@@ -87,9 +87,16 @@ pub enum ArrayOp {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+pub enum FnCall {
+    Upper,
+    Lower,
+}
+
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
     Void,
     Variable(Atom),
+    Function(FnCall, Box<AstNode>),
     Constant(Atom),
     List(Vec<Atom>),
     Compare(Box<AstNode>, ComparisonOp, Box<AstNode>),

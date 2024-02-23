@@ -14,7 +14,7 @@ use nom::{
     IResult,
 };
 
-use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, LogicOp};
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
 
 /// Took from nom recipes
 fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
@@ -122,6 +122,20 @@ fn parse_variable_node(i: &str) -> IResult<&str, AstNode> {
     map(parse_variable, AstNode::Variable)(i)
 }
 
+fn parse_variable_node_modifier(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((
+        ws(parse_function_names),
+        delimited(tag("("), ws(parse_variable_node), tag(")")),
+    ));
+    map(parser, |(fn_call, expr)| {
+        AstNode::Function(fn_call, Box::new(expr))
+    })(i)
+}
+
+fn parse_variable_node_or_modified(i: &str) -> IResult<&str, AstNode> {
+    alt((parse_variable_node_modifier, parse_variable_node))(i)
+}
+
 fn parse_constant(i: &str) -> IResult<&str, AstNode> {
     map(parse_atom, AstNode::Constant)(i)
 }
@@ -133,15 +147,30 @@ fn parse_array_op(i: &str) -> IResult<&str, ArrayOp> {
     ))(i)
 }
 
+fn parse_function_names(i: &str) -> IResult<&str, FnCall> {
+    alt((
+        map(tag_no_case("upper"), |_| FnCall::Upper),
+        map(tag_no_case("lower"), |_| FnCall::Lower),
+    ))(i)
+}
+
 fn parse_array_expr(i: &str) -> IResult<&str, AstNode> {
-    let parser = tuple((parse_variable_node, ws(parse_array_op), parse_list));
+    let parser = tuple((
+        parse_variable_node_or_modified,
+        ws(parse_array_op),
+        parse_list,
+    ));
     map(parser, |(var, op, val)| {
         AstNode::Array(Box::new(var), op, Box::new(val))
     })(i)
 }
 
 fn parse_compare_expr(i: &str) -> IResult<&str, AstNode> {
-    let parser = tuple((parse_variable_node, ws(parse_comparison_op), parse_constant));
+    let parser = tuple((
+        parse_variable_node_or_modified,
+        ws(parse_comparison_op),
+        parse_constant,
+    ));
     map(parser, |(var, op, val)| {
         AstNode::Compare(Box::new(var), op, Box::new(val))
     })(i)
@@ -326,6 +355,12 @@ mod tests {
     #[test]
     fn test_scopes() {
         let res = parse("not (a=b and c=d)");
+        assert_eq!(res.is_ok(), true);
+    }
+
+    #[test]
+    fn test_fn_modifiers() {
+        let res = parse("UPPER(_demo) == 'DEMO DEMO'");
         assert_eq!(res.is_ok(), true);
     }
 
