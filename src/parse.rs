@@ -209,6 +209,7 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
         parse_parenthesized_expr,
         parse_logic_expr,
         parse_compare_or_array_expr,
+        parse_constant,
     ))(input)
     .expect("parse failed");
 
@@ -231,6 +232,13 @@ pub fn parse(i: &str) -> IResult<&str, AstNode> {
 
 mod tests {
     use super::*;
+
+    #[test]
+    fn parse_constant_test() {
+        let res = parse("True");
+        assert_eq!(true, res.is_ok());
+        assert_eq!(AstNode::Constant(Atom::Boolean(true)), res.unwrap().1);
+    }
 
     #[test]
     fn test_parse_bool() {

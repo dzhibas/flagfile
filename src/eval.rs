@@ -5,6 +5,19 @@ use crate::ast::{AstNode, Atom, ComparisonOp};
 pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &'a str> {
     let mut result = false;
     result = match expr {
+        AstNode::Constant(var) => {
+            let mut result = false;
+            if let Atom::Boolean(v) = var {
+                result = *v;
+            }
+            if let Atom::Variable(v) = var {
+                let context_val = context.get(v.as_str());
+                if let Some(Atom::Boolean(inner)) = context_val {
+                    result = *inner;
+                }
+            }
+            result
+        }
         AstNode::Compare(var, op, val) => {
             // check var in context
             // compare with val
@@ -87,6 +100,18 @@ mod tests {
             )
             .unwrap(),
             true
+        );
+    }
+
+    #[test]
+    fn simple_constant_eval_test() {
+        assert_eq!(
+            false,
+            eval(&parse("false").unwrap().1, &HashMap::from([])).unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(&parse("TRUE").unwrap().1, &HashMap::from([])).unwrap()
         );
     }
 
