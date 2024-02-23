@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, line_ending, space0, multispace0},
+    character::complete::{alpha1, alphanumeric1, line_ending, multispace0, space0},
     combinator::{eof, recognize},
     complete::take,
     multi::{many0, many0_count, many_till},
-    sequence::{pair, tuple, preceded},
+    sequence::{pair, preceded, tuple},
     Err, IResult,
 };
 
@@ -31,8 +31,8 @@ fn parse_equal(input: &str) -> IResult<&str, (&str, &str, &str)> {
 
 fn parse_value(input: &str) -> IResult<&str, &str> {
     let (tail, _) = tag("\"")(input)?;
-    let (tail, inner) = recognize(many_till(alt((alphanumeric1,multispace0)), tag("\"")))(tail)?;
-    Ok((tail, &inner[0 .. inner.len()-1]))
+    let (tail, inner) = recognize(many_till(alt((alphanumeric1, multispace0)), tag("\"")))(tail)?;
+    Ok((tail, &inner[0..inner.len() - 1]))
 }
 
 fn parse_assignment(input: &str) -> IResult<&str, Pair> {
