@@ -1,12 +1,18 @@
 use nom::{
-    branch::alt, bytes::complete::tag_no_case, character::complete::{digit1, multispace0}, combinator::{map, opt, recognize},
-    bytes::complete::tag, error::ParseError, sequence::{delimited, pair}, IResult,
+    branch::alt,
+    bytes::complete::{tag, tag_no_case, take_until},
+    character::complete::{alpha1, alphanumeric1, digit1, multispace0},
+    combinator::{map, opt, recognize},
+    error::ParseError,
+    multi::many0_count,
+    number::complete::double,
+    sequence::{delimited, pair},
+    IResult,
 };
 
 use crate::ast::Atom;
 
-/// A combinator that takes a parser `inner` and produces a parser that also consumes both leading and
-/// trailing whitespace, returning the output of `inner`.
+/// Took from nom recipes
 fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
     inner: F,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
@@ -20,6 +26,9 @@ fn parse_number(i: &str) -> IResult<&str, Atom> {
     let parser = recognize(pair(opt(tag("-")), digit1));
     map(parser, |num: &str| Atom::Number(num.parse().unwrap()))(i)
 }
+fn parse_float(i: &str) -> IResult<&str, Atom> {
+    map(double, Atom::Float)(i)
+}
 
 fn parse_boolean(i: &str) -> IResult<&str, Atom> {
     let parser = alt((
@@ -27,6 +36,29 @@ fn parse_boolean(i: &str) -> IResult<&str, Atom> {
         map(tag_no_case("false"), |_| false),
     ));
     map(parser, Atom::Boolean)(i)
+}
+
+fn parse_string(i: &str) -> IResult<&str, Atom> {
+    let parser = delimited(tag("\""), take_until("\""), tag("\""));
+    map(parser, |s: &str| Atom::String(s.to_string()))(i)
+}
+
+fn parse_variable(i: &str) -> IResult<&str, Atom> {
+    let parser = recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0_count(alt((alphanumeric1, tag("_")))),
+    ));
+    map(parser, |v: &str| Atom::Variable(v.to_string()))(i)
+}
+
+fn parse_atom(i: &str) -> IResult<&str, Atom> {
+    alt((
+        parse_string,
+        parse_boolean,
+        parse_number,
+        parse_float,
+        parse_variable,
+    ))(i)
 }
 
 #[cfg(test)]
@@ -50,5 +82,17 @@ mod tests {
 
         let (_, v) = parse_number("199").unwrap();
         assert_eq!(v, Atom::Number(199));
+    }
+
+    #[test]
+    fn test_parse_string() {
+        let (_, v) = parse_string("\"this is demo\"").unwrap();
+        assert_eq!(v, Atom::String("this is demo".to_string()));
+    }
+
+    #[test]
+    fn test_parse_atom() {
+        let (_, v) = parse_atom("_demo_demo").unwrap();
+        assert_eq!(v, Atom::Variable("_demo_demo".to_string()));
     }
 }
