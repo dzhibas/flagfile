@@ -1,11 +1,11 @@
 use nom::{
     branch::alt,
-    bytes::complete::{tag, take_until},
-    character::complete::{alpha1, alphanumeric1, line_ending, multispace0, space0, char},
+    bytes::complete::{tag, take_until, tag_no_case},
+    character::{complete::{alpha1, alphanumeric1, line_ending, multispace0, space0, char} },
     combinator::{eof, recognize, map_res, map},
     complete::take,
     multi::{many0, many0_count, many_till},
-    sequence::{pair, preceded, tuple},
+    sequence::{pair, preceded, tuple, separated_pair, delimited},
     Err, IResult,
 };
 
@@ -14,19 +14,10 @@ use std::{collections::HashMap, error::Error};
 type Pair = HashMap<String, String>;
 type AppError = Box<dyn Error>;
 
+#[derive(Debug)]
 enum LogicExpr {
-    And,
-    Or
-}
-
-impl LogicExpr {
-    fn from_str(expr: &str) -> Self {
-        match expr.to_lowercase().as_str() {
-            "and" => LogicExpr::And,
-            "or" => LogicExpr::Or,
-            _ => unreachable!(),
-        }
-    }
+    And(Pair, Pair),
+    Or(Pair, Pair),
 }
 
 enum ComparisonExpr {
@@ -81,14 +72,26 @@ fn parse_assignment(input: &str) -> IResult<&str, Pair> {
     )(input)
 }
 
-fn parse_main(input: &str) -> IResult<&str, Vec<Pair>> {
-    many0(parse_assignment)(input)
+fn parse_bool_expr_and(i: &str) -> IResult<&str, LogicExpr> {
+    let and = delimited(multispace0, tag_no_case("and"), multispace0);
+    map(separated_pair(parse_assignment, and, parse_assignment), |(p1, p2)| 
+        LogicExpr::And(p1, p2)
+    ,)(i)
+}
+
+fn parse_bool_expr_or(i: &str) -> IResult<&str, LogicExpr> {
+    let or = delimited(multispace0, tag_no_case("or"), multispace0);
+    map(separated_pair(parse_assignment, or, parse_assignment), |(p1, p2)| 
+        LogicExpr::Or(p1, p2)
+    ,)(i)
+}
+
+fn parse_main(input: &str) -> IResult<&str, Vec<LogicExpr>> {
+    many0(alt((parse_bool_expr_and, parse_bool_expr_or)))(input)
 }
 
 fn main() -> Result<(), AppError> {
-    let content = r##"street_name ="Random this or that"
-countryCode = "123 NL 123"
-demo="demo4""##;
+    let content = r##"street_name ="Random this or that" OR countryCode = "123 NL 123""##;
 
     let res = parse_main(content)?;
 
