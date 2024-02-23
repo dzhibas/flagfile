@@ -15,3 +15,7 @@ feature-x ->
 feature-y -> 
     countryCode == NL: true
     false
+
+testing->
+    // NOW actually should be Atom variable without value till its evaluated
+    NOW() >= 2024-02-18: true // this is basically scheduling something

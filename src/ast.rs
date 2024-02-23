@@ -14,6 +14,8 @@ pub enum Atom {
     Variable(String),
     Date(NaiveDate),
     DateTime(String),
+    // Timestamp(i64)
+    // Now(i64)
 }
 
 impl PartialEq<Atom> for Atom {
