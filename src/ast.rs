@@ -78,6 +78,7 @@ impl LogicOp {
 pub enum AstNode {
     Variable(Atom),
     Constant(Atom),
+    List(Vec<Atom>),
     Compare(Box<AstNode>, ComparisonOp, Box<AstNode>),
     Logic(Box<AstNode>, LogicOp, Box<AstNode>),
 }

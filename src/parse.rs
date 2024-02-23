@@ -4,7 +4,7 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, digit1, multispace0},
     combinator::{map, opt, recognize},
     error::ParseError,
-    multi::{many0, many0_count},
+    multi::{many0, many0_count, separated_list0},
     number::complete::double,
     sequence::{delimited, pair, tuple},
     IResult,
@@ -55,8 +55,8 @@ fn parse_atom(i: &str) -> IResult<&str, Atom> {
     alt((
         parse_string,
         parse_boolean,
-        parse_number,
         parse_float,
+        parse_number,
         parse_variable,
     ))(i)
 }
@@ -77,6 +77,15 @@ fn parse_logic_op(i: &str) -> IResult<&str, LogicOp> {
         map(alt((tag("&&"), tag_no_case("and"))), |_| LogicOp::And),
         map(alt((tag("||"), tag_no_case("or"))), |_| LogicOp::Or),
     ))(i)
+}
+
+fn parse_list(i: &str) -> IResult<&str, AstNode> {
+    let parser = delimited(
+        tag("("),
+        separated_list0(tag(","), ws(parse_atom)),
+        tag(")"),
+    );
+    map(parser, AstNode::List)(i)
 }
 
 fn parse_compare_expr(i: &str) -> IResult<&str, AstNode> {
@@ -121,6 +130,12 @@ mod tests {
     }
 
     #[test]
+    fn test_float() {
+        let (_,v) = parse_atom("3.14").unwrap();
+        assert_eq!(v, Atom::Float(3.14));
+    }
+
+    #[test]
     fn test_parse_string() {
         let (_, v) = parse_string("\"this is demo\"").unwrap();
         assert_eq!(v, Atom::String("this is demo".to_string()));
@@ -157,6 +172,12 @@ mod tests {
     #[test]
     fn test_logic_expr() {
         let (i, v) = parse_logic_expr("_demo >= 10 && demo == \"something more than that\"").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_list() {
+        let (i, v) = parse_list("(1,2, 34, \"demo\", -10, -3.14)").unwrap();
         assert_eq!(i, "");
     }
 }
