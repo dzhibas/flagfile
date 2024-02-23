@@ -1,6 +1,6 @@
 [package]
-name = "bool_expr_parser_nom"
-version = "0.3.6"
+name = "flagfile"
+version = "0.3.7"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 

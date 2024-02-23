@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use bool_expr_parser_nom::ast::Atom;
-use bool_expr_parser_nom::eval::Context;
-use bool_expr_parser_nom::{self, eval::eval, parse::parse};
+use flagfile::ast::Atom;
+use flagfile::eval::Context;
+use flagfile::{self, eval::eval, parse::parse};
 use chrono::NaiveDate;
 
 #[test]
