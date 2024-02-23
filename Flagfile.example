@@ -1,43 +1,45 @@
+// once you dont have rules you can use short notation to return boolean
+FF-feature-flat-on-off -> true
+
+// you can return non-boolean in this example json. or empty json object json({})
+FF-feature-json-variant -> json({"success": true})
+
+// features are forced to start with FF- case-sensitive as it allows you later to find all flags through in codebase
+FF-feature-name-specifics -> false
+
+// you can have feature with multiple rules in it with default flag value returned in end
+FF-feature-y {
+    // if country is NL return True
+    countryCode == NL: true
+    // else default to false
+    false
+}
+
+// you can also return different variations (non-boolean) as example json
+FF-testing {
+    // default variant
+    json({"success": true})
+}
+
+// and have more complex feature with multiple rules in it, which at the end defaults to false
 FF-feature-complex-ticket-234234 {
-    // this is yet another
+    // complex bool expression
     a = b and c=d and (dd not in (1,2,3) or z == "demo car"): true
     
-    // this is other
+    // another one
     z == "demo car": false
     
-    // demo this
+    // with checking more
     g in (4,5,6) and z == "demo car": true
     
-    // demo comment
+    // and multi-line rule works
     model in (ms,mx,m3,my) and created >= 2024-01-01
         and demo == false: true
     
     false
 }
 
-// once you dont have rules you can use short notation to return boolean
-FF-feature-flat-on-off -> true
-
-// you can return non-boolean in this example json
-FF-feature-json-variant -> json({"success": true})
-
-// feature with one rule
-// returns true for NL country, else false
-FF-feature-y {
-    countryCode == NL: true
-    false
-}
-
-// demo
-FF-some-other -> true
-
-// feature with inside commments and works like scheduler
-FF-testing {
-    // testing
-    json({"success": true})
-}
-
-// simple flat on-off flags still can be written as a functions
+// different kind of comments inside
 FF-feature1 {
     /* comment like this */
     true
@@ -45,4 +47,12 @@ FF-feature1 {
     false
     json({})
 }
+
+/* this is multi-line commented feature
+FF-timer-feature {
+    // turn on only on evaluation time after 22nd feb
+    NOW() > 2024-02-22: true
+    false
+}
+*/
 
