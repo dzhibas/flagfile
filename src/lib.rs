@@ -12,6 +12,9 @@ use nom::{
     Err, IResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
+mod parse;
+mod eval;
+mod ast;
 
 use std::{collections::HashMap, error::Error};
 
@@ -148,15 +151,4 @@ pub fn parse_wasm(i: &str) -> String {
     let Ok((i, tree)) = parse_main(i) else { todo!() };
     let b = format!("{:?}", tree);
     b.to_string()
-}
-
-fn main() -> Result<(), AppError> {
-    let content = r##"street_name = "Random this or that""##;
-
-    let res = parse_main(content)?;
-
-    println!("Trying to parse: {}", content);
-    dbg!(res);
-
-    Ok(())
 }
