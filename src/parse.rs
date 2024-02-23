@@ -150,10 +150,21 @@ fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse(input: &str) -> IResult<&str, Vec<AstNode>> {
-    alt((
-        many0(ws(parse_logic_expr)),
-        map(parse_compare_or_array_expr, |v| vec![v]),
-    ))(input)
+    let mut res: Vec<AstNode> = vec![];
+
+    let (i, mut head) =
+        alt((parse_logic_expr, parse_compare_or_array_expr))(input).expect("parse failed");
+
+    let (i, tail) =
+        many0(pair(ws(parse_logic_op), parse_compare_or_array_expr))(i).expect("Parse failed");
+
+    for (op, expr) in tail {
+        head = AstNode::Logic(Box::new(head.clone()), op.clone(), Box::new(expr.clone()));
+    }
+
+    res.push(head.clone());
+
+    Ok((i, res))
 }
 
 #[cfg(test)]
@@ -248,11 +259,11 @@ mod tests {
     #[test]
     fn test_more_complext_not_in() {
         assert_eq!(
-            parse_logic_expr("a=3 && c = 3 || d not in in (2,4,5)").is_ok(),
+            parse_logic_expr("a=3 && c = 3 || d not in (2,4,5)").is_ok(),
             true
         );
-        let (i, v) = parse("a=3 && c = 3 || d not in in (2,4,5)").unwrap();
-        // dbg!(i, v);
+        let (i, v) = parse("a=3 && c = 3 || d not in (2,4,5) and this<>34.43").unwrap();
+        assert_eq!(i, "");
     }
 
     #[test]

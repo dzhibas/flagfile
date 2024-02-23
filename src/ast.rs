@@ -74,14 +74,15 @@ impl LogicOp {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ArrayOp {
     In,
     NotIn,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum AstNode {
+    Void,
     Variable(Atom),
     Constant(Atom),
     List(Vec<Atom>),
