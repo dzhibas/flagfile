@@ -1,4 +1,4 @@
-feature-complex-ticket-234234 {
+FF-feature-complex-ticket-234234 {
     // this is yet another
     a = b and c=d and (dd not in (1,2,3) or z == "demo car"): true
     
@@ -16,26 +16,26 @@ feature-complex-ticket-234234 {
 }
 
 // once you dont have rules you can use short notation to return boolean
-feature-flat-on-off -> true
+FF-feature-flat-on-off -> true
 
 // you can return non-boolean in this example json
-feature-json-variant -> json({success: true})
+FF-feature-json-variant -> json({success: true})
 
 // feature with one rule
 // returns true for NL country, else false
-feature-y {
+FF-feature-y {
     countryCode == NL: true
     false
 }
 
 // feature with inside commments and works like scheduler
-testing {
+FF-testing {
     // NOW actually should be Atom variable without value till its evaluated
     NOW() >= 2024-02-18: true // this is basically scheduling something
     false
 }
 
 // simple flat on-off flags still can be written as a functions
-feature1 {
+FF-feature1 {
     true
 }
