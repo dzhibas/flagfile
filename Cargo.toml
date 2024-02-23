@@ -12,6 +12,9 @@ unused = "allow"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[profile.release]
+opt-level = "z"
+
 [dependencies]
 nom = "7.1.3"
 wasm-bindgen = "0.2"
