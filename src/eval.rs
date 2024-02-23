@@ -49,6 +49,14 @@ mod tests {
         assert_eq!(eval(&parse("a < 3.3").unwrap().1, &context).unwrap(), true);
         assert_eq!(
             eval(
+                &parse("a > 3.15").unwrap().1,
+                &HashMap::from([("a", Atom::Float(3.14))])
+            )
+            .unwrap(),
+            false
+        );
+        assert_eq!(
+            eval(
                 &parse("a < 3.1415").unwrap().1,
                 &HashMap::from([("a", Atom::Float(3.0))])
             )
