@@ -69,29 +69,27 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
         AstNode::Array(var_expr, op, list) => {
             let mut result = false;
             if let AstNode::List(vec_list) = list.as_ref() {
-                if let AstNode::Variable(Atom::Variable(var)) = var_expr.as_ref() {
-                    let var_value = get_variable_value_from_context(var_expr, context);
-                    if let Some(search_value) = &var_value {
-                        match op {
-                            ArrayOp::In => {
-                                // check if this value is in the list
-                                for i in vec_list.iter() {
-                                    if search_value == i {
-                                        result = true;
-                                        break;
-                                    }
+                let var_value = get_variable_value_from_context(var_expr, context);
+                if let Some(search_value) = &var_value {
+                    match op {
+                        ArrayOp::In => {
+                            // check if this value is in the list
+                            for i in vec_list.iter() {
+                                if search_value == i {
+                                    result = true;
+                                    break;
                                 }
                             }
-                            ArrayOp::NotIn => {
-                                // a not in (c,d)
-                                let mut found = false;
-                                for i in vec_list.iter() {
-                                    if search_value == i {
-                                        found = true;
-                                    }
+                        }
+                        ArrayOp::NotIn => {
+                            // a not in (c,d)
+                            let mut found = false;
+                            for i in vec_list.iter() {
+                                if search_value == i {
+                                    found = true;
                                 }
-                                result = !found;
                             }
+                            result = !found;
                         }
                     }
                 }

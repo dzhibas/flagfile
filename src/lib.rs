@@ -11,9 +11,9 @@ use nom::{
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
-mod ast;
-mod eval;
-mod parse;
+pub mod ast;
+pub mod eval;
+pub mod parse;
 
 #[wasm_bindgen]
 pub fn parse_wasm(i: &str) -> String {
