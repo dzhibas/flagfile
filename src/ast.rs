@@ -1,4 +1,5 @@
 use core::fmt;
+use std::str::FromStr;
 
 use chrono::NaiveDate;
 
@@ -73,7 +74,7 @@ pub enum ComparisonOp {
 }
 
 impl ComparisonOp {
-    pub fn from_str(expr: &str) -> Self {
+    pub fn build_from_str(expr: &str) -> Self {
         match expr {
             "==" | "=" => ComparisonOp::Eq,
             ">" => ComparisonOp::More,
@@ -105,7 +106,7 @@ pub enum LogicOp {
 }
 
 impl LogicOp {
-    pub fn from_str(i: &str) -> Self {
+    pub fn build_from_str(i: &str) -> Self {
         match i.to_lowercase().as_str() {
             "and" | "&&" => LogicOp::And,
             "or" | "||" => LogicOp::Or,

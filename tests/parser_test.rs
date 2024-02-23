@@ -11,7 +11,8 @@ fn test_parsing() {}
 
 #[test]
 fn test_evaluation() {
-    let rule = r###"accountRole in (Admin,admin,"Admin/Order Manager")
+    let rule = r###"
+accountRole in (Admin,admin,"Admin/Order Manager")
     and upper(account_country_code) in (LT , NL, DE, GB, US)
     and account_uuid in ("543987b0-e69f-41ec-9a68-cfc5cfb15afe", "6133b8d6-4078-4270-9a68-fa0ac78bf512")
     and accountType in ("Some Corporate & Managament Type", Corporate , Managament)
@@ -39,7 +40,7 @@ fn test_evaluation() {
 
 #[test]
 fn scoped_test_case() {
-    let rule = r###"accountRole in (Admin, "Admin/Order Manager") and
+    let rule = r###"(accountRole in (Admin, "Admin/Order Manager")) and
     ((lower(account_country_code) == lt or account_uuid = 32434) and accountType="Some Corporate & Managament Type") and user_id == 2032312"###;
 
     let context = HashMap::from([
@@ -60,4 +61,38 @@ fn scoped_test_case() {
     let val = eval(&expr, &context).unwrap();
     assert_eq!(val, true);
     assert_eq!(i, ""); // empty remainder of parsed string
+}
+
+#[test]
+fn scopes_bug_test() {
+    let rule = "(a=1 or b=2) and ((c=3 or d=4) and e=5)";
+    let context = HashMap::from([
+        ("a", Atom::Number(1)),
+        ("b", Atom::Number(2)),
+        ("c", Atom::Number(3)),
+        ("d", Atom::Number(4)),
+        ("e", Atom::Number(5)),
+    ]);
+    let (i, expr) = parse(rule).unwrap();
+    let val = eval(&expr, &context).unwrap();
+    assert_eq!(val, true);
+    assert_eq!(i, "");
+}
+
+#[test]
+fn scopes_bug_with_new_lines_around_test() {
+    let rule = r###"
+            (a=1 or b=2) and ((c=3 or d=4) and e=5)
+"###;
+    let context = HashMap::from([
+        ("a", Atom::Number(1)),
+        ("b", Atom::Number(2)),
+        ("c", Atom::Number(3)),
+        ("d", Atom::Number(4)),
+        ("e", Atom::Number(5)),
+    ]);
+    let (i, expr) = parse(rule).unwrap();
+    let val = eval(&expr, &context).unwrap();
+    assert_eq!(val, true);
+    assert_eq!(i, "");
 }

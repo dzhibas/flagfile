@@ -6,7 +6,7 @@
       "configuration": {
         "request": "launch",
         "program": "${workspaceRoot}/target/debug/deps/parser_test-ce9cb22a64720f6c",
-        "args": ["test", "scoped_test_case"]
+        "args": ["test", "scopes_bug_test"]
       }
     }
   }

@@ -227,7 +227,7 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
 }
 
 pub fn parse(i: &str) -> IResult<&str, AstNode> {
-    alt((parse_parenthesized_expr, parse_expr))(i)
+    alt((ws(parse_expr), ws(parse_parenthesized_expr)))(i)
 }
 
 mod tests {
