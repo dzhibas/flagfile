@@ -1,0 +1,13 @@
+{
+  "configurations": {
+    "launch": {
+      "adapter": "CodeLLDB",
+      "filetypes": [ "rust" ],
+      "configuration": {
+        "request": "launch",
+        "program": "${workspaceRoot}/target/debug/deps/bool_expr_parser_nom-093629a51566feb2",
+        "args": ["test"]
+      }
+    }
+  }
+}
