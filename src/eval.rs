@@ -16,21 +16,20 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
             .unwrap();
 
             if let Some(c_val) = context_val {
-                dbg!(c_val, val_content);
-                let res = match op {
+                match op {
                     ComparisonOp::More => c_val > val_content,
                     ComparisonOp::MoreEq => c_val >= val_content,
-                    _ => false,
-                };
-                dbg!(context_val);
-                res
+                    ComparisonOp::Less => c_val < val_content,
+                    ComparisonOp::LessEq => c_val <= val_content,
+                    ComparisonOp::Eq => c_val == val_content,
+                    ComparisonOp::NotEq => c_val != val_content,
+                }
             } else {
                 false
             }
         }
         _ => false,
     };
-    dbg!(expr);
     Ok(result)
 }
 
@@ -45,9 +44,22 @@ mod tests {
             ("a", Atom::Number(3)),
             ("b", Atom::String("demo".to_string())),
         ]);
-        let (i, expr) = parse("a < 4 ").unwrap();
 
-        let res = eval(&expr, &context).unwrap();
-        assert_eq!(res, false);
+        assert_eq!(eval(&parse("a < 4").unwrap().1, &context).unwrap(), true);
+        assert_eq!(eval(&parse("a < 3.3").unwrap().1, &context).unwrap(), true);
+        assert_eq!(
+            eval(
+                &parse("a < 3.1415").unwrap().1,
+                &HashMap::from([("a", Atom::Float(3.0))])
+            )
+            .unwrap(),
+            true
+        );
+        assert_eq!(eval(&parse("a>4").unwrap().1, &context).unwrap(), false);
+        assert_eq!(eval(&parse("a<=4").unwrap().1, &context).unwrap(), true);
+        assert_eq!(eval(&parse("a>=3").unwrap().1, &context).unwrap(), true);
+        assert_eq!(eval(&parse("a!=4").unwrap().1, &context).unwrap(), true);
+        assert_eq!(eval(&parse("a==4").unwrap().1, &context).unwrap(), false);
+        assert_eq!(eval(&parse("a==3").unwrap().1, &context).unwrap(), true);
     }
 }

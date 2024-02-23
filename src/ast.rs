@@ -3,15 +3,33 @@ use core::fmt;
 use chrono::NaiveDate;
 
 /// TODO: add date and datetime as its common
-#[derive(Debug, Clone, PartialEq, PartialOrd)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     String(String),
-    Number(i64),
+    Number(i32),
     Float(f64),
     Boolean(bool),
     Variable(String),
     Date(NaiveDate),
     DateTime(String),
+}
+
+impl PartialOrd for Atom {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        match self {
+            Atom::Number(v) => match other {
+                Atom::Number(v2) => Some(v.cmp(v2)),
+                Atom::Float(v2) => f64::from(*v).partial_cmp(v2),
+                _ => None,
+            },
+            Atom::Float(v) => match other {
+                Atom::Float(v2) => v.partial_cmp(v2),
+                Atom::Number(v2) => v.partial_cmp(&f64::from(*v2)),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }
 
 impl fmt::Display for Atom {
@@ -108,10 +126,9 @@ pub enum AstNode {
 impl AstNode {
     pub fn as_str(&self) -> Option<&str> {
         match self {
-            AstNode::Variable(val) => match val {
-                Atom::Variable(s) => Some(s.as_str()),
-                _ => None,
-            },
+            AstNode::Variable(Atom::Variable(s)) => Some(s.as_str()),
+            AstNode::Constant(Atom::String(s)) => Some(s.as_str()),
+            AstNode::Constant(Atom::Variable(s)) => Some(s.as_str()),
             _ => None,
         }
     }
