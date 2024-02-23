@@ -219,4 +219,10 @@ mod tests {
         let (i, v) = parse_logic_expr(e).unwrap();
         assert_eq!(i, "");
     }
+
+    #[test]
+    fn test_list_bug() {
+        let a = "a == 2 and b >= (1,2,3)";
+        let (i, v) = parse_logic_expr(a).unwrap();
+    }
 }
