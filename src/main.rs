@@ -5,7 +5,7 @@ use nom::{
     combinator::{eof, recognize},
     complete::take,
     multi::{many0, many0_count, many_till},
-    sequence::{pair, tuple},
+    sequence::{pair, tuple, preceded},
     Err, IResult,
 };
 
@@ -21,6 +21,10 @@ fn parse_variable(input: &str) -> IResult<&str, &str> {
     ))(input)
 }
 
+fn parse_variable_clean_spaces(input: &str) -> IResult<&str, &str> {
+    preceded(multispace0, parse_variable)(input)
+}
+
 fn parse_equal(input: &str) -> IResult<&str, (&str, &str, &str)> {
     tuple((space0, tag("="), space0))(input)
 }
@@ -32,7 +36,7 @@ fn parse_value(input: &str) -> IResult<&str, &str> {
 }
 
 fn parse_assignment(input: &str) -> IResult<&str, Pair> {
-    let res = tuple((parse_variable, parse_equal, parse_value))(input);
+    let res = tuple((parse_variable_clean_spaces, parse_equal, parse_value))(input);
     match res {
         Ok((input, (var, _, val))) => {
             Ok((input, HashMap::from([(var.to_string(), val.to_string())])))
