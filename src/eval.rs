@@ -75,6 +75,20 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
             }
             result
         }
+        // todo Function, Logic, Scope
+        AstNode::Logic(expr1, op, expr2) => {
+            todo!()
+        }
+        AstNode::Function(func, variable) => {
+            todo!()
+        }
+        AstNode::Scope { expr, negate } => {
+            let res = eval(expr, context).unwrap();
+            match negate {
+                true => !res,
+                false => res,
+            }
+        }
         _ => false,
     };
     Ok(result)
@@ -84,6 +98,40 @@ mod tests {
     use crate::{ast::Atom, parse::parse};
 
     use super::*;
+
+    #[test]
+    fn simple_scope_test() {
+        let (i, expr) = parse("!(country=LT)").unwrap();
+        assert_eq!(
+            false,
+            eval(
+                &expr,
+                &HashMap::from([("country", Atom::String("LT".to_string()))])
+            )
+            .unwrap()
+        );
+
+        // scope inside scope
+        let (i, expr) = parse("(not (country == Lithuania))").unwrap();
+        assert_eq!(
+            false,
+            eval(
+                &expr,
+                &HashMap::from([("country", Atom::String("Lithuania".to_string()))])
+            )
+            .unwrap()
+        );
+
+        let (i, expr) = parse("((country == Netherlands))").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("country", Atom::String("Netherlands".to_string()))])
+            )
+            .unwrap()
+        );
+    }
 
     #[test]
     fn array_eval_test() {
