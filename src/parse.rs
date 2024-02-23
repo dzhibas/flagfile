@@ -49,7 +49,7 @@ fn parse_float(i: &str) -> IResult<&str, Atom> {
     map(parser, |n: &str| Atom::Float(n.parse().unwrap()))(i)
 }
 
-fn parse_boolean(i: &str) -> IResult<&str, Atom> {
+pub fn parse_boolean(i: &str) -> IResult<&str, Atom> {
     let parser = alt((
         map(tag_no_case("true"), |_| true),
         map(tag_no_case("false"), |_| false),

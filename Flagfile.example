@@ -1,4 +1,4 @@
-FF-feature-complex-ticket-234234 {
+/* FF-feature-complex-ticket-234234 {
     // this is yet another
     a = b and c=d and (dd not in (1,2,3) or z == "demo car"): true
     
@@ -13,14 +13,15 @@ FF-feature-complex-ticket-234234 {
         and demo == false: true
     
     false
-}
+}*/
 
 // once you dont have rules you can use short notation to return boolean
 FF-feature-flat-on-off -> true
 
 // you can return non-boolean in this example json
-FF-feature-json-variant -> json({success: true})
+FF-feature-json-variant -> json({"success": true})
 
+/*
 // feature with one rule
 // returns true for NL country, else false
 FF-feature-y {
@@ -39,3 +40,4 @@ FF-testing {
 FF-feature1 {
     true
 }
+*/
