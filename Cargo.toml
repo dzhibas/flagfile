@@ -1,6 +1,6 @@
 [package]
 name = "bool_expr_parser_nom"
-version = "0.3.5"
+version = "0.3.6"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 

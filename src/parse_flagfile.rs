@@ -81,15 +81,26 @@ fn parse_rule_static(i: &str) -> IResult<&str, Rule> {
 fn parse_rules(i: &str) -> IResult<&str, Rule> {
     alt((parse_rule_expr, parse_rule_static))(i)
 }
+
+fn parse_rules_or_comments(i: &str) -> IResult<&str, Rule> {
+    terminated(
+        preceded(many0(alt((parse_comment, multiline_comment))), parse_rules),
+        many0(alt((parse_comment, multiline_comment))),
+    )(i)
+}
+
 fn parse_rules_list(i: &str) -> IResult<&str, Vec<Rule>> {
-    many1(parse_rules)(i)
+    many1(parse_rules_or_comments)(i)
 }
 
 fn parse_function(i: &str) -> IResult<&str, FlagValue> {
-    let func_content = delimited(ws(tag("{")), take_until("}"), ws(tag("}")));
-    let (i, (flag_name, func_body)) = pair(ws(parse_flag_name), func_content)(i)?;
-    let (_, rules) = parse_rules_list(func_body)?;
-    Ok((i, HashMap::from([(flag_name, rules)])))
+    let parser = pair(
+        ws(parse_flag_name),
+        delimited(ws(tag("{")), parse_rules_list, ws(tag("}"))),
+    );
+    map(parser, |(flag_name, rules)| {
+        HashMap::from([(flag_name, rules)])
+    })(i)
 }
 
 pub fn parse_flagfile(i: &str) -> IResult<&str, Vec<FlagValue>> {
@@ -125,8 +136,8 @@ mod tests {
         let data = include_str!("../Flagfile.example");
 
         let (i, v) = parse_flagfile(data).unwrap();
+        dbg!(i, &v);
         assert_eq!(true, v.len() > 0);
-        // dbg!(i, v);
     }
 }
 
