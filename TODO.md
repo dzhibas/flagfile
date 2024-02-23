@@ -1,6 +1,6 @@
 - [ ] Atom parsing for Date & DateTime
 - [ ] Scopes and negated scopes
 - [ ] either lower() or upper() function calls or case insensitive string comparison operators
-- [ ] support for single quote strings
+- [+] support for single quote strings
 - [ ] not quoted strings as values treated as variables now, needs a fix
 - [ ] evaluation with provided context
