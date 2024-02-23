@@ -1,5 +1,5 @@
-use chrono::NaiveDate;
 use bool_expr_parser_nom;
+use chrono::NaiveDate;
 
 /// library tests for public functions to parse and then evaluate
 

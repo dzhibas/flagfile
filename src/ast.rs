@@ -95,8 +95,5 @@ pub enum AstNode {
     Compare(Box<AstNode>, ComparisonOp, Box<AstNode>),
     Array(Box<AstNode>, ArrayOp, Box<AstNode>),
     Logic(Box<AstNode>, LogicOp, Box<AstNode>),
-    Scope {
-        expr: Box<AstNode>,
-        negate: bool
-    }
+    Scope { expr: Box<AstNode>, negate: bool },
 }
