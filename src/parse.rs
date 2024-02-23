@@ -8,11 +8,11 @@ use nom::{
     error::ParseError,
     multi::{many0, many0_count, separated_list0},
     number::complete::double,
-    sequence::{delimited, pair, tuple},
+    sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
 
-use crate::ast::{AstNode, Atom, ComparisonOp, LogicOp};
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, LogicOp};
 
 /// Took from nom recipes
 fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
@@ -86,7 +86,6 @@ fn parse_comparison_op(i: &str) -> IResult<&str, ComparisonOp> {
         map(tag("<"), |_| ComparisonOp::Less),
         map(tag(">="), |_| ComparisonOp::MoreEq),
         map(tag(">"), |_| ComparisonOp::More),
-        map(tag("in"), |_| ComparisonOp::In),
     ))(i)
 }
 
@@ -113,22 +112,48 @@ fn parse_constant(i: &str) -> IResult<&str, AstNode> {
     map(parse_atom, AstNode::Constant)(i)
 }
 
+fn parse_array_op(i: &str) -> IResult<&str, ArrayOp> {
+    alt((
+        map(tag_no_case("not in"), |_| ArrayOp::NotIn),
+        map(tag_no_case("in"), |_| ArrayOp::In),
+    ))(i)
+}
+
+fn parse_array_expr(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((parse_variable_node, ws(parse_array_op), parse_list));
+    map(parser, |(var, op, val)| {
+        AstNode::Array(Box::new(var), op, Box::new(val))
+    })(i)
+}
+
 fn parse_compare_expr(i: &str) -> IResult<&str, AstNode> {
-    let parser = tuple((
-        parse_variable_node,
-        ws(parse_comparison_op),
-        alt((parse_constant, parse_list)),
-    ));
+    let parser = tuple((parse_variable_node, ws(parse_comparison_op), parse_constant));
     map(parser, |(var, op, val)| {
         AstNode::Compare(Box::new(var), op, Box::new(val))
     })(i)
 }
 
+fn parse_compare_or_array_expr(i: &str) -> IResult<&str, AstNode> {
+    alt((parse_array_expr, parse_compare_expr))(i)
+}
+
 fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
-    let parser = tuple((parse_compare_expr, ws(parse_logic_op), parse_compare_expr));
+    /// a=b AND b not in (1,2,3)
+    let parser = tuple((
+        parse_compare_or_array_expr,
+        ws(parse_logic_op),
+        parse_compare_or_array_expr,
+    ));
     map(parser, |(var, op, val)| {
         AstNode::Logic(Box::new(var), op, Box::new(val))
     })(i)
+}
+
+fn parse(input: &str) -> IResult<&str, Vec<AstNode>> {
+    alt((
+        many0(ws(parse_logic_expr)),
+        map(parse_compare_or_array_expr, |v| vec![v]),
+    ))(input)
 }
 
 #[cfg(test)]
@@ -221,8 +246,20 @@ mod tests {
     }
 
     #[test]
+    fn test_more_complext_not_in() {
+        assert_eq!(
+            parse_logic_expr("a=3 && c = 3 || d not in in (2,4,5)").is_ok(),
+            true
+        );
+        let (i, v) = parse("a=3 && c = 3 || d not in in (2,4,5)").unwrap();
+        // dbg!(i, v);
+    }
+
+    #[test]
     fn test_list_bug() {
+        /// this should not be allowed as array should have either in () or not in ()
         let a = "a == 2 and b >= (1,2,3)";
-        let (i, v) = parse_logic_expr(a).unwrap();
+        let res = parse_logic_expr(a);
+        assert_eq!(res.is_err(), true);
     }
 }
