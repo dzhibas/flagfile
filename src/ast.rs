@@ -21,5 +21,41 @@ impl fmt::Display for Atom {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+enum ComparisonOp {
+    Eq,
+    More,
+    Less,
+    MoreEq,
+    LessEq,
+    NotEq,
+}
+
+impl ComparisonOp {
+    fn from_str(expr: &str) -> Self {
+        match expr {
+            "==" | "=" => ComparisonOp::Eq,
+            ">" => ComparisonOp::More,
+            ">=" => ComparisonOp::MoreEq,
+            "<" => ComparisonOp::Less,
+            "<=" => ComparisonOp::LessEq,
+            "!=" | "<>" => ComparisonOp::NotEq,
+            _ => unreachable!(),
+        }
+    }
+}
+impl fmt::Display for ComparisonOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match (self) {
+            ComparisonOp::Eq => write!(f, "=="),
+            ComparisonOp::More => write!(f, ">"),
+            ComparisonOp::Less => write!(f, "<"), 
+            ComparisonOp::MoreEq => write!(f, ">="),
+            ComparisonOp::LessEq => write!(f, "<="),
+            ComparisonOp::NotEq => write!(f, "<>"),
+        }
+    }
+}
+
 pub enum AstNode {
 }
