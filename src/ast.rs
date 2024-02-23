@@ -1,5 +1,7 @@
 use core::fmt;
 
+
+/// TODO: add date and datetime as its common
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
     String(String),
