@@ -1,7 +1,7 @@
 use nom::{
     branch::alt,
-    bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, line_ending, multispace0, space0},
+    bytes::complete::{tag, take_until},
+    character::complete::{alpha1, alphanumeric1, line_ending, multispace0, space0, char},
     combinator::{eof, recognize},
     complete::take,
     multi::{many0, many0_count, many_till},
@@ -29,14 +29,13 @@ fn parse_equal(input: &str) -> IResult<&str, (&str, &str, &str)> {
     tuple((space0, tag("="), space0))(input)
 }
 
-fn parse_value(input: &str) -> IResult<&str, &str> {
-    let (tail, _) = tag("\"")(input)?;
-    let (tail, inner) = recognize(many_till(alt((alphanumeric1, multispace0)), tag("\"")))(tail)?;
-    Ok((tail, &inner[0..inner.len() - 1]))
+fn parse_string_value(i: &str) -> IResult<&str, &str> {
+    let (tail, (_, str, _)) = tuple((char('"'), take_until("\""), char('"')))(i)?;
+    Ok((tail, str))
 }
 
 fn parse_assignment(input: &str) -> IResult<&str, Pair> {
-    let res = tuple((parse_variable_clean_spaces, parse_equal, parse_value))(input);
+    let res = tuple((parse_variable_clean_spaces, parse_equal, parse_string_value))(input);
     match res {
         Ok((input, (var, _, val))) => {
             Ok((input, HashMap::from([(var.to_string(), val.to_string())])))
