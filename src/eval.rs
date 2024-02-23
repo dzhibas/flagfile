@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
 
+pub type Context<'a> = HashMap<&'a str, Atom>;
+
 fn get_variable_value_from_context<'a>(
     variable: &'a AstNode,
-    context: &'a HashMap<&str, Atom>,
+    context: &'a Context,
 ) -> Option<Atom> {
     let res = match variable {
         AstNode::Variable(Atom::Variable(v)) => context.get(v.as_str()),
@@ -25,7 +27,7 @@ fn get_variable_value_from_context<'a>(
     res.cloned()
 }
 
-pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &'a str> {
+pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
     let mut result = false;
     result = match expr {
         // true || false

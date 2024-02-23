@@ -1,10 +1,16 @@
 use std::collections::HashMap;
 
 use bool_expr_parser_nom::ast::Atom;
+use bool_expr_parser_nom::eval::Context;
 use bool_expr_parser_nom::{self, eval::eval, parse::parse};
 use chrono::NaiveDate;
 
-/// library tests for public functions to parse and then evaluate
+#[test]
+fn test_hashmap_into() {
+    let out: Context = HashMap::from([("demo", "demo".into())]);
+    assert_eq!(true, out.get("demo").is_some());
+    assert_eq!(Atom::String("demo".into()), *out.get("demo").unwrap());
+}
 
 #[test]
 fn test_parsing() {
