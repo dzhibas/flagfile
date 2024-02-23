@@ -218,7 +218,7 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
     Ok((i, head.clone()))
 }
 
-fn parse(i: &str) -> IResult<&str, AstNode> {
+pub fn parse(i: &str) -> IResult<&str, AstNode> {
     alt((parse_parenthesized_expr, parse_expr))(i)
 }
 
