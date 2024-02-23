@@ -19,4 +19,4 @@ eventually this lib compiles into wasm and used in UI to validate and parse rule
 
 ### Vision for Flagfile example
 
-Please take a look at format and supported features in [Flagfile.example]
+Please take a look at format and supported features in [Flagfile.example](Flagfile.example)
