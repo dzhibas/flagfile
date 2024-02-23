@@ -205,11 +205,18 @@ fn parse_parenthesized_expr(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse_expr(input: &str) -> IResult<&str, AstNode> {
-    let (i, mut head) =
-        alt((parse_logic_expr, parse_compare_or_array_expr))(input).expect("parse failed");
+    let (i, mut head) = alt((
+        parse_parenthesized_expr,
+        parse_logic_expr,
+        parse_compare_or_array_expr,
+    ))(input)
+    .expect("parse failed");
 
-    let (i, tail) =
-        many0(pair(ws(parse_logic_op), parse_compare_or_array_expr))(i).expect("Parse failed");
+    let (i, tail) = many0(pair(
+        ws(parse_logic_op),
+        alt((parse_compare_or_array_expr, parse_parenthesized_expr)),
+    ))(i)
+    .expect("Parse failed");
 
     for (op, expr) in tail {
         head = AstNode::Logic(Box::new(head.clone()), op.clone(), Box::new(expr.clone()));
@@ -364,14 +371,15 @@ mod tests {
         assert_eq!(res.is_ok(), true);
     }
 
-    //    #[test]
-    //    fn test_extreme_test() {
-    //        let expression = r###"a = b and c=d and something not in (1,2,3) or lower(z) == "demo car" or
-    //    z == "demo car" or
-    //    g in (4,5,6) and z == "demo car" or
-    //    model in (ms,mx,m3,my) and created >= 2024-01-01
-    //        and demo == false"###;
-    //        let (i, v) = parse(expression).unwrap();
-    //        assert_eq!(i, "");
-    //    }
+    #[test]
+    fn test_extreme_logic_test() {
+        let expression = r###"a = b and c=d and something not in (1,2,3) or lower(z) == "demo car" or
+    z == "demo car" or
+    g in (4,5,6) and z == "demo car" or
+    model in (ms,mx,m3,my) and !(created >= 2024-01-01
+        and demo == false) and ((a=2) and not (c=3))"###;
+        let (i, v) = parse(expression).unwrap();
+        assert_eq!(i, "");
+        dbg!(v);
+    }
 }
