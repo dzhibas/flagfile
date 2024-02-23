@@ -1,6 +1,6 @@
 use nom::{
-    branch::alt, bytes::complete::tag_no_case, character::complete::multispace0, combinator::map,
-    complete::tag, error::ParseError, sequence::delimited, IResult,
+    branch::alt, bytes::complete::tag_no_case, character::complete::{digit1, multispace0}, combinator::{map, opt, recognize},
+    bytes::complete::tag, error::ParseError, sequence::{delimited, pair}, IResult,
 };
 
 use crate::ast::Atom;
@@ -14,6 +14,11 @@ where
     F: Fn(&'a str) -> IResult<&'a str, O, E>,
 {
     delimited(multispace0, inner, multispace0)
+}
+
+fn parse_number(i: &str) -> IResult<&str, Atom> {
+    let parser = recognize(pair(opt(tag("-")), digit1));
+    map(parser, |num: &str| Atom::Number(num.parse().unwrap()))(i)
 }
 
 fn parse_boolean(i: &str) -> IResult<&str, Atom> {
@@ -36,5 +41,14 @@ mod tests {
         let (i, v) = parse_boolean("false and true").unwrap();
         assert_eq!(v, Atom::Boolean(false));
         assert_eq!(i, " and true");
+    }
+
+    #[test]
+    fn test_parse_numbers() {
+        let (_, v) = parse_number("-10").unwrap();
+        assert_eq!(v, Atom::Number(-10));
+
+        let (_, v) = parse_number("199").unwrap();
+        assert_eq!(v, Atom::Number(199));
     }
 }
