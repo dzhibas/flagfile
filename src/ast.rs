@@ -74,4 +74,10 @@ impl LogicOp {
     }
 }
 
-pub enum AstNode {}
+#[derive(Debug)]
+pub enum AstNode {
+    Variable(Atom),
+    Constant(Atom),
+    Compare(Box<AstNode>, ComparisonOp, Box<AstNode>),
+    Logic(Box<AstNode>, LogicOp, Box<AstNode>),
+}

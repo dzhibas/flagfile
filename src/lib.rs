@@ -44,7 +44,7 @@ fn parse_variable_clean_spaces(i: &str) -> IResult<&str, &str> {
     preceded(multispace0, parse_variable)(i)
 }
 
-fn parse_comparison_op(i: &str) -> IResult<&str, ComparisonOp> {
+fn parse_comparison_op_old(i: &str) -> IResult<&str, ComparisonOp> {
     let (i, t) = alt((
         tag("="),
         tag(">"),
@@ -64,7 +64,7 @@ fn parse_logic_op(i: &str) -> IResult<&str, LogicOp> {
 }
 
 fn parse_equal(i: &str) -> IResult<&str, ComparisonOp> {
-    let (i, (_, op, _)) = tuple((space0, parse_comparison_op, space0))(i)?;
+    let (i, (_, op, _)) = tuple((space0, parse_comparison_op_old, space0))(i)?;
     return Ok((i, op));
 }
 

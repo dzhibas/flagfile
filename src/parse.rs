@@ -4,13 +4,13 @@ use nom::{
     character::complete::{alpha1, alphanumeric1, digit1, multispace0},
     combinator::{map, opt, recognize},
     error::ParseError,
-    multi::many0_count,
+    multi::{many0, many0_count},
     number::complete::double,
-    sequence::{delimited, pair},
+    sequence::{delimited, pair, tuple},
     IResult,
 };
 
-use crate::{ast::Atom, ComparisonOp, LogicOp};
+use crate::ast::{AstNode, Atom, ComparisonOp, LogicOp};
 
 /// Took from nom recipes
 fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
@@ -64,7 +64,7 @@ fn parse_atom(i: &str) -> IResult<&str, Atom> {
 fn parse_comparison_op(i: &str) -> IResult<&str, ComparisonOp> {
     alt((
         map(alt((tag("!="), tag("<>"))), |_| ComparisonOp::NotEq),
-        map(alt((tag("="), tag("=="))), |_| ComparisonOp::Eq),
+        map(alt((tag("=="), tag("="))), |_| ComparisonOp::Eq),
         map(tag("<="), |_| ComparisonOp::LessEq),
         map(tag("<"), |_| ComparisonOp::Less),
         map(tag(">="), |_| ComparisonOp::MoreEq),
@@ -77,6 +77,24 @@ fn parse_logic_op(i: &str) -> IResult<&str, LogicOp> {
         map(alt((tag("&&"), tag_no_case("and"))), |_| LogicOp::And),
         map(alt((tag("||"), tag_no_case("or"))), |_| LogicOp::Or),
     ))(i)
+}
+
+fn parse_compare_expr(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((parse_variable, ws(parse_comparison_op), parse_atom));
+    map(parser, |(var, op, val)| {
+        AstNode::Compare(
+            Box::new(AstNode::Variable(var)),
+            op,
+            Box::new(AstNode::Constant(val)),
+        )
+    })(i)
+}
+
+fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((parse_compare_expr, ws(parse_logic_op), parse_compare_expr));
+    map(parser, |(var, op, val)| {
+        AstNode::Logic(Box::new(var), op, Box::new(val))
+    })(i)
 }
 
 #[cfg(test)]
@@ -118,11 +136,27 @@ mod tests {
     fn test_comparison_op() {
         let (i, v) = parse_comparison_op("<>").unwrap();
         assert_eq!(v, ComparisonOp::NotEq);
+
+        let (i, v) = parse_comparison_op("==").unwrap();
+        assert_eq!(v, ComparisonOp::Eq);
+        assert_eq!(i, "");
     }
 
     #[test]
     fn test_logic_op() {
         let (i, v) = parse_logic_op("&& this").unwrap();
         assert_eq!(v, LogicOp::And);
+    }
+
+    #[test]
+    fn test_compare_expr() {
+        let (i, v) = parse_compare_expr("_demo >= 10").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_logic_expr() {
+        let (i, v) = parse_logic_expr("_demo >= 10 && demo == \"something more than that\"").unwrap();
+        assert_eq!(i, "");
     }
 }
