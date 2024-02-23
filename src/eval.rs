@@ -39,7 +39,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_basic_eval() {
+    fn test_comparison_expr_eval() {
         let context = HashMap::from([
             ("a", Atom::Number(3)),
             ("b", Atom::String("demo".to_string())),
@@ -69,5 +69,30 @@ mod tests {
         assert_eq!(eval(&parse("a!=4").unwrap().1, &context).unwrap(), true);
         assert_eq!(eval(&parse("a==4").unwrap().1, &context).unwrap(), false);
         assert_eq!(eval(&parse("a==3").unwrap().1, &context).unwrap(), true);
+    }
+    #[test]
+    fn test_compare_string_expr_eval() {
+        assert_eq!(
+            eval(
+                &parse("car!='Tesla'").unwrap().1,
+                &HashMap::from([("car", Atom::String("BMW".into()))])
+            )
+            .unwrap(),
+            true
+        );
+        assert_eq!(
+            eval(
+                &parse("car=='Tesla'").unwrap().1,
+                &HashMap::from([("car", Atom::String("Tesla".into()))])
+            )
+            .unwrap(),
+            true
+        );
+    }
+
+    #[test]
+    fn test_logic_expr_eval() {
+
+        // assert_eq!(eval(&parse("a>4 and b<3").unwrap().1, &HashMap::from([])).unwrap(), true);
     }
 }
