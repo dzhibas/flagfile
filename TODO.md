@@ -4,4 +4,5 @@
 - [+] either lower() or upper() function calls or case insensitive string comparison operators
 - [+] support for single quote strings
 - [+] evaluation with provided context
-- [ ] date comparisons
+- [+] date comparisons
+- [ ] date > timestamp comparison

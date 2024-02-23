@@ -315,8 +315,20 @@ mod tests {
     }
 
     #[test]
-    fn test_logic_expr_eval() {
+    fn testing_date_comparison_evaluation() {
+        let (i, expr) = parse("created > 2024-02-02 and created <= 2024-02-13").unwrap();
+        assert_eq!(
+            true,
+            eval(&expr, &HashMap::from([("created", "2024-02-12".into())])).unwrap()
+        );
 
-        // assert_eq!(eval(&parse("a>4 and b<3").unwrap().1, &HashMap::from([])).unwrap(), true);
+        assert_eq!(
+            false,
+            eval(
+                &parse("created < 2024-02-02").unwrap().1,
+                &HashMap::from([("created", "2024-02-02".into())])
+            )
+            .unwrap()
+        );
     }
 }

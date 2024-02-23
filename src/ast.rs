@@ -46,6 +46,11 @@ impl PartialOrd for Atom {
                 Atom::Number(v2) => v.partial_cmp(&f64::from(*v2)),
                 _ => None,
             },
+            Atom::Date(v) => match other {
+                Atom::Date(v2) => v.partial_cmp(v2),
+                /// TODO: if compare to number it might be unixtimestamp
+                _ => None,
+            },
             _ => None,
         }
     }
