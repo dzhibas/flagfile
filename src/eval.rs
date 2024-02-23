@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use crate::ast::{AstNode, Atom, ComparisonOp};
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp};
 
 pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &'a str> {
     let mut result = false;
     result = match expr {
+        // true || false
         AstNode::Constant(var) => {
             let mut result = false;
             if let Atom::Boolean(v) = var {
@@ -18,9 +19,9 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
             }
             result
         }
+        // a == 3
+        // a < 3
         AstNode::Compare(var, op, val) => {
-            // check var in context
-            // compare with val
             let context_val = context.get(var.as_str().unwrap());
             let val_content = match val.as_ref() {
                 AstNode::Constant(a) => Some(a),
@@ -41,6 +42,39 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
                 false
             }
         }
+        // x in (1, 2, 3)
+        AstNode::Array(var, op, list) => {
+            let mut result = false;
+            if let AstNode::List(vec_list) = list.as_ref() {
+                if let AstNode::Variable(Atom::Variable(var)) = var.as_ref() {
+                    let var_value = context.get(&var.as_str());
+                    if let Some(search_value) = var_value {
+                        match op {
+                            ArrayOp::In => {
+                                // check if this value is in the list
+                                for i in vec_list.iter() {
+                                    if search_value == i {
+                                        result = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            ArrayOp::NotIn => {
+                                // a not in (c,d)
+                                let mut found = false;
+                                for i in vec_list.iter() {
+                                    if search_value == i {
+                                        found = true;
+                                    }
+                                }
+                                result = !found;
+                            }
+                        }
+                    }
+                }
+            }
+            result
+        }
         _ => false,
     };
     Ok(result)
@@ -50,6 +84,47 @@ mod tests {
     use crate::{ast::Atom, parse::parse};
 
     use super::*;
+
+    #[test]
+    fn array_eval_test() {
+        let context = HashMap::from([
+            ("x", Atom::Number(10)),
+            ("y", Atom::String("tree".to_string())),
+        ]);
+        let (i, expr) = parse("y in ('one', 'two', 'tree')").unwrap();
+        let res = eval(&expr, &context).unwrap();
+        assert_eq!(res, true);
+
+        assert_eq!(
+            false,
+            eval(
+                &expr,
+                &HashMap::from([("y", Atom::String("four".to_string())),])
+            )
+            .unwrap()
+        );
+
+        assert_eq!(
+            true,
+            eval(
+                &parse("y not in ('one','two','tree')").unwrap().1,
+                &HashMap::from([("y", Atom::String("four".to_string())),])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn compare_variable_with_string_in_array_test() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("y in (one,two,tree)").unwrap().1,
+                &HashMap::from([("y", Atom::String("two".to_string())),])
+            )
+            .unwrap()
+        );
+    }
 
     #[test]
     fn test_comparison_expr_eval() {

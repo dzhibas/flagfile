@@ -2,8 +2,7 @@ use core::fmt;
 
 use chrono::NaiveDate;
 
-/// TODO: add date and datetime as its common
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 pub enum Atom {
     String(String),
     Number(i32),
@@ -12,6 +11,23 @@ pub enum Atom {
     Variable(String),
     Date(NaiveDate),
     DateTime(String),
+}
+
+impl PartialEq<Atom> for Atom {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (Atom::String(s1), Atom::String(s2)) => s1 == s2,
+            (Atom::Variable(v1), Atom::Variable(v2)) => v1 == v2, 
+            (Atom::String(v1), Atom::Variable(v2)) => v1 == v2, 
+            (Atom::Variable(v1), Atom::String(v2)) => v1 == v2, 
+            (Atom::Number(n1), Atom::Number(n2)) => n1 == n2,
+            (Atom::Float(f1), Atom::Float(f2)) => f1 == f2, 
+            (Atom::Boolean(b1), Atom::Boolean(b2)) => b1 == b2,
+            (Atom::Date(d1), Atom::Date(d2)) => d1 == d2,
+            (Atom::DateTime(t1), Atom::DateTime(t2)) => t1 == t2,
+            _ => false,
+        }
+    }
 }
 
 impl PartialOrd for Atom {
