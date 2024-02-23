@@ -243,6 +243,35 @@ mod tests {
     }
 
     #[test]
+    fn parse_boolean_test() {
+        let test_cases = vec![
+            ("true", Ok(("", Atom::Boolean(true)))),
+            ("TRUE", Ok(("", Atom::Boolean(true)))),
+            ("false", Ok(("", Atom::Boolean(false)))),
+            ("FALSE", Ok(("", Atom::Boolean(false)))),
+            (
+                "1",
+                Err(nom::Err::Error(nom::error::Error {
+                    input: "1",
+                    code: nom::error::ErrorKind::Tag,
+                })),
+            ),
+            (
+                "hello",
+                Err(nom::Err::Error(nom::error::Error {
+                    input: "hello",
+                    code: nom::error::ErrorKind::Tag,
+                })),
+            ),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = parse_boolean(input);
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
     fn test_parse_numbers() {
         let (_, v) = parse_number("-10").unwrap();
         assert_eq!(v, Atom::Number(-10));
