@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp};
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
 
 pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &'a str> {
+    let mut inner_context = context.clone();
     let mut result = false;
     result = match expr {
         // true || false
@@ -12,7 +13,7 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
                 result = *v;
             }
             if let Atom::Variable(v) = var {
-                let context_val = context.get(v.as_str());
+                let context_val = inner_context.get(v.as_str());
                 if let Some(Atom::Boolean(inner)) = context_val {
                     result = *inner;
                 }
@@ -22,7 +23,7 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
         // a == 3
         // a < 3
         AstNode::Compare(var, op, val) => {
-            let context_val = context.get(var.as_str().unwrap());
+            let context_val = inner_context.get(var.as_str().unwrap());
             let val_content = match val.as_ref() {
                 AstNode::Constant(a) => Some(a),
                 _ => None,
@@ -47,7 +48,7 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
             let mut result = false;
             if let AstNode::List(vec_list) = list.as_ref() {
                 if let AstNode::Variable(Atom::Variable(var)) = var.as_ref() {
-                    let var_value = context.get(&var.as_str());
+                    let var_value = inner_context.get(&var.as_str());
                     if let Some(search_value) = var_value {
                         match op {
                             ArrayOp::In => {
@@ -75,15 +76,52 @@ pub fn eval<'a>(expr: &AstNode, context: &HashMap<&str, Atom>) -> Result<bool, &
             }
             result
         }
-        // todo Function, Logic, Scope
         AstNode::Logic(expr1, op, expr2) => {
-            todo!()
+            let expr1_eval = eval(expr1, &inner_context).unwrap();
+            let expr2_eval = eval(expr2, &inner_context).unwrap();
+            match op {
+                LogicOp::And => expr1_eval && expr2_eval,
+                LogicOp::Or => expr1_eval || expr2_eval,
+            }
         }
-        AstNode::Function(func, variable) => {
-            todo!()
-        }
+        AstNode::Function(func, variable) => match func {
+            FnCall::Upper => {
+                if let AstNode::Variable(Atom::Variable(var)) = variable.as_ref() {
+                    if let Some(v) = inner_context.get_mut(var.as_str()) {
+                        let out = match v {
+                            Atom::String(val) => Atom::String(val.to_uppercase()),
+                            Atom::Number(val) => Atom::Number(*val),
+                            Atom::Float(val) => Atom::Float(*val),
+                            Atom::Boolean(val) => Atom::Boolean(*val),
+                            Atom::Variable(val) => Atom::Variable(val.to_uppercase()),
+                            Atom::Date(val) => Atom::Date(*val),
+                            Atom::DateTime(val) => Atom::DateTime(val.to_string()),
+                        };
+                        *v = out;
+                    }
+                }
+                false
+            }
+            FnCall::Lower => {
+                if let AstNode::Variable(Atom::Variable(var)) = variable.as_ref() {
+                    if let Some(v) = inner_context.get_mut(var.as_str()) {
+                        let out = match v {
+                            Atom::String(val) => Atom::String(val.to_lowercase()),
+                            Atom::Number(val) => Atom::Number(*val),
+                            Atom::Float(val) => Atom::Float(*val),
+                            Atom::Boolean(val) => Atom::Boolean(*val),
+                            Atom::Variable(val) => Atom::Variable(val.to_lowercase()),
+                            Atom::Date(val) => Atom::Date(*val),
+                            Atom::DateTime(val) => Atom::DateTime(val.to_string()),
+                        };
+                        *v = out;
+                    }
+                }
+                false
+            }
+        },
         AstNode::Scope { expr, negate } => {
-            let res = eval(expr, context).unwrap();
+            let res = eval(expr, &inner_context).unwrap();
             match negate {
                 true => !res,
                 false => res,
@@ -98,6 +136,58 @@ mod tests {
     use crate::{ast::Atom, parse::parse};
 
     use super::*;
+
+    #[test]
+    fn logic_test() {
+        let (i, expr) = parse("x=1 and y=2").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("x", Atom::Number(1)), ("y", Atom::Number(2))])
+            )
+            .unwrap()
+        );
+
+        let (i, expr) = parse("x=1 || y=2").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("x", Atom::Number(12)), ("y", Atom::Number(2))])
+            )
+            .unwrap()
+        );
+
+        let (i, expr) = parse("countryCode==LT && city='Palanga'").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([
+                    ("countryCode", Atom::String("LT".to_string())),
+                    ("city", Atom::String("Palanga".to_string()))
+                ])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn testing_function_calls() {
+        // let (i, expr) = parse("lower(countryCode)==LT && city='Palanga'").unwrap();
+        // assert_eq!(
+        //     true,
+        //     eval(
+        //         &expr,
+        //         &HashMap::from([
+        //             ("countryCode", Atom::String("LT".to_string())),
+        //             ("city", Atom::String("Palanga".to_string()))
+        //         ])
+        //     )
+        //     .unwrap()
+        // );
+    }
 
     #[test]
     fn simple_scope_test() {
