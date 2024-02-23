@@ -273,4 +273,21 @@ mod tests {
         let res = parse_logic_expr(a);
         assert_eq!(res.is_err(), true);
     }
+
+    #[test]
+    fn test_extreme_test() {
+        /// TODO:
+        /// scopes with negates (!(a=b) and c=d)
+        /// date/date time Atom
+        /// function calls to lower / upper
+        /// values > variables should be strings
+        let expression = r###"a = b and c=d and something not in (1,2,3) or lower(z) == "demo car" or
+    z == "demo car" or
+    g in (4,5,6) and z == "demo car" or
+    model in (ms,mx,m3,my) and created >= 2024-01-01
+        and demo == false"###;
+        let (i, v) = parse(expression).unwrap();
+        assert_eq!(i, "");
+        dbg!(v);
+    }
 }
