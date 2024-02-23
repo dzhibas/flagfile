@@ -61,8 +61,8 @@ fn parse_date(i: &str) -> IResult<&str, Atom> {
     let parser = recognize(tuple((digit1, char('-'), digit1, char('-'), digit1)));
 
     map(parser, |date_str: &str| {
-       let dt = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Invalid date format");
-       Atom::Date(dt)
+        let dt = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Invalid date format");
+        Atom::Date(dt)
     })(i)
 }
 
@@ -163,9 +163,19 @@ fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
     })(i)
 }
 
-fn parse(input: &str) -> IResult<&str, Vec<AstNode>> {
-    let mut res: Vec<AstNode> = vec![];
+fn parse_parenthesized_expr(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((
+        opt(alt((tag_no_case("not"), tag("!")))),
+        delimited(ws(char('(')), parse_expr, ws(char(')'))),
+    ));
 
+    map(parser, |(not, expr)| AstNode::Scope {
+        expr: Box::new(expr),
+        negate: not.is_some(),
+    })(i)
+}
+
+fn parse_expr(input: &str) -> IResult<&str, AstNode> {
     let (i, mut head) =
         alt((parse_logic_expr, parse_compare_or_array_expr))(input).expect("parse failed");
 
@@ -176,12 +186,13 @@ fn parse(input: &str) -> IResult<&str, Vec<AstNode>> {
         head = AstNode::Logic(Box::new(head.clone()), op.clone(), Box::new(expr.clone()));
     }
 
-    res.push(head.clone());
-
-    Ok((i, res))
+    Ok((i, head.clone()))
 }
 
-#[cfg(test)]
+fn parse(i: &str) -> IResult<&str, AstNode> {
+    alt((parse_parenthesized_expr, parse_expr))(i)
+}
+
 mod tests {
     use super::*;
 
@@ -276,7 +287,7 @@ mod tests {
             parse_logic_expr("a=3 && c = 3 || d not in (2,4,5)").is_ok(),
             true
         );
-        let (i, v) = parse("a=3 && c = 3 || d not in (2,4,5) and this<>34.43").unwrap();
+        let (i, v) = parse_expr("a=3 && c = 3 || d not in (2,4,5) and this<>34.43").unwrap();
         assert_eq!(i, "");
     }
 
@@ -295,7 +306,10 @@ mod tests {
         assert_eq!(res.is_ok(), true);
         if let Ok((i, v)) = res {
             assert_eq!(i, "");
-            assert_eq!(v, Atom::Date(NaiveDate::from_ymd_opt(2004,12,23).unwrap()));
+            assert_eq!(
+                v,
+                Atom::Date(NaiveDate::from_ymd_opt(2004, 12, 23).unwrap())
+            );
         }
     }
 
@@ -307,6 +321,12 @@ mod tests {
         if let Ok((i, v)) = res {
             assert_eq!(i, "");
         }
+    }
+
+    #[test]
+    fn test_scopes() {
+        let res = parse("not (a=b and c=d)");
+        assert_eq!(res.is_ok(), true);
     }
 
     //    #[test]

@@ -10,9 +10,11 @@ use nom::{
     Err, IResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
+
 mod ast;
 mod eval;
 mod parse;
+
 use ast::{ComparisonOp, LogicOp};
 use std::{collections::HashMap, error::Error};
 
