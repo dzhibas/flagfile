@@ -30,6 +30,7 @@ pub enum ComparisonOp {
     MoreEq,
     LessEq,
     NotEq,
+    In,
 }
 
 impl ComparisonOp {
@@ -41,6 +42,7 @@ impl ComparisonOp {
             "<" => ComparisonOp::Less,
             "<=" => ComparisonOp::LessEq,
             "!=" | "<>" => ComparisonOp::NotEq,
+            "in" => ComparisonOp::In,
             _ => unreachable!(),
         }
     }
@@ -54,6 +56,7 @@ impl fmt::Display for ComparisonOp {
             ComparisonOp::MoreEq => write!(f, ">="),
             ComparisonOp::LessEq => write!(f, "<="),
             ComparisonOp::NotEq => write!(f, "<>"),
+            ComparisonOp::In => write!(f, "in"),
         }
     }
 }

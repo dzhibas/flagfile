@@ -1,8 +1,10 @@
+use std::f64::consts::E;
+
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_until},
-    character::complete::{alpha1, alphanumeric1, digit1, multispace0},
-    combinator::{map, opt, recognize},
+    character::complete::{alpha1, alphanumeric1, char, digit1, multispace0},
+    combinator::{cut, map, opt, recognize},
     error::ParseError,
     multi::{many0, many0_count, separated_list0},
     number::complete::double,
@@ -26,8 +28,23 @@ fn parse_number(i: &str) -> IResult<&str, Atom> {
     let parser = recognize(pair(opt(tag("-")), digit1));
     map(parser, |num: &str| Atom::Number(num.parse().unwrap()))(i)
 }
+
+/// modified original double parser to always have "." for floats
 fn parse_float(i: &str) -> IResult<&str, Atom> {
-    map(double, Atom::Float)(i)
+    let parser = recognize(tuple((
+        opt(alt((char('+'), char('-')))),
+        alt((
+            map(tuple((digit1, pair(char('.'), opt(digit1)))), |_| ()),
+            map(tuple((char('.'), digit1)), |_| ()),
+        )),
+        opt(tuple((
+            alt((char('e'), char('E'))),
+            opt(alt((char('+'), char('-')))),
+            cut(digit1),
+        ))),
+    )));
+
+    map(parser, |n: &str| Atom::Float(n.parse().unwrap()))(i)
 }
 
 fn parse_boolean(i: &str) -> IResult<&str, Atom> {
@@ -69,6 +86,7 @@ fn parse_comparison_op(i: &str) -> IResult<&str, ComparisonOp> {
         map(tag("<"), |_| ComparisonOp::Less),
         map(tag(">="), |_| ComparisonOp::MoreEq),
         map(tag(">"), |_| ComparisonOp::More),
+        map(tag("in"), |_| ComparisonOp::In),
     ))(i)
 }
 
@@ -87,15 +105,22 @@ fn parse_list(i: &str) -> IResult<&str, AstNode> {
     );
     map(parser, AstNode::List)(i)
 }
+fn parse_variable_node(i: &str) -> IResult<&str, AstNode> {
+    map(parse_variable, AstNode::Variable)(i)
+}
+
+fn parse_constant(i: &str) -> IResult<&str, AstNode> {
+    map(parse_atom, AstNode::Constant)(i)
+}
 
 fn parse_compare_expr(i: &str) -> IResult<&str, AstNode> {
-    let parser = tuple((parse_variable, ws(parse_comparison_op), parse_atom));
+    let parser = tuple((
+        parse_variable_node,
+        ws(parse_comparison_op),
+        alt((parse_constant, parse_list)),
+    ));
     map(parser, |(var, op, val)| {
-        AstNode::Compare(
-            Box::new(AstNode::Variable(var)),
-            op,
-            Box::new(AstNode::Constant(val)),
-        )
+        AstNode::Compare(Box::new(var), op, Box::new(val))
     })(i)
 }
 
@@ -131,8 +156,14 @@ mod tests {
 
     #[test]
     fn test_float() {
-        let (_,v) = parse_atom("3.14").unwrap();
+        let (_, v) = parse_atom("3.14").unwrap();
         assert_eq!(v, Atom::Float(3.14));
+    }
+
+    #[test]
+    fn test_float_bug() {
+        let (_, v) = parse_atom("3").unwrap();
+        assert_eq!(v, Atom::Number(3));
     }
 
     #[test]
@@ -171,13 +202,21 @@ mod tests {
 
     #[test]
     fn test_logic_expr() {
-        let (i, v) = parse_logic_expr("_demo >= 10 && demo == \"something more than that\"").unwrap();
+        let (i, v) =
+            parse_logic_expr("_demo >= 10 && demo == \"something more than that\"").unwrap();
         assert_eq!(i, "");
     }
 
     #[test]
     fn test_parse_list() {
         let (i, v) = parse_list("(1,2, 34, \"demo\", -10, -3.14)").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_logic_expresion_with_list() {
+        let e = "a = 2 and b in  (1,2.2, \"demo\")";
+        let (i, v) = parse_logic_expr(e).unwrap();
         assert_eq!(i, "");
     }
 }
