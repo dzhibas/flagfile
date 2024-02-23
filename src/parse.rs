@@ -1,10 +1,14 @@
+use chrono::NaiveDate;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, tag_no_case, take_until},
-    character::complete::{alpha1, alphanumeric1, char, digit1, multispace0},
-    combinator::{cut, map, opt, recognize},
+    bytes::complete::{tag, tag_no_case, take_until, take_while_m_n},
+    character::{
+        complete::{alpha1, alphanumeric1, char, digit1, multispace0},
+        is_digit,
+    },
+    combinator::{cut, map, map_res, opt, recognize},
     error::ParseError,
-    multi::{many0, many0_count, separated_list0},
+    multi::{many0, many0_count, many_m_n, separated_list0},
     number::complete::double,
     sequence::{delimited, pair, preceded, tuple},
     IResult,
@@ -53,6 +57,15 @@ fn parse_boolean(i: &str) -> IResult<&str, Atom> {
     map(parser, Atom::Boolean)(i)
 }
 
+fn parse_date(i: &str) -> IResult<&str, Atom> {
+    let parser = recognize(tuple((digit1, char('-'), digit1, char('-'), digit1)));
+
+    map(parser, |date_str: &str| {
+       let dt = NaiveDate::parse_from_str(date_str, "%Y-%m-%d").expect("Invalid date format");
+       Atom::Date(dt)
+    })(i)
+}
+
 fn parse_string(i: &str) -> IResult<&str, Atom> {
     let parser_a = delimited(tag("\""), take_until("\""), tag("\""));
     let parser_b = delimited(tag("\'"), take_until("\'"), tag("\'"));
@@ -70,6 +83,7 @@ fn parse_variable(i: &str) -> IResult<&str, Atom> {
 
 fn parse_atom(i: &str) -> IResult<&str, Atom> {
     alt((
+        parse_date,
         parse_string,
         parse_boolean,
         parse_float,
@@ -275,6 +289,17 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_date() {
+        let a = "2004-12-23";
+        let res = parse_date(a);
+        assert_eq!(res.is_ok(), true);
+        if let Ok((i, v)) = res {
+            assert_eq!(i, "");
+            assert_eq!(v, Atom::Date(NaiveDate::from_ymd_opt(2004,12,23).unwrap()));
+        }
+    }
+
+    #[test]
     fn test_single_quote_string() {
         let a = "a='demo demo'";
         let res = parse_compare_expr(a);
@@ -284,19 +309,14 @@ mod tests {
         }
     }
 
-//    #[test]
-//    fn test_extreme_test() {
-//        /// TODO:
-//        /// scopes with negates (!(a=b) and c=d)
-//        /// date/date time Atom
-//        /// function calls to lower / upper
-//        /// values > variables should be strings
-//        let expression = r###"a = b and c=d and something not in (1,2,3) or lower(z) == "demo car" or
-//    z == "demo car" or
-//    g in (4,5,6) and z == "demo car" or
-//    model in (ms,mx,m3,my) and created >= 2024-01-01
-//        and demo == false"###;
-//        let (i, v) = parse(expression).unwrap();
-//        assert_eq!(i, "");
-//    }
+    //    #[test]
+    //    fn test_extreme_test() {
+    //        let expression = r###"a = b and c=d and something not in (1,2,3) or lower(z) == "demo car" or
+    //    z == "demo car" or
+    //    g in (4,5,6) and z == "demo car" or
+    //    model in (ms,mx,m3,my) and created >= 2024-01-01
+    //        and demo == false"###;
+    //        let (i, v) = parse(expression).unwrap();
+    //        assert_eq!(i, "");
+    //    }
 }

@@ -1,5 +1,7 @@
 use core::fmt;
 
+use chrono::NaiveDate;
+
 /// TODO: add date and datetime as its common
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
@@ -8,6 +10,8 @@ pub enum Atom {
     Float(f64),
     Boolean(bool),
     Variable(String),
+    Date(NaiveDate),
+    DateTime(String),
 }
 
 impl fmt::Display for Atom {
@@ -18,6 +22,8 @@ impl fmt::Display for Atom {
             Atom::Float(float) => write!(f, "{float}"),
             Atom::Boolean(bool) => write!(f, "{bool}"),
             Atom::Variable(var) => write!(f, "{var}"),
+            Atom::Date(var) => write!(f, "{var}"),
+            Atom::DateTime(var) => write!(f, "{var}"),
         }
     }
 }

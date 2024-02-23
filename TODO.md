@@ -1,4 +1,5 @@
-- [ ] Atom parsing for Date & DateTime
+- [+] Atom parsing for Date
+- [+] Date converted to chrono datetime for comparison later
 - [ ] Scopes and negated scopes
 - [ ] either lower() or upper() function calls or case insensitive string comparison operators
 - [+] support for single quote strings
