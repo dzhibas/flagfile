@@ -1,5 +1,3 @@
-use std::f64::consts::E;
-
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_until},
@@ -288,6 +286,5 @@ mod tests {
         and demo == false"###;
         let (i, v) = parse(expression).unwrap();
         assert_eq!(i, "");
-        dbg!(v);
     }
 }
