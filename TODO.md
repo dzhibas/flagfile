@@ -7,4 +7,4 @@
 - [+] date comparisons
 - [ ] date > timestamp comparison
 - [ ] parse NOW function
-- [ ] parse comments in function body under rules
+- [+] parse comments in function body under rules

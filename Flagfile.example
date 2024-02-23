@@ -41,5 +41,8 @@ FF-testing {
 FF-feature1 {
     /* comment like this */
     true
+    a == "something": false
+    false
+    json({})
 }
 
