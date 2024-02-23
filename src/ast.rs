@@ -3,7 +3,7 @@ use core::fmt;
 use chrono::NaiveDate;
 
 /// TODO: add date and datetime as its common
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, PartialOrd)]
 pub enum Atom {
     String(String),
     Number(i64),
@@ -103,4 +103,16 @@ pub enum AstNode {
     Array(Box<AstNode>, ArrayOp, Box<AstNode>),
     Logic(Box<AstNode>, LogicOp, Box<AstNode>),
     Scope { expr: Box<AstNode>, negate: bool },
+}
+
+impl AstNode {
+    pub fn as_str(&self) -> Option<&str> {
+        match self {
+            AstNode::Variable(val) => match val {
+                Atom::Variable(s) => Some(s.as_str()),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
 }

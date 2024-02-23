@@ -380,6 +380,5 @@ mod tests {
         and demo == false) and ((a=2) and not (c=3))"###;
         let (i, v) = parse(expression).unwrap();
         assert_eq!(i, "");
-        dbg!(v);
     }
 }
