@@ -183,9 +183,9 @@ fn parse_compare_or_array_expr(i: &str) -> IResult<&str, AstNode> {
 fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
     /// a=b AND b not in (1,2,3)
     let parser = tuple((
-        parse_compare_or_array_expr,
+        alt((parse_compare_or_array_expr, parse_parenthesized_expr)),
         ws(parse_logic_op),
-        parse_compare_or_array_expr,
+        alt((parse_compare_or_array_expr, parse_parenthesized_expr)),
     ));
     map(parser, |(var, op, val)| {
         AstNode::Logic(Box::new(var), op, Box::new(val))

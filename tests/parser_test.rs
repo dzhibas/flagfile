@@ -36,3 +36,28 @@ fn test_evaluation() {
     assert_eq!(val, true);
     assert_eq!(i, ""); // empty remainder of parsed string
 }
+
+#[test]
+fn scoped_test_case() {
+    let rule = r###"accountRole in (Admin, "Admin/Order Manager") and
+    ((lower(account_country_code) == lt or account_uuid = 32434) and accountType="Some Corporate & Managament Type") and user_id == 2032312"###;
+
+    let context = HashMap::from([
+        ("accountRole", Atom::String("Admin/Order Manager".into())),
+        ("account_country_code", Atom::String("LT".into())),
+        (
+            "account_uuid",
+            Atom::String("543987b0-e69f-41ec-9a68-cfc5cfb15afe".into()),
+        ),
+        (
+            "accountType",
+            Atom::String("Some Corporate & Managament Type".into()),
+        ),
+        ("user_id", Atom::Number(2032312)),
+    ]);
+
+    let (i, expr) = parse(&rule).unwrap();
+    let val = eval(&expr, &context).unwrap();
+    assert_eq!(val, true);
+    assert_eq!(i, ""); // empty remainder of parsed string
+}
