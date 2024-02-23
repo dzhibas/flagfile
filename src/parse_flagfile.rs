@@ -16,6 +16,9 @@ use crate::{
     parse::{parse, parse_boolean, ws},
 };
 
+// Dependency
+// Flagfile -> Vec<Feature> -> Feature -> Vec<Rule> -> Rule -> Expr -> Return
+
 #[derive(Debug, Clone)]
 pub enum FlagReturn {
     OnOff(bool),
@@ -30,7 +33,7 @@ pub enum Rule {
 
 pub type FlagValue<'a> = HashMap<&'a str, Vec<Rule>>;
 
-// Parses and throws away: // comment EOL
+/// Parses and throws away: // comment EOL
 fn parse_comment(i: &str) -> IResult<&str, ()> {
     value((), pair(ws(tag("//")), is_not("\n\r")))(i)
 }
@@ -75,9 +78,11 @@ fn parse_rule_expr(i: &str) -> IResult<&str, Rule> {
     let parser = tuple((parse, ws(tag(":")), parse_return_val));
     map(parser, |(e, _, v)| Rule::BoolExpressionValue(e, v))(i)
 }
+
 fn parse_rule_static(i: &str) -> IResult<&str, Rule> {
     map(parse_return_val, |v| Rule::Value(v))(i)
 }
+
 fn parse_rules(i: &str) -> IResult<&str, Rule> {
     alt((parse_rule_expr, parse_rule_static))(i)
 }

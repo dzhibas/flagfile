@@ -4,7 +4,8 @@ FF-feature-flat-on-off -> true
 // you can return non-boolean in this example json. or empty json object json({})
 FF-feature-json-variant -> json({"success": true})
 
-// features are forced to start with FF- case-sensitive as it allows you later to find all flags through in codebase
+// features are forced to start with FF- case-sensitive as 
+// it allows you later to find all flags through in codebase
 FF-feature-name-specifics -> false
 
 // you can have feature with multiple rules in it with default flag value returned in end
