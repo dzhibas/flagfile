@@ -1,10 +1,10 @@
 use nom::{
     branch::alt,
     bytes::complete::tag,
-    character::complete::{alpha1, alphanumeric1, line_ending, space0},
+    character::complete::{alpha1, alphanumeric1, line_ending, space0, multispace0},
     combinator::{eof, recognize},
     complete::take,
-    multi::{many0, many0_count},
+    multi::{many0, many0_count, many_till},
     sequence::{pair, tuple},
     Err, IResult,
 };
@@ -26,8 +26,9 @@ fn parse_equal(input: &str) -> IResult<&str, (&str, &str, &str)> {
 }
 
 fn parse_value(input: &str) -> IResult<&str, &str> {
-    let (i, (v, _)) = tuple((alphanumeric1, alt((line_ending, eof))))(input)?;
-    Ok((i, v))
+    let (tail, _) = tag("\"")(input)?;
+    let (tail, inner) = recognize(many_till(alt((alphanumeric1,multispace0)), tag("\"")))(tail)?;
+    Ok((tail, &inner[0 .. inner.len()-1]))
 }
 
 fn parse_assignment(input: &str) -> IResult<&str, Pair> {
@@ -45,9 +46,9 @@ fn parse_main(input: &str) -> IResult<&str, Vec<Pair>> {
 }
 
 fn main() -> Result<(), AppError> {
-    let content = r##"street_name =Random
-countryCode =  NL
-demo=demo4"##;
+    let content = r##"street_name ="Random this or that"
+countryCode = "NL"
+demo="demo4""##;
 
     let res = parse_main(content)?;
 
