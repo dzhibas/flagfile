@@ -331,4 +331,57 @@ mod tests {
             .unwrap()
         );
     }
+
+    #[test]
+    fn testing_logical_expression() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("a=b and (c=d or e=f)").unwrap().1,
+                &HashMap::from([
+                    ("a", "b".into()),
+                    ("c", "non-exiting".into()),
+                    ("e", "f".into())
+                ])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("a=b and (c=d or e=f)").unwrap().1,
+                &HashMap::from([("a", "b".into()), ("c", "d".into()), ("e", "fnon".into())])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("a=b and c=d or e=f").unwrap().1,
+                &HashMap::from([
+                    ("a", "non".into()),
+                    ("c", "non-exiting".into()),
+                    ("e", "f".into())
+                ])
+            )
+            .unwrap()
+        );
+
+        assert_eq!(
+            true,
+            eval(
+                &parse("a=b and c=d or e=f").unwrap().1,
+                &HashMap::from([("a", "non".into()), ("c", "non".into()), ("e", "f".into())])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("a=b and c=d or e=f").unwrap().1,
+                &HashMap::from([("a", "non".into()), ("c", "d".into()), ("e", "non".into())])
+            )
+            .unwrap()
+        );
+    }
 }
