@@ -19,32 +19,4 @@ eventually this lib compiles into wasm and used in UI to validate and parse rule
 
 ### Vision for Flagfile example
 
-scheduling of the flag:
-```
-demo-flag ->
-    NOW > 2024-02-02: true
-    false
-```
-
-Flagfile example with multiple flags:
-```
-// flag with default false
-feature1 ->
-    created > 2024-01-01 and userId in (12,3,4): true
-    false
-
-// flag where default is true
-feature2 -> 
-    country in (LT, NL) and role not in (Admin, Viewer): false
-    true
-
-// flag with variation of json
-feature3->
-    country in (NL, LT, DE): json({success: true})
-    json({success: false})
-
-// simplest flag which is turned off
-feature4->
-    false
-```
-
+Please take a look at format and supported features in [Flagfile.example]
