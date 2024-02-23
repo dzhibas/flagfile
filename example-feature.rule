@@ -1,5 +1,5 @@
 feature-232->
-    a = b and c=d and not (g in [1,2,3] or z == "demo car"): true
+    a = b and c=d and (dd not in (1,2,3) or z == "demo car"): true
     z == "demo car": false
     g in (4,5,6) and z == "demo car": true
     model in (ms,mx,m3,my) and created >= 2024-01-01
