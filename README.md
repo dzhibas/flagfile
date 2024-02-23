@@ -1,9 +1,18 @@
-# boolean expresion parser in Nom
+# Boolean expression parser in Nom for feature flagging solution
 
-same as pest parser written with pest.rs here https://github.com/dzhibas/bool_expr_parser but parsed with NOM
+Same as pest parser written with pest.rs here https://github.com/dzhibas/bool_expr_parser but parsed with NOM
 
-## TODO
+Lets say you have activation rule likes this:
 
-- negating In comparison /// not in (this, that), or !(a=b or c=d)
-- array expressions in [] not in []
-- value expressions: ="string inside", =STRING_without_spaces (treated as string if no spaces around), =1212 (digits), =1213.21 (floats)
+```
+country == NL and created > 2024-02-15 and userId not in (122133, 122132323, 2323423)
+```
+
+```rust
+let rule = "country == NL and created > 2024-02-15 and userId not in (122133, 122132323, 2323423)";
+let (i, expr) = parse(&rule).expect("parse error");
+let flag_value = eval(&expr, &HashMap::from([("country", "NL"), ("userId", "2132321"), ("created", "2024-02-02")]);
+dbg!(flag_value);
+```
+
+eventually this lib compiles into wasm and used in UI to validate and parse rules, and with FFI exported into other languages to parse and evaluate rules
