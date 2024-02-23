@@ -11,6 +11,7 @@ use nom::{
     sequence::{delimited, pair, preceded, separated_pair, tuple},
     Err, IResult,
 };
+use wasm_bindgen::prelude::wasm_bindgen;
 
 use std::{collections::HashMap, error::Error};
 
@@ -18,7 +19,7 @@ type Pair = HashMap<String, String>;
 type AppError = Box<dyn Error>;
 
 #[derive(Debug)]
-enum AstNode<'a> {
+pub enum AstNode<'a> {
     Comparison {
         op: ComparisonOp,
         var: &'a str,
@@ -71,15 +72,15 @@ impl LogicOp {
     }
 }
 
-fn parse_variable(input: &str) -> IResult<&str, &str> {
+fn parse_variable(i: &str) -> IResult<&str, &str> {
     recognize(pair(
         alt((alpha1, tag("_"))),
         many0_count(alt((alphanumeric1, tag("_")))),
-    ))(input)
+    ))(i)
 }
 
-fn parse_variable_clean_spaces(input: &str) -> IResult<&str, &str> {
-    preceded(multispace0, parse_variable)(input)
+fn parse_variable_clean_spaces(i: &str) -> IResult<&str, &str> {
+    preceded(multispace0, parse_variable)(i)
 }
 
 fn parse_comparison_op(i: &str) -> IResult<&str, ComparisonOp> {
@@ -101,8 +102,8 @@ fn parse_logic_op(i: &str) -> IResult<&str, LogicOp> {
     Ok((i, LogicOp::from_str(t)))
 }
 
-fn parse_equal(input: &str) -> IResult<&str, ComparisonOp> {
-    let (i, (_, op, _)) = tuple((space0, parse_comparison_op, space0))(input)?;
+fn parse_equal(i: &str) -> IResult<&str, ComparisonOp> {
+    let (i, (_, op, _)) = tuple((space0, parse_comparison_op, space0))(i)?;
     return Ok((i, op));
 }
 
@@ -140,6 +141,13 @@ fn parse_comparison(i: &str) -> IResult<&str, AstNode> {
 
 fn parse_main(i: &str) -> IResult<&str, AstNode> {
     alt((parse_comparison,))(i)
+}
+
+#[wasm_bindgen]
+pub fn parse_wasm(i: &str) -> String {
+    let Ok((i, tree)) = parse_main(i) else { todo!() };
+    let b = format!("{:?}", tree);
+    b.to_string()
 }
 
 fn main() -> Result<(), AppError> {
