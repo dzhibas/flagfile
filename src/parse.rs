@@ -1,16 +1,12 @@
 use chrono::NaiveDate;
 use nom::{
     branch::alt,
-    bytes::complete::{tag, tag_no_case, take_until, take_while_m_n},
-    character::{
-        complete::{alpha1, alphanumeric1, char, digit1, multispace0},
-        is_digit,
-    },
-    combinator::{cut, map, map_res, opt, recognize},
+    bytes::complete::{tag, tag_no_case, take_until},
+    character::complete::{alpha1, alphanumeric1, char, digit1, multispace0},
+    combinator::{cut, map, opt, recognize},
     error::ParseError,
-    multi::{many0, many0_count, many_m_n, separated_list0},
-    number::complete::double,
-    sequence::{delimited, pair, preceded, tuple},
+    multi::{many0, many0_count, separated_list0},
+    sequence::{delimited, pair, tuple},
     IResult,
 };
 
@@ -181,7 +177,7 @@ fn parse_compare_or_array_expr(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
-    /// a=b AND b not in (1,2,3)
+    // a=b AND b not in (1,2,3)
     let parser = tuple((
         alt((parse_compare_or_array_expr, parse_parenthesized_expr)),
         ws(parse_logic_op),
@@ -313,7 +309,7 @@ mod tests {
 
     #[test]
     fn test_comparison_op() {
-        let (i, v) = parse_comparison_op("<>").unwrap();
+        let (_i, v) = parse_comparison_op("<>").unwrap();
         assert_eq!(v, ComparisonOp::NotEq);
 
         let (i, v) = parse_comparison_op("==").unwrap();
@@ -323,33 +319,33 @@ mod tests {
 
     #[test]
     fn test_logic_op() {
-        let (i, v) = parse_logic_op("&& this").unwrap();
+        let (_i, v) = parse_logic_op("&& this").unwrap();
         assert_eq!(v, LogicOp::And);
     }
 
     #[test]
     fn test_compare_expr() {
-        let (i, v) = parse_compare_expr("_demo >= 10").unwrap();
+        let (i, _v) = parse_compare_expr("_demo >= 10").unwrap();
         assert_eq!(i, "");
     }
 
     #[test]
     fn test_logic_expr() {
-        let (i, v) =
+        let (i, _v) =
             parse_logic_expr("_demo >= 10 && demo == \"something more than that\"").unwrap();
         assert_eq!(i, "");
     }
 
     #[test]
     fn test_parse_list() {
-        let (i, v) = parse_list("(1,2, 34, \"demo\", -10, -3.14)").unwrap();
+        let (i, _v) = parse_list("(1,2, 34, \"demo\", -10, -3.14)").unwrap();
         assert_eq!(i, "");
     }
 
     #[test]
     fn test_logic_expresion_with_list() {
         let e = "a = 2 and b in  (1,2.2, \"demo\")";
-        let (i, v) = parse_logic_expr(e).unwrap();
+        let (i, _v) = parse_logic_expr(e).unwrap();
         assert_eq!(i, "");
     }
 
@@ -359,13 +355,13 @@ mod tests {
             parse_logic_expr("a=3 && c = 3 || d not in (2,4,5)").is_ok(),
             true
         );
-        let (i, v) = parse_expr("a=3 && c = 3 || d not in (2,4,5) and this<>34.43").unwrap();
+        let (i, _v) = parse_expr("a=3 && c = 3 || d not in (2,4,5) and this<>34.43").unwrap();
         assert_eq!(i, "");
     }
 
     #[test]
     fn test_list_bug() {
-        /// this should not be allowed as array should have either in () or not in ()
+        // this should not be allowed as array should have either in () or not in ()
         let a = "a == 2 and b >= (1,2,3)";
         let res = parse_logic_expr(a);
         assert_eq!(res.is_err(), true);
@@ -390,7 +386,7 @@ mod tests {
         let a = "a='demo demo'";
         let res = parse_compare_expr(a);
         assert_eq!(res.is_ok(), true);
-        if let Ok((i, v)) = res {
+        if let Ok((i, _v)) = res {
             assert_eq!(i, "");
         }
     }
@@ -414,7 +410,7 @@ mod tests {
     g in (4,5,6) and z == "demo car" or
     model in (ms,mx,m3,my) and !(created >= 2024-01-01
         and demo == false) and ((a=2) and not (c=3))"###;
-        let (i, v) = parse(expression).unwrap();
+        let (i, _v) = parse(expression).unwrap();
         assert_eq!(i, "");
     }
 }

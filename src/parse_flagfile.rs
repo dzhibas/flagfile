@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_until},
-    character::complete::{alpha1, alphanumeric1, char},
-    combinator::{map, opt, recognize, value},
+    character::complete::alphanumeric1,
+    combinator::{map, recognize, value},
     multi::{many0, many0_count, many1},
     sequence::{delimited, pair, preceded, terminated, tuple},
     IResult,

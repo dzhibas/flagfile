@@ -3,7 +3,6 @@ use std::collections::HashMap;
 use flagfile::ast::Atom;
 use flagfile::eval::Context;
 use flagfile::{self, eval::eval, parse::parse};
-use chrono::NaiveDate;
 
 #[test]
 fn test_hashmap_into() {
@@ -14,7 +13,7 @@ fn test_hashmap_into() {
 
 #[test]
 fn test_parsing() {
-    let (i, expr) = parse("!(a=b and c=d) and z=3").unwrap();
+    let (_i, expr) = parse("!(a=b and c=d) and z=3").unwrap();
     assert_eq!(
         true,
         eval(

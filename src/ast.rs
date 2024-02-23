@@ -1,7 +1,5 @@
-use core::fmt;
-use std::str::FromStr;
-
 use chrono::NaiveDate;
+use core::fmt;
 
 use crate::parse::parse_atom;
 
@@ -50,7 +48,7 @@ impl PartialOrd for Atom {
             },
             Atom::Date(v) => match other {
                 Atom::Date(v2) => v.partial_cmp(v2),
-                /// TODO: if compare to number it might be unixtimestamp
+                // TODO: if compare to number it might be unixtimestamp
                 _ => None,
             },
             _ => None,
@@ -75,7 +73,7 @@ impl fmt::Display for Atom {
 impl<'a> From<&'a str> for Atom {
     fn from(val: &'a str) -> Self {
         let res = parse_atom(val);
-        if let Ok((i, out)) = res {
+        if let Ok((_i, out)) = res {
             return out;
         }
         Atom::String(val.into())
@@ -107,7 +105,7 @@ impl ComparisonOp {
 }
 impl fmt::Display for ComparisonOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match (self) {
+        match self {
             ComparisonOp::Eq => write!(f, "=="),
             ComparisonOp::More => write!(f, ">"),
             ComparisonOp::Less => write!(f, "<"),

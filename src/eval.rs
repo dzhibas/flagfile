@@ -28,15 +28,14 @@ fn get_variable_value_from_context<'a>(
 }
 
 pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
-    let mut result = false;
-    result = match expr {
+    let result = match expr {
         // true || false
         AstNode::Constant(var) => {
             let mut result = false;
             if let Atom::Boolean(v) = var {
                 result = *v;
             }
-            if let Atom::Variable(v) = var {
+            if let Atom::Variable(_v) = var {
                 let context_val = get_variable_value_from_context(expr, context);
                 if let Some(Atom::Boolean(inner)) = context_val {
                     result = inner;
@@ -126,7 +125,7 @@ mod tests {
 
     #[test]
     fn logic_test() {
-        let (i, expr) = parse("x=1 and y=2").unwrap();
+        let (_i, expr) = parse("x=1 and y=2").unwrap();
         assert_eq!(
             true,
             eval(
@@ -136,7 +135,7 @@ mod tests {
             .unwrap()
         );
 
-        let (i, expr) = parse("x=1 || y=2").unwrap();
+        let (_i, expr) = parse("x=1 || y=2").unwrap();
         assert_eq!(
             true,
             eval(
@@ -146,7 +145,7 @@ mod tests {
             .unwrap()
         );
 
-        let (i, expr) = parse("countryCode==LT && city='Palanga'").unwrap();
+        let (_i, expr) = parse("countryCode==LT && city='Palanga'").unwrap();
         assert_eq!(
             true,
             eval(
@@ -162,7 +161,7 @@ mod tests {
 
     #[test]
     fn testing_function_calls() {
-        let (i, expr) = parse("lower(countryCode)==lt && upper(city)='PALANGA'").unwrap();
+        let (_i, expr) = parse("lower(countryCode)==lt && upper(city)='PALANGA'").unwrap();
         assert_eq!(
             true,
             eval(
@@ -178,7 +177,7 @@ mod tests {
 
     #[test]
     fn simple_scope_test() {
-        let (i, expr) = parse("!(country=LT)").unwrap();
+        let (_i, expr) = parse("!(country=LT)").unwrap();
         assert_eq!(
             false,
             eval(
@@ -189,7 +188,7 @@ mod tests {
         );
 
         // scope inside scope
-        let (i, expr) = parse("(not (country == Lithuania))").unwrap();
+        let (_i, expr) = parse("(not (country == Lithuania))").unwrap();
         assert_eq!(
             false,
             eval(
@@ -199,7 +198,7 @@ mod tests {
             .unwrap()
         );
 
-        let (i, expr) = parse("((lower(country) == netherlands))").unwrap();
+        let (_i, expr) = parse("((lower(country) == netherlands))").unwrap();
         assert_eq!(
             true,
             eval(
@@ -216,7 +215,7 @@ mod tests {
             ("x", Atom::Number(10)),
             ("y", Atom::String("tree".to_string())),
         ]);
-        let (i, expr) = parse("y in ('one', 'two', 'tree')").unwrap();
+        let (_i, expr) = parse("y in ('one', 'two', 'tree')").unwrap();
         let res = eval(&expr, &context).unwrap();
         assert_eq!(res, true);
 
@@ -317,7 +316,7 @@ mod tests {
 
     #[test]
     fn testing_date_comparison_evaluation() {
-        let (i, expr) = parse("created > 2024-02-02 and created <= 2024-02-13").unwrap();
+        let (_i, expr) = parse("created > 2024-02-02 and created <= 2024-02-13").unwrap();
         assert_eq!(
             true,
             eval(&expr, &HashMap::from([("created", "2024-02-12".into())])).unwrap()
