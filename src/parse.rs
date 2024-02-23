@@ -210,14 +210,12 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
         parse_logic_expr,
         parse_compare_or_array_expr,
         parse_constant,
-    ))(input)
-    .expect("parse failed");
+    ))(input)?;
 
     let (i, tail) = many0(pair(
         ws(parse_logic_op),
         alt((parse_compare_or_array_expr, parse_parenthesized_expr)),
-    ))(i)
-    .expect("Parse failed");
+    ))(i)?;
 
     for (op, expr) in tail {
         head = AstNode::Logic(Box::new(head.clone()), op.clone(), Box::new(expr.clone()));

@@ -21,18 +21,17 @@ FF-feature-flat-on-off -> true
 // you can return non-boolean in this example json
 FF-feature-json-variant -> json({"success": true})
 
-/*
 // feature with one rule
 // returns true for NL country, else false
 FF-feature-y {
     countryCode == NL: true
     false
 }
+// demo
+FF-some-other -> true
 
 // feature with inside commments and works like scheduler
 FF-testing {
-    // NOW actually should be Atom variable without value till its evaluated
-    NOW() >= 2024-02-18: true // this is basically scheduling something
     false
 }
 
@@ -40,4 +39,4 @@ FF-testing {
 FF-feature1 {
     true
 }
-*/
+

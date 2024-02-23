@@ -6,3 +6,5 @@
 - [+] evaluation with provided context
 - [+] date comparisons
 - [ ] date > timestamp comparison
+- [ ] parse NOW function
+- [ ] parse comments in function body under rules
