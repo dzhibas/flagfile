@@ -118,6 +118,7 @@ pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
     Ok(result)
 }
 
+#[cfg(test)]
 mod tests {
     use crate::{ast::Atom, parse::parse};
 

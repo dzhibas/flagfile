@@ -228,6 +228,7 @@ pub fn parse(i: &str) -> IResult<&str, AstNode> {
     alt((ws(parse_expr), ws(parse_parenthesized_expr)))(i)
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

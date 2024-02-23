@@ -112,6 +112,7 @@ pub fn parse_flagfile(i: &str) -> IResult<&str, Vec<FlagValue>> {
     many0(rest)(i)
 }
 
+#[cfg(test)]
 mod tests {
     use super::*;
 

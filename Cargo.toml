@@ -6,7 +6,6 @@ authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 
 [lints.rust]
 unsafe_code = "forbid"
-unused = "allow"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
