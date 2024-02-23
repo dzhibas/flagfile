@@ -7,7 +7,17 @@ use chrono::NaiveDate;
 /// library tests for public functions to parse and then evaluate
 
 #[test]
-fn test_parsing() {}
+fn test_parsing() {
+    let (i, expr) = parse("!(a=b and c=d) and z=3").unwrap();
+    assert_eq!(
+        true,
+        eval(
+            &expr,
+            &HashMap::from([("a", "d".into()), ("c", "b".into()), ("z", "3".into()),])
+        )
+        .unwrap()
+    );
+}
 
 #[test]
 fn test_evaluation() {

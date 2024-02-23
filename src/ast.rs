@@ -3,6 +3,8 @@ use std::str::FromStr;
 
 use chrono::NaiveDate;
 
+use crate::parse::parse_atom;
+
 #[derive(Debug, Clone)]
 pub enum Atom {
     String(String),
@@ -60,6 +62,16 @@ impl fmt::Display for Atom {
             Atom::Date(var) => write!(f, "{var}"),
             Atom::DateTime(var) => write!(f, "{var}"),
         }
+    }
+}
+
+impl<'a> From<&'a str> for Atom {
+    fn from(val: &'a str) -> Self {
+        let res = parse_atom(val);
+        if let Ok((i, out)) = res {
+            return out;
+        }
+        Atom::String(val.into())
     }
 }
 

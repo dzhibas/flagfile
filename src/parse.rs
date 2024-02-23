@@ -81,7 +81,7 @@ fn parse_variable(i: &str) -> IResult<&str, Atom> {
     map(parser, |v: &str| Atom::Variable(v.to_string()))(i)
 }
 
-fn parse_atom(i: &str) -> IResult<&str, Atom> {
+pub fn parse_atom(i: &str) -> IResult<&str, Atom> {
     alt((
         parse_date,
         parse_string,
