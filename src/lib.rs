@@ -1,8 +1,6 @@
 use nom::{
     branch::alt,
-    bytes::{
-        complete::{tag, tag_no_case, take_until},
-    },
+    bytes::complete::{tag, tag_no_case, take_until},
     character::complete::{alpha1, alphanumeric1, char, line_ending, multispace0, one_of, space0},
     combinator::{eof, map, map_res, recognize},
     complete::take,
@@ -12,10 +10,10 @@ use nom::{
     Err, IResult,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
-mod parse;
-mod eval;
 mod ast;
-
+mod eval;
+mod parse;
+use ast::{ComparisonOp, LogicOp};
 use std::{collections::HashMap, error::Error};
 
 type Pair = HashMap<String, String>;
@@ -33,46 +31,6 @@ pub enum AstNode<'a> {
         lhs: Box<AstNode<'a>>,
         rhs: Box<AstNode<'a>>,
     },
-}
-
-#[derive(Debug)]
-enum ComparisonOp {
-    Eq,
-    More,
-    Less,
-    MoreEq,
-    LessEq,
-    NotEq,
-}
-
-impl ComparisonOp {
-    fn from_str(expr: &str) -> Self {
-        match expr {
-            "==" | "=" => ComparisonOp::Eq,
-            ">" => ComparisonOp::More,
-            ">=" => ComparisonOp::MoreEq,
-            "<" => ComparisonOp::Less,
-            "<=" => ComparisonOp::LessEq,
-            "!=" => ComparisonOp::NotEq,
-            _ => unreachable!(),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum LogicOp {
-    And,
-    Or,
-}
-
-impl LogicOp {
-    fn from_str(i: &str) -> Self {
-        match i.to_lowercase().as_str() {
-            "and" | "&&" => LogicOp::And,
-            "or" | "||" => LogicOp::Or,
-            _ => unreachable!(),
-        }
-    }
 }
 
 fn parse_variable(i: &str) -> IResult<&str, &str> {
@@ -118,11 +76,7 @@ fn parse_string_value(i: &str) -> IResult<&str, &str> {
 fn parse_comparison(i: &str) -> IResult<&str, AstNode> {
     map(
         tuple((parse_variable_clean_spaces, parse_equal, parse_string_value)),
-        |(var, op, val)| AstNode::Comparison {
-            op,
-            var,
-            val
-        },
+        |(var, op, val)| AstNode::Comparison { op, var, val },
     )(i)
 }
 
@@ -148,7 +102,9 @@ fn parse_main(i: &str) -> IResult<&str, AstNode> {
 
 #[wasm_bindgen]
 pub fn parse_wasm(i: &str) -> String {
-    let Ok((i, tree)) = parse_main(i) else { todo!() };
+    let Ok((i, tree)) = parse_main(i) else {
+        todo!()
+    };
     let b = format!("{:?}", tree);
     b.to_string()
 }

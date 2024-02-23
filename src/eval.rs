@@ -1,4 +1,3 @@
 use crate::ast::AstNode;
 
-pub fn eval(expr: AstNode) {
-}
+pub fn eval(expr: AstNode) {}

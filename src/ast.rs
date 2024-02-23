@@ -1,6 +1,5 @@
 use core::fmt;
 
-
 /// TODO: add date and datetime as its common
 #[derive(Debug, Clone, PartialEq)]
 pub enum Atom {
@@ -15,7 +14,7 @@ impl fmt::Display for Atom {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Atom::String(string) => write!(f, "{string}"),
-            Atom::Number(number) => write!(f, "{number}"), 
+            Atom::Number(number) => write!(f, "{number}"),
             Atom::Float(float) => write!(f, "{float}"),
             Atom::Boolean(bool) => write!(f, "{bool}"),
             Atom::Variable(var) => write!(f, "{var}"),
@@ -24,7 +23,7 @@ impl fmt::Display for Atom {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-enum ComparisonOp {
+pub enum ComparisonOp {
     Eq,
     More,
     Less,
@@ -34,7 +33,7 @@ enum ComparisonOp {
 }
 
 impl ComparisonOp {
-    fn from_str(expr: &str) -> Self {
+    pub fn from_str(expr: &str) -> Self {
         match expr {
             "==" | "=" => ComparisonOp::Eq,
             ">" => ComparisonOp::More,
@@ -51,7 +50,7 @@ impl fmt::Display for ComparisonOp {
         match (self) {
             ComparisonOp::Eq => write!(f, "=="),
             ComparisonOp::More => write!(f, ">"),
-            ComparisonOp::Less => write!(f, "<"), 
+            ComparisonOp::Less => write!(f, "<"),
             ComparisonOp::MoreEq => write!(f, ">="),
             ComparisonOp::LessEq => write!(f, "<="),
             ComparisonOp::NotEq => write!(f, "<>"),
@@ -59,5 +58,20 @@ impl fmt::Display for ComparisonOp {
     }
 }
 
-pub enum AstNode {
+#[derive(Debug, Clone, PartialEq)]
+pub enum LogicOp {
+    And,
+    Or,
 }
+
+impl LogicOp {
+    pub fn from_str(i: &str) -> Self {
+        match i.to_lowercase().as_str() {
+            "and" | "&&" => LogicOp::And,
+            "or" | "||" => LogicOp::Or,
+            _ => unreachable!(),
+        }
+    }
+}
+
+pub enum AstNode {}

@@ -10,7 +10,7 @@ use nom::{
     IResult,
 };
 
-use crate::ast::Atom;
+use crate::{ast::Atom, ComparisonOp, LogicOp};
 
 /// Took from nom recipes
 fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
@@ -61,6 +61,24 @@ fn parse_atom(i: &str) -> IResult<&str, Atom> {
     ))(i)
 }
 
+fn parse_comparison_op(i: &str) -> IResult<&str, ComparisonOp> {
+    alt((
+        map(alt((tag("!="), tag("<>"))), |_| ComparisonOp::NotEq),
+        map(alt((tag("="), tag("=="))), |_| ComparisonOp::Eq),
+        map(tag("<="), |_| ComparisonOp::LessEq),
+        map(tag("<"), |_| ComparisonOp::Less),
+        map(tag(">="), |_| ComparisonOp::MoreEq),
+        map(tag(">"), |_| ComparisonOp::More),
+    ))(i)
+}
+
+fn parse_logic_op(i: &str) -> IResult<&str, LogicOp> {
+    alt((
+        map(alt((tag("&&"), tag_no_case("and"))), |_| LogicOp::And),
+        map(alt((tag("||"), tag_no_case("or"))), |_| LogicOp::Or),
+    ))(i)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +112,17 @@ mod tests {
     fn test_parse_atom() {
         let (_, v) = parse_atom("_demo_demo").unwrap();
         assert_eq!(v, Atom::Variable("_demo_demo".to_string()));
+    }
+
+    #[test]
+    fn test_comparison_op() {
+        let (i, v) = parse_comparison_op("<>").unwrap();
+        assert_eq!(v, ComparisonOp::NotEq);
+    }
+
+    #[test]
+    fn test_logic_op() {
+        let (i, v) = parse_logic_op("&& this").unwrap();
+        assert_eq!(v, LogicOp::And);
     }
 }
