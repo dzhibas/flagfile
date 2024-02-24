@@ -8,6 +8,7 @@ Still todo
 - [ ] parse NOW function
 - [ ] evaluator for Flagfile
 - [ ] restructure and rename project into Flagfile.rs / into workspaces
+- [ ] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
 
 Done
 

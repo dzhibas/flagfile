@@ -88,6 +88,10 @@ pub enum ComparisonOp {
     MoreEq,
     LessEq,
     NotEq,
+    // RegexMatch =~
+    // NotRegexMatch !=~
+    // Contains =*
+    // DoesNotContain !=*
 }
 
 impl ComparisonOp {
