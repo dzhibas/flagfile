@@ -57,12 +57,16 @@ fn parse_bool(i: &str) -> IResult<&str, FlagReturn> {
     })(i)
 }
 
+/// Opionated feature flag name
+/// it should always start with "FF-" < as this allows later auditing of the code and find all
+/// flags
 fn parse_flag_name(i: &str) -> IResult<&str, &str> {
     recognize(pair(
         tag("FF-"),
         many0_count(alt((alphanumeric1, tag("-"), tag("_")))),
     ))(i)
 }
+
 fn parse_return_val(i: &str) -> IResult<&str, FlagReturn> {
     alt((ws(parse_bool), ws(parse_json)))(i)
 }
