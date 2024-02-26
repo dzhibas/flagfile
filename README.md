@@ -1,4 +1,4 @@
-# Flagfile
+# ![logo](https://github.com/dzhibas/flagfile/blob/main/public/ff.png?raw=true) Flagfile
 
 it's developer friendly feature flagging solution where you define all your flags in Flagfile in this format: [Flagfile.example](Flagfile.example)
 
