@@ -67,7 +67,7 @@ fn scoped_test_case() {
         ),
         (
             "accountType",
-            Atom::String("Some Corporate & Managament Type".into()),
+            Atom::String("Some Corporate & Management Type".into()),
         ),
         ("user_id", Atom::Number(2032312)),
     ]);

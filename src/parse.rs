@@ -343,14 +343,14 @@ mod tests {
     }
 
     #[test]
-    fn test_logic_expresion_with_list() {
+    fn test_logic_expression_with_list() {
         let e = "a = 2 and b in  (1,2.2, \"demo\")";
         let (i, _v) = parse_logic_expr(e).unwrap();
         assert_eq!(i, "");
     }
 
     #[test]
-    fn test_more_complext_not_in() {
+    fn test_more_complex_not_in() {
         assert_eq!(
             parse_logic_expr("a=3 && c = 3 || d not in (2,4,5)").is_ok(),
             true

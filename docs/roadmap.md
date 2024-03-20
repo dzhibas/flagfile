@@ -11,7 +11,7 @@ for the full-blown project Flagfile follow same bottom up technique just like NO
 5. export WASM and FFI
 6. create demo ffi lib in lets say c# .net core
 7. create simple UI to create and update Flagfile on web
-7.1 create syntax highlights for vim/neovim, vscode etc (ex.: https://github.com/NoahTheDuke/vim-just)
+7.1 create syntax highlights for vim/neovim, vscode etc. (ex.: https://github.com/NoahTheDuke/vim-just)
 8. create sidecar container with storage of Flagfile in git/filesystem/cdn configurable
       expose same through either restful/grpc/redis custom command
 9. create full-blown UI multi-tenant and projects, envs and stuff to serve Flagfile through cdn

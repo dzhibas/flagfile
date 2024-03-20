@@ -48,7 +48,7 @@ impl PartialOrd for Atom {
             },
             Atom::Date(v) => match other {
                 Atom::Date(v2) => v.partial_cmp(v2),
-                // TODO: if compare to number it might be unixtimestamp
+                // TODO: if compare to number it might be unix-timestamp
                 _ => None,
             },
             _ => None,

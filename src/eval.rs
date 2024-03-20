@@ -350,7 +350,7 @@ mod tests {
             true,
             eval(
                 &parse("a=b and (c=d or e=f)").unwrap().1,
-                &HashMap::from([("a", "b".into()), ("c", "d".into()), ("e", "fnon".into())])
+                &HashMap::from([("a", "b".into()), ("c", "d".into()), ("e", "f-non".into())])
             )
             .unwrap()
         );

@@ -57,7 +57,7 @@ fn parse_bool(i: &str) -> IResult<&str, FlagReturn> {
     })(i)
 }
 
-/// Opionated feature flag name
+/// Opinionated feature flag name
 /// it should always start with "FF-" < as this allows later auditing of the code and find all
 /// flags
 fn parse_flag_name(i: &str) -> IResult<&str, &str> {
@@ -71,7 +71,7 @@ fn parse_return_val(i: &str) -> IResult<&str, FlagReturn> {
     alt((ws(parse_bool), ws(parse_json)))(i)
 }
 
-fn parse_anononymous_func(i: &str) -> IResult<&str, FlagValue> {
+fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue> {
     let parser = tuple((ws(parse_flag_name), ws(tag("->")), parse_return_val));
     map(parser, |(n, _, v)| {
         HashMap::from([(n, vec![Rule::Value(v)])])
@@ -115,7 +115,7 @@ fn parse_function(i: &str) -> IResult<&str, FlagValue> {
 pub fn parse_flagfile(i: &str) -> IResult<&str, Vec<FlagValue>> {
     let parser = preceded(
         many0(alt((parse_comment, multiline_comment))),
-        alt((parse_anononymous_func, parse_function)),
+        alt((parse_anonymous_func, parse_function)),
     );
     let rest = terminated(parser, many0(alt((parse_comment, multiline_comment))));
     many0(rest)(i)

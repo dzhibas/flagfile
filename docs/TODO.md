@@ -15,7 +15,7 @@ Done
 - [x] Atom parsing for Date
 - [x] Date converted to chrono datetime for comparison later
 - [x] Scopes and negated scopes. ex.: a=b and !(c=d or g=z)
-- [x] either lower() or upper() function calls or case insensitive string comparison operators
+- [x] either lower() or upper() function calls or case-insensitive string comparison operators
 - [x] support for single quote strings
 - [x] evaluation with provided context
 - [x] date comparisons
