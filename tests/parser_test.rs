@@ -56,7 +56,7 @@ accountRole in (Admin,admin,"Admin/Order Manager")
 #[test]
 fn scoped_test_case() {
     let rule = r###"(accountRole in (Admin, "Admin/Order Manager")) and
-    ((lower(account_country_code) == lt or account_uuid = 32434) and accountType="Some Corporate & Managament Type") and user_id == 2032312"###;
+    ((lower(account_country_code) == lt or account_uuid = 32434) and accountType="Some Corporate & Management Type") and user_id == 2032312"###;
 
     let context = HashMap::from([
         ("accountRole", Atom::String("Admin/Order Manager".into())),
