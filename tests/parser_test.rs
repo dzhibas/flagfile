@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
-use flagfile::ast::Atom;
-use flagfile::eval::Context;
-use flagfile::{self, eval::eval, parse::parse};
+use flagfile_lib::ast::Atom;
+use flagfile_lib::eval::Context;
+use flagfile_lib::{self, eval::eval, parse::parse};
 
 #[test]
 fn test_hashmap_into() {
