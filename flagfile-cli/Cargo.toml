@@ -1,5 +1,5 @@
 [package]
-name = "flagfile-cli"
+name = "flagfile"
 version = "0.1.0"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]

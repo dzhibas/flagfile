@@ -160,6 +160,13 @@ checksum = "06ea2b9bc92be3c2baa9334a323ebca2d6f074ff852cd1d7b11064035cd3868f"
 
 [[package]]
 name = "flagfile"
+version = "0.1.0"
+dependencies = [
+ "clap",
+]
+
+[[package]]
+name = "flagfile-lib"
 version = "0.3.8"
 dependencies = [
  "chrono",
@@ -168,13 +175,6 @@ dependencies = [
  "serde_json",
  "wasm-bindgen",
  "web-sys",
-]
-
-[[package]]
-name = "flagfile-cli"
-version = "0.1.0"
-dependencies = [
- "clap",
 ]
 
 [[package]]
