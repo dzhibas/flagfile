@@ -4,6 +4,14 @@ version = "0.3.8"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 
+[workspace]
+resolver = "2"
+
+members = [
+    "flagfile-cli",
+    "."
+]
+
 [lints.rust]
 unsafe_code = "forbid"
 
