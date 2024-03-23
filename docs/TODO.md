@@ -10,6 +10,12 @@ Still todo
 - [ ] restructure and rename project into Flagfile.rs / into workspaces
 - [ ] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
 
+CLI
+
+- [ ] validate flagfile
+- [ ] init new flagfile
+- [ ] built-in ui to edit and save flagfile in current dir
+
 Done
 
 - [x] Atom parsing for Date
