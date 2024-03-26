@@ -12,8 +12,9 @@ Still todo
 
 CLI
 
-- [ ] validate flagfile
-- [ ] init new flagfile
+- [ ] flagfile validate
+- [ ] flagfile init
+- [ ] flagfile list
 - [ ] built-in ui to edit and save flagfile in current dir
 
 Done
