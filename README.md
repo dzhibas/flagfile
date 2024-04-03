@@ -30,6 +30,15 @@ Flagfile.example (with comments):
 // once you dont have rules you can use short notation to return boolean
 FF-feature-flat-on-off -> true
 
+// can be snake_case as well as kebab-case
+FF_feature_can_be_snake_case_213213 -> FALSE
+
+// can be camelCase
+FF_featureOneOrTwo -> FALSE
+
+// can be PascalCase
+FF_Feature23432 -> TRUE
+
 // you can return non-boolean in this example json. or empty json object json({})
 FF-feature-json-variant -> json({"success": true})
 

@@ -62,7 +62,7 @@ fn parse_bool(i: &str) -> IResult<&str, FlagReturn> {
 /// flags
 fn parse_flag_name(i: &str) -> IResult<&str, &str> {
     recognize(pair(
-        tag("FF-"),
+        alt((tag("FF-"), tag("FF_"))),
         many0_count(alt((alphanumeric1, tag("-"), tag("_")))),
     ))(i)
 }
@@ -140,6 +140,18 @@ mod tests {
         assert_eq!(true, v.len() == 1);
         assert_eq!(i, "");
     }
+
+    #[test]
+    fn test_parse_rule_snake_case() {
+        let data = r###"FF_feature_y {
+        FALSE
+}"###;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(true, v.len() == 1);
+        assert_eq!(i, "");
+
+    }
+
 
     #[test]
     fn full_flag_file_test() {

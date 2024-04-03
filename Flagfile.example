@@ -8,6 +8,15 @@ FF-feature-json-variant -> json({"success": true})
 // it allows you later to find all flags through in codebase
 FF-feature-name-specifics -> false
 
+// can be snake_case as well as kebab-case
+FF_feature_can_be_snake_case_213213 -> FALSE
+
+// can be camelCase
+FF_featureOneOrTwo -> FALSE
+
+// can be PascalCase
+FF_Feature23432 -> TRUE
+
 // you can have feature with multiple rules in it with default flag value returned in end
 FF-feature-y {
     // if country is NL return True
