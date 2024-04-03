@@ -1,6 +1,6 @@
 # <img src="https://github.com/dzhibas/flagfile/blob/main/public/ff.png?raw=true" width=50px/> Flagfile
 
-![Build and Tests](https://github.com/dzhibas/flagfile/actions/workflows/rust.yml/badge.svg)
+![Tests passing](https://github.com/dzhibas/flagfile/actions/workflows/tests.yml/badge.svg)
 
 it's developer friendly feature flagging solution where you define all your flags in Flagfile in this format: [Flagfile.example](Flagfile.example)
 
