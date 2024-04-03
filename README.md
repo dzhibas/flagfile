@@ -1,5 +1,7 @@
 # <img src="https://github.com/dzhibas/flagfile/blob/main/public/ff.png?raw=true" width=50px/> Flagfile
 
+![Build and Tests](https://github.com/dzhibas/flagfile/actions/workflows/rust.yml/badge.svg)
+
 it's developer friendly feature flagging solution where you define all your flags in Flagfile in this format: [Flagfile.example](Flagfile.example)
 
 its boolean expression parser library which was initially written in pest.rs (https://github.com/dzhibas/bool_expr_parser) and later rewrote everything in Nom rust lib
@@ -32,10 +34,11 @@ FF-feature-flat-on-off -> true
 FF-feature-json-variant -> json({"success": true})
 
 // features are forced to start with FF- case-sensitive as
-// it allows you later to find all flags through in codebase
+// it allows you later to find all flags through the codebase
 FF-feature-name-specifics -> false
 
-// you can have feature with multiple rules in it with default flag value returned in end
+// you can have feature with multiple rules in it with default flag value returned in the end
+// you can have comments or comment blocks with // or /* comment */
 FF-feature-y {
     // if country is NL return True
     countryCode == NL: true
@@ -49,7 +52,8 @@ FF-testing {
     json({"success": true})
 }
 
-// and have more complex feature with multiple rules in it, which at the end defaults to false
+// and have more complex feature with multiple rules in it and some rules multiline rule, which at the end defaults to false
+// aswel capitalize for visibility boolean TRUE/FALSE
 FF-feature-complex-ticket-234234 {
     // complex bool expression
     a = b and c=d and (dd not in (1,2,3) or z == "demo car"): TRUE
