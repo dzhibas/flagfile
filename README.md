@@ -17,3 +17,70 @@ dbg!(flag_value);
 ```
 
 eventually this lib compiles into wasm and used in UI to validate and parse rules, and with FFI exported into other languages to parse and evaluate rules
+
+## Flagfile
+
+it's a flagfile in your application root folder to control behaviour and feature flagging in your app
+
+Flagfile.example (with comments):
+
+```cpp
+// once you dont have rules you can use short notation to return boolean
+FF-feature-flat-on-off -> true
+
+// you can return non-boolean in this example json. or empty json object json({})
+FF-feature-json-variant -> json({"success": true})
+
+// features are forced to start with FF- case-sensitive as
+// it allows you later to find all flags through in codebase
+FF-feature-name-specifics -> false
+
+// you can have feature with multiple rules in it with default flag value returned in end
+FF-feature-y {
+    // if country is NL return True
+    countryCode == NL: true
+    // else default to false
+    false
+}
+
+// you can also return different variations (non-boolean) as example json
+FF-testing {
+    // default variant
+    json({"success": true})
+}
+
+// and have more complex feature with multiple rules in it, which at the end defaults to false
+FF-feature-complex-ticket-234234 {
+    // complex bool expression
+    a = b and c=d and (dd not in (1,2,3) or z == "demo car"): TRUE
+
+    // another one
+    z == "demo car": FALSE
+
+    // with checking more
+    g in (4,5,6) and z == "demo car": TRUE
+
+    // and multi-line rule works
+    model in (ms,mx,m3,my) and created >= 2024-01-01
+        and demo == false: TRUE
+
+    FALSE
+}
+
+// different kind of comments inside
+FF-feature1 {
+    /* comment like this */
+    true
+    a == "something": false
+    false
+    json({})
+}
+
+/* this is multi-line commented feature
+FF-timer-feature {
+    // turn on only on evaluation time after 22nd feb
+    NOW() > 2024-02-22: true
+    false
+}
+*/
+```
