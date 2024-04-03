@@ -16,6 +16,9 @@ CLI
 - [ ] flagfile init
 - [ ] flagfile list
 - [ ] built-in ui to edit and save flagfile in current dir
+- [ ] flagfile find // find all flagnames within current directory source code recursively
+        like you would do with grep or ripgrep with regex /(FF[-_].*)\s?->/
+- [ ] make it so you can install flagfile-cli with brew or shell script
 
 Done
 
