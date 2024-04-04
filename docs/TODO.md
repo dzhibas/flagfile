@@ -19,6 +19,8 @@ CLI
 - [ ] flagfile find // find all flagnames within current directory source code recursively
         like you would do with grep or ripgrep with regex /(FF[-_].*)\s?->/
 - [ ] make it so you can install flagfile-cli with brew or shell script
+- [ ] flagfile fmt
+- [ ] flagfile test (will look for flagfile.tests file and run those)
 
 Done
 
