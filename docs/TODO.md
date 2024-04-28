@@ -2,7 +2,7 @@
 
 items tracking to be done
 
-Still todo
+Flagfile-Parser
 
 - [ ] date > timestamp comparison
 - [ ] parse NOW function
@@ -10,7 +10,7 @@ Still todo
 - [ ] restructure and rename project into Flagfile.rs / into workspaces
 - [ ] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
 
-CLI
+Flagfile-CLI
 
 - [ ] flagfile validate
 - [ ] flagfile init
@@ -21,6 +21,12 @@ CLI
 - [ ] make it so you can install flagfile-cli with brew or shell script
 - [ ] flagfile fmt
 - [ ] flagfile test (will look for flagfile.tests file and run those)
+
+Flagfile-Relay
+
+- [ ] Server options: gRPC (tonic), rest (axum), redis (pretend to be redis), flagfile cdn
+- [ ] Pullers: pulling from cdn, from github, SSE - listening for update as server side events
+- [ ] Create lightweight side-car container for this
 
 Done
 
