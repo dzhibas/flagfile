@@ -25,8 +25,14 @@ Flagfile-CLI
 Flagfile-Relay
 
 - [ ] Server options: gRPC (tonic), rest (axum), redis (pretend to be redis), flagfile cdn
+  - [ ] server as cdn can serve this as flagfile or converted through converter into other framework (like launchdarkly or .net flagging)
 - [ ] Pullers: pulling from cdn, from github, SSE - listening for update as server side events
 - [ ] Create lightweight side-car container for this
+
+Flagfile other crazy ideas
+
+- [ ] Compile into other framework languages something like you have Flagfile and then convert to .net feature flagging
+- 
 
 Done
 
