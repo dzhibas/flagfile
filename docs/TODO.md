@@ -28,6 +28,7 @@ Flagfile-Relay
   - [ ] server as cdn can serve this as flagfile or converted through converter into other framework (like launchdarkly or .net flagging)
 - [ ] Pullers: pulling from cdn, from github, SSE - listening for update as server side events
 - [ ] Create lightweight side-car container for this
+- [ ] Look into if we can transform AST of feature flags into json structure launchdarkly uses and force ld-relay to pull state from our apis instead so client libraries doesnt need to change. similar to what dorklyorg/dorkly does with yaml files
 
 Flagfile other crazy ideas
 
