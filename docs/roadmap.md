@@ -2,6 +2,8 @@
 
 for the full-blown project Flagfile follow same bottom up technique just like NOM parsing bottom up :)
 
+feature flags perfectly decribed here: https://martinfowler.com/articles/feature-toggles.html
+
 ## sequence of events
 
 1. create parser and evaluator for boolean expressions (DONE)

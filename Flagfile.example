@@ -58,6 +58,16 @@ FF-feature1 {
     json({})
 }
 
+// @author Nikolajus K
+// @expires 2024-12-31 00:00:00
+FF-flag-with-annotations -> true
+
+/**
+ * @author Nikolajus K
+ * @expires 2024-12-31 00:00:00
+ */
+FF-flag-with-annotations-2 -> false
+
 /* this is multi-line commented feature
 FF-timer-feature {
     // turn on only on evaluation time after 22nd feb
