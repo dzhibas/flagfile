@@ -10,18 +10,6 @@ Flagfile-Parser
 - [ ] restructure and rename project into Flagfile.rs / into workspaces
 - [ ] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
 
-Flagfile-CLI
-
-- [ ] flagfile validate
-- [ ] flagfile init
-- [ ] flagfile list
-- [ ] built-in ui to edit and save flagfile in current dir
-- [ ] flagfile find // find all flagnames within current directory source code recursively
-        like you would do with grep or ripgrep with regex /(FF[-_].*)\s?->/
-- [ ] make it so you can install flagfile-cli with brew or shell script
-- [ ] flagfile fmt
-- [ ] flagfile test (will look for flagfile.tests file and run those)
-
 Flagfile-Relay
 
 - [ ] Server options: gRPC (tonic), rest (axum), redis (pretend to be redis), flagfile cdn
