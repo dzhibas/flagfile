@@ -6,13 +6,13 @@ use clap::{Parser, Subcommand};
 #[command(about = "Feature flagging for developers", long_about = None)]
 struct Args {
     #[command(subcommand)]
-    cmd: Command
+    cmd: Command,
 }
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    Init, // creates empty file with demo flag
-    List, // lists all flags in flagfile
+    Init,     // creates empty file with demo flag
+    List,     // lists all flags in flagfile
     Validate, // parses and validates all rules
 }
 

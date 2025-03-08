@@ -127,13 +127,13 @@ mod tests {
 
     #[test]
     fn test_parse_rules() {
-        let res = parse_rule_expr("countryCode == NL: true");
+        let res = parse_rule_expr("countryCode == NL -> true");
         assert_eq!(true, res.is_ok());
         let res = parse_rule_static("\n     false\n");
         assert_eq!(true, res.is_ok());
 
         let data = r###"FF-feature-y {
-    countryCode == NL: true
+    countryCode == NL -> true
     false
 }"###;
         let (i, v) = parse_function(data).unwrap();
@@ -149,9 +149,7 @@ mod tests {
         let (i, v) = parse_function(data).unwrap();
         assert_eq!(true, v.len() == 1);
         assert_eq!(i, "");
-
     }
-
 
     #[test]
     fn full_flag_file_test() {
