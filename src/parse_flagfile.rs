@@ -79,7 +79,7 @@ fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue> {
 }
 
 fn parse_rule_expr(i: &str) -> IResult<&str, Rule> {
-    let parser = tuple((parse, ws(tag(":")), parse_return_val));
+    let parser = tuple((parse, ws(tag("->")), parse_return_val));
     map(parser, |(e, _, v)| Rule::BoolExpressionValue(e, v))(i)
 }
 
@@ -160,6 +160,7 @@ mod tests {
         let (i, v) = parse_flagfile(data).unwrap();
         dbg!(i, &v);
         assert_eq!(true, v.len() > 0);
+        assert_eq!(i.to_string().trim(), "");
     }
 }
 
