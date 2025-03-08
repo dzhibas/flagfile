@@ -50,7 +50,7 @@ FF-feature-name-specifics -> false
 // you can have comments or comment blocks with // or /* comment */
 FF-feature-y {
     // if country is NL return True
-    countryCode == NL: true
+    countryCode == NL -> true
     // else default to false
     false
 }
@@ -65,17 +65,17 @@ FF-testing {
 // aswel capitalize for visibility boolean TRUE/FALSE
 FF-feature-complex-ticket-234234 {
     // complex bool expression
-    a = b and c=d and (dd not in (1,2,3) or z == "demo car"): TRUE
+    a = b and c=d and (dd not in (1,2,3) or z == "demo car") -> TRUE
 
     // another one
-    z == "demo car": FALSE
+    z == "demo car" -> FALSE
 
     // with checking more
-    g in (4,5,6) and z == "demo car": TRUE
+    g in (4,5,6) and z == "demo car" -> TRUE
 
     // and multi-line rule works
     model in (ms,mx,m3,my) and created >= 2024-01-01
-        and demo == false: TRUE
+        and demo == false -> TRUE
 
     FALSE
 }
@@ -84,7 +84,7 @@ FF-feature-complex-ticket-234234 {
 FF-feature1 {
     /* comment like this */
     true
-    a == "something": false
+    a == "something" -> false
     false
     json({})
 }
@@ -92,7 +92,7 @@ FF-feature1 {
 /* this is multi-line commented feature
 FF-timer-feature {
     // turn on only on evaluation time after 22nd feb
-    NOW() > 2024-02-22: true
+    NOW() > 2024-02-22 -> true
     false
 }
 */
