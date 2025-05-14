@@ -20,6 +20,25 @@ dbg!(flag_value);
 
 eventually this lib compiles into wasm and used in UI to validate and parse rules, and with FFI exported into other languages to parse and evaluate rules
 
+## Features language summary:
+
+*   Feature flag name definition: `FF-<name>` or `FF_<name>`
+*   Short notation: `FF-name -> value`
+*   Block notation: `FF-name { rules... defaultValue }`
+*   Values: `true`, `TRUE`, `false`, `FALSE`, `json({"key": "value"})`
+*   Rules: `condition1 && condition2 -> value`
+*   Default value in block: A final `value` without `->`
+*   Conditions:
+    *   Comparisons: `==`, `!=` (implicit from `not`), `>=`, `<=`, `>`, `<`
+    *   Logical op (case-insensitive): `and`, `or`
+    *   Grouping: `(...)`
+    *   Membership (case-insensitive): `in`, `not in`
+    *   Operands: Identifiers, string literals, number literals, date literals (`YYYY-MM-DD`), `NOW()`
+    *   Tuple/List for `in`/`not in`: `(1,2,3)`
+*   Comments: singleline `// ...` and multiline `/* ... */`
+*   In Block notation can have multiple rules to evaluate
+*   Multi-line rules
+
 ## Flagfile
 
 it's a flagfile in your application root folder to control behaviour and feature flagging in your app
