@@ -46,7 +46,6 @@ it's a flagfile in your application root folder to control behaviour and feature
 Flagfile.example (with comments):
 
 ```cpp
-
 // Basic on/off switches
 FF-new-ui -> true
 FF-beta-features -> false
@@ -125,7 +124,6 @@ FF-premium-features {
     "storageLimit": "1GB"
   })
 }
-
 
 // Time-based feature rollout
 FF-new-dashboard {
@@ -213,7 +211,7 @@ FF-mobile-features {
   })
 }
 
-    // Performance and load based features  
+// Performance and load based features  
 FF-performance-mode {
   // Reduce features under high load
   serverLoad > 80 -> json({
