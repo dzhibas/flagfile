@@ -46,6 +46,231 @@ it's a flagfile in your application root folder to control behaviour and feature
 Flagfile.example (with comments):
 
 ```cpp
+
+// Basic on/off switches
+FF-new-ui -> true
+FF-beta-features -> false
+FF-maintenance-mode -> false
+
+// Configuration values
+FF-api-timeout -> 5000
+FF-max-retries -> 3
+FF-log-level -> "debug"
+
+// Feature variants
+FF-button-color -> "blue"
+FF-theme-config -> json({
+  "primaryColor": "#007bff",
+  "secondaryColor": "#6c757d",
+  "darkMode": true,
+  "animations": true
+})
+
+// ==== Complext features with multiple rules block === 
+
+// Geographic-based features
+FF-regional-features {
+  countryCode == "US" -> json({
+    "paymentMethods": ["card", "paypal", "apple_pay"],
+    "currency": "USD",
+    "taxCalculation": "state_based"
+  })
+  
+  countryCode == "EU" -> json({
+    "paymentMethods": ["card", "paypal", "sepa"],
+    "currency": "EUR", 
+    "taxCalculation": "vat_based"
+  })
+  
+  countryCode in ("NL", "BE", "DE") -> json({
+    "paymentMethods": ["card", "ideal", "sepa"],
+    "currency": "EUR",
+    "taxCalculation": "vat_based",
+    "languageOptions": ["en", "nl", "de"]
+  })
+  
+  // Default for other countries
+  json({
+    "paymentMethods": ["card"],
+    "currency": "USD",
+    "taxCalculation": "basic"
+  })
+}
+
+
+// User tier based features
+FF-premium-features {
+  tier == "enterprise" and seats >= 100 -> json({
+    "features": ["advanced_analytics", "custom_integrations", "priority_support", "sso"],
+    "apiRateLimit": 10000,
+    "storageLimit": "unlimited"
+  })
+  
+  tier == "premium" -> json({
+    "features": ["analytics", "integrations", "priority_support"],
+    "apiRateLimit": 5000,
+    "storageLimit": "100GB"
+  })
+  
+  tier == "basic" -> json({
+    "features": ["basic_analytics"],
+    "apiRateLimit": 1000,
+    "storageLimit": "10GB"
+  })
+  
+  // Free tier
+  json({
+    "features": [],
+    "apiRateLimit": 100,
+    "storageLimit": "1GB"
+  })
+}
+
+
+// Time-based feature rollout
+FF-new-dashboard {
+  // Enable for internal users immediately
+  userType == "internal" -> true
+  
+  // Gradual rollout for external users
+  userType == "external" and rolloutPercentage <= 25 and NOW() > "2024-01-15" -> true
+  userType == "external" and rolloutPercentage <= 50 and NOW() > "2024-02-01" -> true
+  userType == "external" and rolloutPercentage <= 75 and NOW() > "2024-02-15" -> true
+  userType == "external" and NOW() > "2024-03-01" -> true
+  
+  false
+}
+
+// A/B testing configuration
+FF-checkout-flow {
+  // Variant A: Traditional checkout
+  experimentGroup == "A" -> json({
+    "variant": "traditional",
+    "steps": ["cart", "shipping", "payment", "confirmation"],
+    "guestCheckout": false
+  })
+  
+  // Variant B: One-page checkout
+  experimentGroup == "B" -> json({
+    "variant": "onepage", 
+    "steps": ["onepage_checkout", "confirmation"],
+    "guestCheckout": true
+  })
+  
+  // Control group gets traditional
+  json({
+    "variant": "traditional",
+    "steps": ["cart", "shipping", "payment", "confirmation"],
+    "guestCheckout": false
+  })
+}
+
+// A/B testing configuration
+FF-checkout-flow {
+  // Variant A: Traditional checkout
+  experimentGroup == "A" -> json({
+    "variant": "traditional",
+    "steps": ["cart", "shipping", "payment", "confirmation"],
+    "guestCheckout": false
+  })
+  
+  // Variant B: One-page checkout
+  experimentGroup == "B" -> json({
+    "variant": "onepage", 
+    "steps": ["onepage_checkout", "confirmation"],
+    "guestCheckout": true
+  })
+  
+  // Control group gets traditional
+  json({
+    "variant": "traditional",
+    "steps": ["cart", "shipping", "payment", "confirmation"],
+    "guestCheckout": false
+  })
+}
+
+// Device and platform specific features
+FF-mobile-features {
+  platform == "ios" and appVersion >= "2.1.0" -> json({
+    "features": ["push_notifications", "biometric_auth", "offline_mode"],
+    "ui": "ios_native"
+  })
+  
+  platform == "android" and appVersion >= "2.1.0" -> json({
+    "features": ["push_notifications", "fingerprint_auth", "offline_mode"],
+    "ui": "material_design"
+  })
+  
+  platform == "web" and browserName in ("chrome", "firefox", "safari") -> json({
+    "features": ["push_notifications", "pwa_install"],
+    "ui": "responsive"
+  })
+  
+  // Fallback for older versions or unsupported platforms
+  json({
+    "features": ["basic_auth"],
+    "ui": "basic"
+  })
+}
+
+    // Performance and load based features  
+FF-performance-mode {
+  // Reduce features under high load
+  serverLoad > 80 -> json({
+    "enableAnimations": false,
+    "enableAnalytics": false,
+    "cacheStrategy": "aggressive",
+    "imageQuality": "low"
+  })
+  
+  serverLoad > 60 -> json({
+    "enableAnimations": true,
+    "enableAnalytics": false, 
+    "cacheStrategy": "moderate",
+    "imageQuality": "medium"
+  })
+  
+  // Normal performance mode
+  json({
+    "enableAnimations": true,
+    "enableAnalytics": true,
+    "cacheStrategy": "normal", 
+    "imageQuality": "high"
+  })
+}
+
+// Multi-condition complex feature
+FF-advanced-search {
+  // Enterprise customers with specific requirements
+  tier == "enterprise" and 
+  searchVolume > 10000 and 
+  dataSize in ("large", "xlarge") and
+  region in ("us-east", "eu-west") -> json({
+    "searchEngine": "elasticsearch",
+    "features": ["fuzzy_search", "autocomplete", "faceted_search", "ml_ranking"],
+    "indexStrategy": "distributed",
+    "cacheSize": "256MB"
+  })
+  
+  // Premium customers 
+  tier == "premium" and searchVolume > 1000 -> json({
+    "searchEngine": "solr",
+    "features": ["fuzzy_search", "autocomplete", "faceted_search"],
+    "indexStrategy": "single_node",
+    "cacheSize": "64MB"
+  })
+  
+  // Basic search for everyone else
+  json({
+    "searchEngine": "basic",
+    "features": ["exact_match"],
+    "indexStrategy": "in_memory",
+    "cacheSize": "16MB"
+  })
+}
+```
+
+```cpp
 // once you dont have rules you can use short notation to return boolean
 FF-feature-flat-on-off -> true
 
@@ -69,7 +294,7 @@ FF-feature-name-specifics -> false
 // you can have comments or comment blocks with // or /* comment */
 FF-feature-y {
     // if country is NL return True
-    countryCode == NL -> true
+    countryCode == "NL" -> true
     // else default to false
     false
 }
