@@ -61,6 +61,54 @@ ff find src/
 
 Output is in grep-style `file:line:content` format.
 
+## Serving flags over HTTP
+
+Start an HTTP server to evaluate flags via REST API:
+
+```bash
+ff serve
+ff serve -f path/to/Flagfile -p 3000
+```
+
+### Configuration
+
+The server reads an optional `ff.toml` config file (default path: `ff.toml` in the current directory). CLI flags override config values.
+
+```toml
+port = 8080
+flagfile = "Flagfile"
+```
+
+You can specify a different config path with `-c`:
+
+```bash
+ff serve -c path/to/ff.toml
+```
+
+Defaults when no config or flags are provided: port `8080`, flagfile `Flagfile`.
+
+### Endpoints
+
+**`GET /flagfile`** — returns the raw Flagfile content as `text/plain`.
+
+```bash
+curl http://localhost:8080/flagfile
+```
+
+**`GET /eval/:flag_name`** — evaluates a flag using query parameters as context.
+
+```bash
+# Flag with no context
+curl http://localhost:8080/eval/FF-welcome-banner
+# {"flag":"FF-welcome-banner","value":true}
+
+# Flag with context
+curl "http://localhost:8080/eval/FF-premium-feature?plan=premium"
+# {"flag":"FF-premium-feature","value":true}
+```
+
+Returns `404` if the flag is not found, `422` if no rule matched the given context.
+
 ---
 
 ## TODO
@@ -71,5 +119,6 @@ Output is in grep-style `file:line:content` format.
 - [x] ff list
 - [x] ff eval
 - [x] ff find
+- [x] ff serve
 - [ ] ff fmt — formats Flagfile
 - [ ] ff edit — opens browser UI with simple editor of Flagfile

@@ -1,3 +1,5 @@
+mod serve;
+
 use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::process;
@@ -57,6 +59,19 @@ enum Command {
         #[arg(default_value = ".")]
         path: String,
     },
+    Serve {
+        /// Path to the Flagfile
+        #[arg(short = 'f', long = "flagfile")]
+        flagfile: Option<String>,
+
+        /// Port to listen on
+        #[arg(short = 'p', long = "port")]
+        port: Option<u16>,
+
+        /// Path to config file
+        #[arg(short = 'c', long = "config", default_value = "ff.toml")]
+        config: String,
+    },
 }
 
 /// Parse a test line like: FF-name(key=val,key=val) == EXPECTED
@@ -93,7 +108,7 @@ fn parse_test_line(line: &str) -> Option<(&str, Vec<(&str, &str)>, &str)> {
 }
 
 /// Evaluate a flag against context, returning the matched FlagReturn
-fn evaluate_flag(rules: &[Rule], context: &Context) -> Option<FlagReturn> {
+pub(crate) fn evaluate_flag(rules: &[Rule], context: &Context) -> Option<FlagReturn> {
     for rule in rules {
         match rule {
             Rule::BoolExpressionValue(expr, return_val) => {
@@ -466,7 +481,8 @@ fn run_find(path: &str) {
         });
 }
 
-fn main() {
+#[tokio::main]
+async fn main() {
     let cli = Args::parse();
     match cli.cmd {
         Command::Init => run_init(),
@@ -477,5 +493,8 @@ fn main() {
             run_eval(&flagfile, &flag_name, &context)
         }
         Command::Find { path } => run_find(&path),
+        Command::Serve { flagfile, port, config } => {
+            serve::run_serve(flagfile, port, &config).await
+        }
     }
 }
