@@ -3,16 +3,16 @@
 - [ ] ff init
     creates Flagfile and Flagfile.tests adds some comments and examples inside
 
-- [ ] ff validate
+- [x] ff validate
     validates current Flagfile, syntax
 
-- [ ] ff test
+- [x] ff test
     runs Flagfile.tests
 
 - [ ] ff eval
     evaluates flag
 
-- [ ] ff list
+- [x] ff list
     lists all flags
 
 - [ ] ff find

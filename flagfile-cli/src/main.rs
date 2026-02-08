@@ -18,7 +18,11 @@ struct Args {
 #[derive(Subcommand, Debug)]
 enum Command {
     Init,     // creates empty file with demo flag
-    List,     // lists all flags in flagfile
+    List {
+        /// Path to the Flagfile
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+    },
     Validate {
         /// Path to the Flagfile to validate
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
@@ -102,6 +106,36 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
             } else {
                 false
             }
+        }
+    }
+}
+
+fn run_list(flagfile_path: &str) {
+    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
+        Ok(content) => content,
+        Err(_) => {
+            eprintln!("{} does not exist", flagfile_path);
+            process::exit(1);
+        }
+    };
+
+    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Parsing failed: {}", e);
+            process::exit(1);
+        }
+    };
+
+    if !remainder.trim().is_empty() {
+        eprintln!("Parsing failed: unexpected content near: {}",
+            remainder.trim().lines().next().unwrap_or(""));
+        process::exit(1);
+    }
+
+    for fv in &flag_values {
+        for (name, _) in fv.iter() {
+            println!("{}", name);
         }
     }
 }
@@ -246,6 +280,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 fn main() {
     let cli = Args::parse();
     match cli.cmd {
+        Command::List { flagfile } => run_list(&flagfile),
         Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Test { flagfile, testfile } => run_tests(&flagfile, &testfile),
         cmd => {
