@@ -19,7 +19,11 @@ struct Args {
 enum Command {
     Init,     // creates empty file with demo flag
     List,     // lists all flags in flagfile
-    Validate, // parses and validates all rules
+    Validate {
+        /// Path to the Flagfile to validate
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+    },
     Test {
         /// Path to the Flagfile to check
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
@@ -100,6 +104,43 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
             }
         }
     }
+}
+
+fn run_validate(flagfile_path: &str) {
+    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
+        Ok(content) => content,
+        Err(_) => {
+            eprintln!("{} does not exist", flagfile_path);
+            process::exit(1);
+        }
+    };
+
+    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Parsing failed: {}", e);
+            process::exit(1);
+        }
+    };
+
+    if !remainder.trim().is_empty() {
+        eprintln!("Parsing failed: unexpected content near: {}",
+            remainder.trim().lines().next().unwrap_or(""));
+        process::exit(1);
+    }
+
+    let mut total_flags = 0;
+    let mut total_rules = 0;
+    for fv in &flag_values {
+        for (name, rules) in fv.iter() {
+            total_flags += 1;
+            total_rules += rules.len();
+            println!("  {} ({} rules)", name, rules.len());
+        }
+    }
+
+    println!();
+    println!("{} valid, {} flags, {} rules", flagfile_path, total_flags, total_rules);
 }
 
 fn run_tests(flagfile_path: &str, testfile_path: &str) {
@@ -205,6 +246,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 fn main() {
     let cli = Args::parse();
     match cli.cmd {
+        Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Test { flagfile, testfile } => run_tests(&flagfile, &testfile),
         cmd => {
             println!("{:?} is not yet implemented", cmd);
