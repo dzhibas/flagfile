@@ -6,3 +6,5 @@ authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 
 [dependencies]
 clap = { version = "4.5.0", features = ["derive", "env"] }
+flagfile-lib = { path = ".." }
+serde_json = "1.0.114"
