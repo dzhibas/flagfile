@@ -333,6 +333,81 @@ mod tests {
     }
 
     #[test]
+    fn test_semver_comparison_eval() {
+        // version > 5.3.42
+        assert_eq!(
+            true,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(6, 0, 0))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(5, 3, 42))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(5, 3, 43))])
+            )
+            .unwrap()
+        );
+
+        // version < 4.32.0
+        assert_eq!(
+            true,
+            eval(
+                &parse("version < 4.32.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(4, 31, 9))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("version < 4.32.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(4, 32, 0))])
+            )
+            .unwrap()
+        );
+
+        // equality
+        assert_eq!(
+            true,
+            eval(
+                &parse("version == 1.2.3").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(1, 2, 3))])
+            )
+            .unwrap()
+        );
+
+        // >= and <=
+        assert_eq!(
+            true,
+            eval(
+                &parse("version >= 2.0.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(2, 0, 0))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("version <= 2.0.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(1, 9, 99))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
     fn testing_logical_expression() {
         assert_eq!(
             true,

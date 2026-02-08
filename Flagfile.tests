@@ -1,1 +1,4 @@
 FF-feature-complex-ticket-234234(model=my,created=2024-03-03,demo=false) == TRUE
+FF-sdk-upgrade(appVersion=6.0.0) == TRUE
+FF-sdk-upgrade(appVersion=4.31.9) == FALSE
+FF-sdk-upgrade(appVersion=5.3.42) == TRUE

@@ -49,6 +49,16 @@ FF-feature-complex-ticket-234234 {
     FALSE
 }
 
+// Semver version checks
+FF-sdk-upgrade {
+    // enable new SDK for apps on version 5.3.42 or higher
+    appVersion >= 5.3.42 -> true
+    // disable for apps below 4.32.0
+    appVersion < 4.32.0 -> false
+    // default: keep old SDK
+    false
+}
+
 // different kind of comments inside
 FF-feature1 {
     /* comment like this */
