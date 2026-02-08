@@ -1,6 +1,6 @@
 # TODO
 
-- [ ] ff init
+- [x] ff init
     creates Flagfile and Flagfile.tests adds some comments and examples inside
 
 - [x] ff validate

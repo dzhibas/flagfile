@@ -110,6 +110,61 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
     }
 }
 
+const INIT_FLAGFILE: &str = r#"// Simple on/off flag
+FF-welcome-banner -> true
+
+// Feature with rules based on context
+FF-premium-feature {
+    // enable for users in premium plan
+    plan == premium -> true
+    // enable for beta testers
+    beta == true -> true
+    // disabled by default
+    false
+}
+
+// Rollout by country
+FF-new-checkout {
+    country in (US, CA, GB) and platform == web -> true
+    false
+}
+"#;
+
+const INIT_TESTS: &str = r#"FF-premium-feature(plan=premium) == TRUE
+FF-premium-feature(plan=free) == FALSE
+FF-premium-feature(plan=free,beta=true) == TRUE
+FF-new-checkout(country=US,platform=web) == TRUE
+FF-new-checkout(country=US,platform=mobile) == FALSE
+FF-new-checkout(country=DE,platform=web) == FALSE
+"#;
+
+fn run_init() {
+    let flagfile_exists = std::path::Path::new("Flagfile").exists();
+    let tests_exists = std::path::Path::new("Flagfile.tests").exists();
+
+    if flagfile_exists || tests_exists {
+        if flagfile_exists {
+            eprintln!("Flagfile already exists in current folder");
+        }
+        if tests_exists {
+            eprintln!("Flagfile.tests already exists in current folder");
+        }
+        process::exit(1);
+    }
+
+    std::fs::write("Flagfile", INIT_FLAGFILE).unwrap_or_else(|e| {
+        eprintln!("Failed to create Flagfile: {}", e);
+        process::exit(1);
+    });
+
+    std::fs::write("Flagfile.tests", INIT_TESTS).unwrap_or_else(|e| {
+        eprintln!("Failed to create Flagfile.tests: {}", e);
+        process::exit(1);
+    });
+
+    println!("Created Flagfile and Flagfile.tests");
+}
+
 fn run_list(flagfile_path: &str) {
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
@@ -280,11 +335,9 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 fn main() {
     let cli = Args::parse();
     match cli.cmd {
+        Command::Init => run_init(),
         Command::List { flagfile } => run_list(&flagfile),
         Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Test { flagfile, testfile } => run_tests(&flagfile, &testfile),
-        cmd => {
-            println!("{:?} is not yet implemented", cmd);
-        }
     }
 }
