@@ -15,7 +15,7 @@
 - [x] ff eval
     evaluates flag
 
-- [ ] ff find
+- [x] ff find
     find all flagnames within current directory source code recursively
         like you would do with grep or ripgrep with regex /(FF[-_].*)\s?->/
 

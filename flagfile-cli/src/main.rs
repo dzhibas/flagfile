@@ -1,10 +1,14 @@
 use std::collections::HashMap;
+use std::io::{self, BufRead, Write};
 use std::process;
+use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::{eval, Context};
 use flagfile_lib::parse_flagfile::{parse_flagfile, FlagReturn, Rule};
+use ignore::WalkBuilder;
+use regex::Regex;
 
 #[derive(Parser, Debug)]
 #[command(name = "Flagfile")]
@@ -47,6 +51,11 @@ enum Command {
 
         /// Context key=value pairs (e.g. country=NL plan=premium)
         context: Vec<String>,
+    },
+    Find {
+        /// Directory to search in
+        #[arg(default_value = ".")]
+        path: String,
     },
 }
 
@@ -401,6 +410,62 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
     }
 }
 
+fn run_find(path: &str) {
+    let pattern = Regex::new(r"FF[-_][a-zA-Z0-9_-]+").unwrap();
+    let stdout = Mutex::new(io::stdout());
+
+    WalkBuilder::new(path)
+        .build_parallel()
+        .run(|| {
+            let pattern = pattern.clone();
+            let stdout = &stdout;
+            Box::new(move |entry| {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+                    return ignore::WalkState::Continue;
+                }
+
+                let path = entry.path();
+
+                let file = match std::fs::File::open(path) {
+                    Ok(f) => f,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                let reader = io::BufReader::new(file);
+                let display_path = path.display();
+
+                // Batch output per file to reduce lock contention
+                let mut matches = Vec::new();
+                for (line_idx, line) in reader.lines().enumerate() {
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(_) => break, // binary file or encoding error
+                    };
+
+                    if pattern.is_match(&line) {
+                        matches.push(format!(
+                            "{}:{}:{}", display_path, line_idx + 1, line
+                        ));
+                    }
+                }
+
+                if !matches.is_empty() {
+                    let mut out = stdout.lock().unwrap();
+                    for m in &matches {
+                        let _ = writeln!(out, "{}", m);
+                    }
+                }
+
+                ignore::WalkState::Continue
+            })
+        });
+}
+
 fn main() {
     let cli = Args::parse();
     match cli.cmd {
@@ -411,5 +476,6 @@ fn main() {
         Command::Eval { flagfile, flag_name, context } => {
             run_eval(&flagfile, &flag_name, &context)
         }
+        Command::Find { path } => run_find(&path),
     }
 }
