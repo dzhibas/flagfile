@@ -14,7 +14,6 @@ pub enum Atom {
     DateTime(String),
     Semver(u32, u32, u32),
     // Timestamp(i64)
-    // Now(i64)
 }
 
 impl PartialEq<Atom> for Atom {
@@ -157,6 +156,7 @@ pub enum ArrayOp {
 pub enum FnCall {
     Upper,
     Lower,
+    Now,
 }
 
 #[derive(Debug, Clone, PartialEq)]

@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use chrono::Local;
+
 use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
 
 pub type Context<'a> = HashMap<&'a str, Atom>;
@@ -12,13 +14,21 @@ fn get_variable_value_from_context<'a>(
         AstNode::Variable(Atom::Variable(v)) => context.get(v.as_str()),
         AstNode::Constant(Atom::Variable(v)) => context.get(v.as_str()),
         AstNode::Function(op, v) => {
-            let value = get_variable_value_from_context(v, context);
-            if let Some(v) = value {
-                let vv = match op {
-                    FnCall::Upper => Atom::String(v.to_string().to_uppercase()),
-                    FnCall::Lower => Atom::String(v.to_string().to_lowercase()),
-                };
-                return Some(vv);
+            match op {
+                FnCall::Now => {
+                    return Some(Atom::Date(Local::now().date_naive()));
+                }
+                _ => {
+                    let value = get_variable_value_from_context(v, context);
+                    if let Some(v) = value {
+                        let vv = match op {
+                            FnCall::Upper => Atom::String(v.to_string().to_uppercase()),
+                            FnCall::Lower => Atom::String(v.to_string().to_lowercase()),
+                            FnCall::Now => unreachable!(),
+                        };
+                        return Some(vv);
+                    }
+                }
             }
             None
         }

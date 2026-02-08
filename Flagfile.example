@@ -78,11 +78,11 @@ FF-flag-with-annotations -> true
  */
 FF-flag-with-annotations-2 -> false
 
-/* this is multi-line commented feature
+/**
+ multiline comments
+ */
 FF-timer-feature {
     // turn on only on evaluation time after 22nd feb
-    NOW() > 2024-02-22 -> true
+    NOW() > 2026-02-07 -> true
     false
 }
-*/
-

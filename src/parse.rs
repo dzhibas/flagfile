@@ -141,7 +141,7 @@ fn parse_variable_node_modifier(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse_variable_node_or_modified(i: &str) -> IResult<&str, AstNode> {
-    alt((parse_variable_node_modifier, parse_variable_node))(i)
+    alt((parse_nullary_function, parse_variable_node_modifier, parse_variable_node))(i)
 }
 
 fn parse_constant(i: &str) -> IResult<&str, AstNode> {
@@ -160,6 +160,11 @@ fn parse_function_names(i: &str) -> IResult<&str, FnCall> {
         map(tag_no_case("upper"), |_| FnCall::Upper),
         map(tag_no_case("lower"), |_| FnCall::Lower),
     ))(i)
+}
+
+fn parse_nullary_function(i: &str) -> IResult<&str, AstNode> {
+    let (i, _) = tag_no_case("now()")(i)?;
+    Ok((i, AstNode::Function(FnCall::Now, Box::new(AstNode::Void))))
 }
 
 fn parse_array_expr(i: &str) -> IResult<&str, AstNode> {
