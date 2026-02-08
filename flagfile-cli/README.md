@@ -9,11 +9,11 @@
 - [x] ff test
     runs Flagfile.tests
 
-- [ ] ff eval
-    evaluates flag
-
 - [x] ff list
     lists all flags
+
+- [x] ff eval
+    evaluates flag
 
 - [ ] ff find
     find all flagnames within current directory source code recursively

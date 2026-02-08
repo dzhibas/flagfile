@@ -415,6 +415,33 @@ mod tests {
             )
             .unwrap()
         );
+
+        // 2-component version (Float) compared against 3-component Semver
+        // 5.4 as Float should coerce to 5.4.0 for semver comparison
+        assert_eq!(
+            true,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Float(5.4))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Float(5.3))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("version == 5.4.0").unwrap().1,
+                &HashMap::from([("version", Atom::Float(5.4))])
+            )
+            .unwrap()
+        );
     }
 
     #[test]

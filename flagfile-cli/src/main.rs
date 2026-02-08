@@ -37,6 +37,17 @@ enum Command {
         #[arg(short = 't', long = "testfile", default_value = "Flagfile.tests")]
         testfile: String,
     },
+    Eval {
+        /// Path to the Flagfile
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+
+        /// Flag name to evaluate (e.g. FF-my-feature)
+        flag_name: String,
+
+        /// Context key=value pairs (e.g. country=NL plan=premium)
+        context: Vec<String>,
+    },
 }
 
 /// Parse a test line like: FF-name(key=val,key=val) == EXPECTED
@@ -332,6 +343,64 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
     }
 }
 
+fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
+    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
+        Ok(content) => content,
+        Err(_) => {
+            eprintln!("{} does not exist", flagfile_path);
+            process::exit(1);
+        }
+    };
+
+    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Parsing failed: {}", e);
+            process::exit(1);
+        }
+    };
+
+    if !remainder.trim().is_empty() {
+        eprintln!(
+            "Parsing failed: unexpected content near: {}",
+            remainder.trim().lines().next().unwrap_or("")
+        );
+        process::exit(1);
+    }
+
+    let mut flags: HashMap<&str, Vec<Rule>> = HashMap::new();
+    for fv in &flag_values {
+        for (name, rules) in fv.iter() {
+            flags.insert(name, rules.clone());
+        }
+    }
+
+    let Some(rules) = flags.get(flag_name) else {
+        eprintln!("Flag '{}' not found", flag_name);
+        process::exit(1);
+    };
+
+    let context: Context = context_args
+        .iter()
+        .filter_map(|arg| {
+            let eq_pos = arg.find('=')?;
+            Some((
+                arg[..eq_pos].as_ref(),
+                Atom::from(&arg[eq_pos + 1..]),
+            ))
+        })
+        .collect();
+
+    match evaluate_flag(rules, &context) {
+        Some(FlagReturn::OnOff(val)) => println!("{}", val),
+        Some(FlagReturn::Json(val)) => println!("{}", val),
+        None => {
+            eprintln!("No rule matched for '{}'", flag_name);
+            process::exit(1);
+        }
+    }
+}
+
 fn main() {
     let cli = Args::parse();
     match cli.cmd {
@@ -339,5 +408,8 @@ fn main() {
         Command::List { flagfile } => run_list(&flagfile),
         Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Test { flagfile, testfile } => run_tests(&flagfile, &testfile),
+        Command::Eval { flagfile, flag_name, context } => {
+            run_eval(&flagfile, &flag_name, &context)
+        }
     }
 }
