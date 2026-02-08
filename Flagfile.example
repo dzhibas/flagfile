@@ -49,6 +49,16 @@ FF-feature-complex-ticket-234234 {
     FALSE
 }
 
+// Semver version checks
+FF-sdk-upgrade {
+    // enable new SDK for apps on version 5.3.42 or higher
+    appVersion >= 5.3.42 -> true
+    // disable for apps below 4.32.0
+    appVersion < 4.32.0 -> false
+    // default: keep old SDK
+    false
+}
+
 // different kind of comments inside
 FF-feature1 {
     /* comment like this */
@@ -68,11 +78,11 @@ FF-flag-with-annotations -> true
  */
 FF-flag-with-annotations-2 -> false
 
-/* this is multi-line commented feature
+/**
+ multiline comments
+ */
 FF-timer-feature {
     // turn on only on evaluation time after 22nd feb
-    NOW() > 2024-02-22 -> true
+    NOW() > 2026-02-07 -> true
     false
 }
-*/
-

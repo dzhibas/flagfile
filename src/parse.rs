@@ -62,6 +62,17 @@ fn parse_date(i: &str) -> IResult<&str, Atom> {
     })(i)
 }
 
+fn parse_semver(i: &str) -> IResult<&str, Atom> {
+    let parser = tuple((digit1, char('.'), digit1, char('.'), digit1));
+    map(parser, |(major, _, minor, _, patch): (&str, _, &str, _, &str)| {
+        Atom::Semver(
+            major.parse().unwrap(),
+            minor.parse().unwrap(),
+            patch.parse().unwrap(),
+        )
+    })(i)
+}
+
 fn parse_string(i: &str) -> IResult<&str, Atom> {
     let parser_a = delimited(tag("\""), take_until("\""), tag("\""));
     let parser_b = delimited(tag("\'"), take_until("\'"), tag("\'"));
@@ -82,6 +93,7 @@ pub fn parse_atom(i: &str) -> IResult<&str, Atom> {
         parse_date,
         parse_string,
         parse_boolean,
+        parse_semver,
         parse_float,
         parse_number,
         parse_variable,
@@ -129,7 +141,7 @@ fn parse_variable_node_modifier(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse_variable_node_or_modified(i: &str) -> IResult<&str, AstNode> {
-    alt((parse_variable_node_modifier, parse_variable_node))(i)
+    alt((parse_nullary_function, parse_variable_node_modifier, parse_variable_node))(i)
 }
 
 fn parse_constant(i: &str) -> IResult<&str, AstNode> {
@@ -148,6 +160,11 @@ fn parse_function_names(i: &str) -> IResult<&str, FnCall> {
         map(tag_no_case("upper"), |_| FnCall::Upper),
         map(tag_no_case("lower"), |_| FnCall::Lower),
     ))(i)
+}
+
+fn parse_nullary_function(i: &str) -> IResult<&str, AstNode> {
+    let (i, _) = tag_no_case("now()")(i)?;
+    Ok((i, AstNode::Function(FnCall::Now, Box::new(AstNode::Void))))
 }
 
 fn parse_array_expr(i: &str) -> IResult<&str, AstNode> {
@@ -401,6 +418,39 @@ mod tests {
     fn test_fn_modifiers() {
         let res = parse("UPPER(_demo) == 'DEMO DEMO'");
         assert_eq!(res.is_ok(), true);
+    }
+
+    #[test]
+    fn test_parse_semver() {
+        let (i, v) = parse_semver("5.3.42").unwrap();
+        assert_eq!(v, Atom::Semver(5, 3, 42));
+        assert_eq!(i, "");
+
+        let (i, v) = parse_semver("0.1.0").unwrap();
+        assert_eq!(v, Atom::Semver(0, 1, 0));
+        assert_eq!(i, "");
+
+        // 2-component is not semver, should fail
+        assert!(parse_semver("4.32").is_err());
+    }
+
+    #[test]
+    fn test_semver_atom() {
+        let (_, v) = parse_atom("5.3.42").unwrap();
+        assert_eq!(v, Atom::Semver(5, 3, 42));
+
+        // 2-component still parses as float
+        let (_, v) = parse_atom("4.32").unwrap();
+        assert_eq!(v, Atom::Float(4.32));
+    }
+
+    #[test]
+    fn test_semver_comparison_expr() {
+        let (i, _v) = parse_compare_expr("version > 5.3.42").unwrap();
+        assert_eq!(i, "");
+
+        let (i, _v) = parse_compare_expr("appVersion <= 4.32.0").unwrap();
+        assert_eq!(i, "");
     }
 
     #[test]

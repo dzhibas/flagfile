@@ -12,8 +12,21 @@ pub enum Atom {
     Variable(String),
     Date(NaiveDate),
     DateTime(String),
+    Semver(u32, u32, u32),
     // Timestamp(i64)
-    // Now(i64)
+}
+
+/// Try to interpret a float as semver components (e.g. 5.4 → (5, 4, 0)).
+fn float_to_semver(f: f64) -> Option<(u32, u32, u32)> {
+    let s = format!("{}", f);
+    if let Some((maj_s, min_s)) = s.split_once('.') {
+        let maj = maj_s.parse::<u32>().ok()?;
+        let min = min_s.parse::<u32>().ok()?;
+        Some((maj, min, 0))
+    } else {
+        let maj = s.parse::<u32>().ok()?;
+        Some((maj, 0, 0))
+    }
 }
 
 impl PartialEq<Atom> for Atom {
@@ -28,6 +41,25 @@ impl PartialEq<Atom> for Atom {
             (Atom::Boolean(b1), Atom::Boolean(b2)) => b1 == b2,
             (Atom::Date(d1), Atom::Date(d2)) => d1 == d2,
             (Atom::DateTime(t1), Atom::DateTime(t2)) => t1 == t2,
+            (Atom::Semver(a1, b1, c1), Atom::Semver(a2, b2, c2)) => {
+                a1 == a2 && b1 == b2 && c1 == c2
+            }
+            (Atom::Semver(a, b, c), Atom::Float(f))
+            | (Atom::Float(f), Atom::Semver(a, b, c)) => {
+                if let Some((maj, min, patch)) = float_to_semver(*f) {
+                    *a == maj && *b == min && *c == patch
+                } else {
+                    false
+                }
+            }
+            (Atom::Semver(a, b, c), Atom::Number(n))
+            | (Atom::Number(n), Atom::Semver(a, b, c)) => {
+                if *n >= 0 {
+                    *a == *n as u32 && *b == 0 && *c == 0
+                } else {
+                    false
+                }
+            }
             _ => false,
         }
     }
@@ -39,16 +71,40 @@ impl PartialOrd for Atom {
             Atom::Number(v) => match other {
                 Atom::Number(v2) => Some(v.cmp(v2)),
                 Atom::Float(v2) => f64::from(*v).partial_cmp(v2),
+                Atom::Semver(a2, b2, c2) => {
+                    if *v < 0 { return None; }
+                    let maj = *v as u32;
+                    Some(maj.cmp(a2).then(0u32.cmp(b2)).then(0u32.cmp(c2)))
+                }
                 _ => None,
             },
             Atom::Float(v) => match other {
                 Atom::Float(v2) => v.partial_cmp(v2),
                 Atom::Number(v2) => v.partial_cmp(&f64::from(*v2)),
+                Atom::Semver(a2, b2, c2) => {
+                    let (maj, min, patch) = float_to_semver(*v)?;
+                    Some(maj.cmp(a2).then(min.cmp(b2)).then(patch.cmp(c2)))
+                }
                 _ => None,
             },
             Atom::Date(v) => match other {
                 Atom::Date(v2) => v.partial_cmp(v2),
                 // TODO: if compare to number it might be unix-timestamp
+                _ => None,
+            },
+            Atom::Semver(a1, b1, c1) => match other {
+                Atom::Semver(a2, b2, c2) => {
+                    Some(a1.cmp(a2).then(b1.cmp(b2)).then(c1.cmp(c2)))
+                }
+                Atom::Float(f) => {
+                    let (maj, min, patch) = float_to_semver(*f)?;
+                    Some(a1.cmp(&maj).then(b1.cmp(&min)).then(c1.cmp(&patch)))
+                }
+                Atom::Number(n) => {
+                    if *n < 0 { return None; }
+                    let maj = *n as u32;
+                    Some(a1.cmp(&maj).then(b1.cmp(&0).then(c1.cmp(&0))))
+                }
                 _ => None,
             },
             _ => None,
@@ -66,6 +122,7 @@ impl fmt::Display for Atom {
             Atom::Variable(var) => write!(f, "{var}"),
             Atom::Date(var) => write!(f, "{var}"),
             Atom::DateTime(var) => write!(f, "{var}"),
+            Atom::Semver(major, minor, patch) => write!(f, "{major}.{minor}.{patch}"),
         }
     }
 }
@@ -146,6 +203,7 @@ pub enum ArrayOp {
 pub enum FnCall {
     Upper,
     Lower,
+    Now,
 }
 
 #[derive(Debug, Clone, PartialEq)]

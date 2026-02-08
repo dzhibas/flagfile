@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use chrono::Local;
+
 use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
 
 pub type Context<'a> = HashMap<&'a str, Atom>;
@@ -12,13 +14,21 @@ fn get_variable_value_from_context<'a>(
         AstNode::Variable(Atom::Variable(v)) => context.get(v.as_str()),
         AstNode::Constant(Atom::Variable(v)) => context.get(v.as_str()),
         AstNode::Function(op, v) => {
-            let value = get_variable_value_from_context(v, context);
-            if let Some(v) = value {
-                let vv = match op {
-                    FnCall::Upper => Atom::String(v.to_string().to_uppercase()),
-                    FnCall::Lower => Atom::String(v.to_string().to_lowercase()),
-                };
-                return Some(vv);
+            match op {
+                FnCall::Now => {
+                    return Some(Atom::Date(Local::now().date_naive()));
+                }
+                _ => {
+                    let value = get_variable_value_from_context(v, context);
+                    if let Some(v) = value {
+                        let vv = match op {
+                            FnCall::Upper => Atom::String(v.to_string().to_uppercase()),
+                            FnCall::Lower => Atom::String(v.to_string().to_lowercase()),
+                            FnCall::Now => unreachable!(),
+                        };
+                        return Some(vv);
+                    }
+                }
             }
             None
         }
@@ -327,6 +337,108 @@ mod tests {
             eval(
                 &parse("created < 2024-02-02").unwrap().1,
                 &HashMap::from([("created", "2024-02-02".into())])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_semver_comparison_eval() {
+        // version > 5.3.42
+        assert_eq!(
+            true,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(6, 0, 0))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(5, 3, 42))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(5, 3, 43))])
+            )
+            .unwrap()
+        );
+
+        // version < 4.32.0
+        assert_eq!(
+            true,
+            eval(
+                &parse("version < 4.32.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(4, 31, 9))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("version < 4.32.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(4, 32, 0))])
+            )
+            .unwrap()
+        );
+
+        // equality
+        assert_eq!(
+            true,
+            eval(
+                &parse("version == 1.2.3").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(1, 2, 3))])
+            )
+            .unwrap()
+        );
+
+        // >= and <=
+        assert_eq!(
+            true,
+            eval(
+                &parse("version >= 2.0.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(2, 0, 0))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("version <= 2.0.0").unwrap().1,
+                &HashMap::from([("version", Atom::Semver(1, 9, 99))])
+            )
+            .unwrap()
+        );
+
+        // 2-component version (Float) compared against 3-component Semver
+        // 5.4 as Float should coerce to 5.4.0 for semver comparison
+        assert_eq!(
+            true,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Float(5.4))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("version > 5.3.42").unwrap().1,
+                &HashMap::from([("version", Atom::Float(5.3))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            true,
+            eval(
+                &parse("version == 5.4.0").unwrap().1,
+                &HashMap::from([("version", Atom::Float(5.4))])
             )
             .unwrap()
         );

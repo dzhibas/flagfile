@@ -2,6 +2,7 @@ use std::collections::HashMap;
 
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::Context;
+use flagfile_lib::parse_flagfile::parse_flagfile;
 use flagfile_lib::{self, eval::eval, parse::parse};
 
 #[test]
@@ -110,4 +111,62 @@ fn scopes_bug_with_new_lines_around_test() {
     let val = eval(&expr, &context).unwrap();
     assert_eq!(val, true);
     assert_eq!(i, "");
+}
+
+#[test]
+fn semver_comparison_test() {
+    // Test: version > 5.3.42
+    let rule = "appVersion > 5.3.42 and platform == ios";
+    let context = HashMap::from([
+        ("appVersion", Atom::Semver(6, 0, 0)),
+        ("platform", Atom::String("ios".into())),
+    ]);
+    let (i, expr) = parse(rule).unwrap();
+    assert_eq!(i, "");
+    assert_eq!(eval(&expr, &context).unwrap(), true);
+
+    // version 5.3.42 is NOT > 5.3.42
+    let context_equal = HashMap::from([
+        ("appVersion", Atom::Semver(5, 3, 42)),
+        ("platform", Atom::String("ios".into())),
+    ]);
+    assert_eq!(eval(&expr, &context_equal).unwrap(), false);
+
+    // Test: version < 4.32.0
+    let rule2 = "appVersion < 4.32.0";
+    let (i2, expr2) = parse(rule2).unwrap();
+    assert_eq!(i2, "");
+    assert_eq!(
+        eval(&expr2, &HashMap::from([("appVersion", Atom::Semver(4, 31, 9))])).unwrap(),
+        true
+    );
+    assert_eq!(
+        eval(&expr2, &HashMap::from([("appVersion", Atom::Semver(4, 32, 0))])).unwrap(),
+        false
+    );
+    assert_eq!(
+        eval(&expr2, &HashMap::from([("appVersion", Atom::Semver(5, 0, 0))])).unwrap(),
+        false
+    );
+}
+
+#[test]
+fn semver_from_str_context_test() {
+    // Semver values provided as strings via From<&str> should parse as Semver
+    let context: Context = HashMap::from([("version", "2.1.0".into())]);
+    assert_eq!(
+        *context.get("version").unwrap(),
+        Atom::Semver(2, 1, 0)
+    );
+
+    let (_, expr) = parse("version >= 2.0.0").unwrap();
+    assert_eq!(eval(&expr, &context).unwrap(), true);
+}
+
+#[test]
+fn flagfile_with_semver_parses() {
+    let data = include_str!("../Flagfile.example");
+    let (i, v) = parse_flagfile(data).unwrap();
+    assert!(v.len() > 0);
+    assert_eq!(i.to_string().trim(), "");
 }
