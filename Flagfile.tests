@@ -5,3 +5,6 @@ FF-sdk-upgrade(appVersion=4.31.9) == FALSE
 FF-sdk-upgrade(appVersion=5.3.44) == TRUE
 FF-sdk-upgrade(appVersion=5.2.1) == false
 FF-timer-feature() == true
+FF-feature-y(countryCode=nl) == true
+FF-feature-y(countryCode=NL) == true
+FF-feature-y(countryCode=DE) == false

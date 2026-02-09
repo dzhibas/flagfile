@@ -20,7 +20,7 @@ FF_Feature23432 -> TRUE
 // you can have feature with multiple rules in it with default flag value returned in end
 FF-feature-y {
     // if country is NL return True
-    countryCode == NL -> true
+    lower(countryCode) == nl -> true
     // else default to false
     false
 }

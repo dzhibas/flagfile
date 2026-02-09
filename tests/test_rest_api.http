@@ -1,0 +1,29 @@
+### testing ofrep
+POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-feature-flat-on-off
+Content-Type: application/json
+
+{}
+###
+
+### testing ofrep
+POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-feature-y
+Content-Type: application/json
+
+{
+    "context": {
+        "countryCode": "NL"
+    }
+}
+###
+
+
+### testing ofrep
+POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags
+Content-Type: application/json
+
+{
+    "context": {
+        "countryCode": "nl"
+    }
+}
+###
