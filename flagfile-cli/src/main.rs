@@ -449,9 +449,9 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
 
 fn run_find(path: &str, search: Option<&str>) {
     let regex_pattern = match search {
-        Some(term) => format!(r"FF[-_][a-zA-Z0-9_-]*{}[a-zA-Z0-9_-]*",
+        Some(term) => format!(r"\bFF[-_][a-zA-Z0-9_-]*{}[a-zA-Z0-9_-]*",
             regex::escape(term)),
-        None => r"FF[-_][a-zA-Z0-9_-]+".to_string(),
+        None => r"\bFF[-_][a-zA-Z0-9_-]+".to_string(),
     };
     let pattern = Regex::new(&regex_pattern).unwrap();
     let use_color = io::stdout().is_terminal();
