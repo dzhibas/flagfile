@@ -14,8 +14,8 @@ use regex::Regex;
 
 #[derive(Parser, Debug)]
 #[command(name = "Flagfile")]
-#[command(version = "1.0")]
-#[command(about = "Feature flagging for developers", long_about = None)]
+#[command(version = "0.1.7")]
+#[command(about = "Feature flagging for developers and devops", long_about = None)]
 struct Args {
     #[command(subcommand)]
     cmd: Command,
@@ -169,6 +169,7 @@ const INIT_FLAGFILE: &str = r#"// Simple on/off flag
 FF-welcome-banner -> true
 
 // Feature with rules based on context
+// @test FF-premium-feature(plan=premium) == true
 FF-premium-feature {
     // enable for users in premium plan
     plan == premium -> true
