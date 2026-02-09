@@ -19,6 +19,11 @@ crate-type = ["cdylib", "rlib"]
 [profile.release]
 opt-level = "z"
 
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+
 [dependencies]
 chrono = "0.4.34"
 nom = "7.1.3"
