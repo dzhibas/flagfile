@@ -1,0 +1,11 @@
+{
+  "name": "js-example",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "flagfile-ts": "file:../../flagfile-ts"
+  }
+}

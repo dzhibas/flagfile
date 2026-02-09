@@ -1,0 +1,7 @@
+FF-feature-y {
+    countryCode in (nl, NL, be, BE) -> true
+    false
+}
+FF-simple -> true
+FF-log -> "debug"
+FF-version -> 3
