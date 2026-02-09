@@ -8,7 +8,7 @@ it's developer and devops friendly feature flagging solution with cli command to
 
 it has a cli available through `brew install dzhibas/tap/flagfile-cli` which allows you to init, run tests, validate syntax, serve flags through openfeature-api, find flags in codebase and evaluate flags through command line
 
-it also have libraries to work with flagfile in each language, check our `examples/` folder
+it also have libraries to work with flagfile in each language, check our [examples/](examples/) folder
 
 ## Usage in Rust
 
