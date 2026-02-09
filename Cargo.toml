@@ -10,7 +10,7 @@ resolver = "2"
 members = [
     "flagfile-cli",
     "."
-]
+, "examples/rust_example"]
 
 [lints.rust]
 unsafe_code = "forbid"

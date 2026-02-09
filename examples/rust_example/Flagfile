@@ -1,0 +1,6 @@
+FF-feature-y {
+    // if country is NL return True
+    lower(country) == nl -> true
+    // else default to false
+    false
+}

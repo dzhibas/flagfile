@@ -18,7 +18,42 @@ let flag_value = eval(&expr, &HashMap::from([("country", "NL"), ("userId", "2132
 dbg!(flag_value);
 ```
 
-eventually this lib compiles into wasm and used in UI to validate and parse rules, and with FFI exported into other languages to parse and evaluate rules
+## Usage as a Rust library
+
+Add the dependency to your `Cargo.toml`:
+
+```toml
+[dependencies]
+flagfile-lib = "0.3"
+```
+
+Then use `init()` to load a `Flagfile` from the current directory and `ff()` to evaluate flags:
+
+```rust
+use std::collections::HashMap;
+use flagfile_lib::{init, ff, FlagReturn, Context};
+use flagfile_lib::ast::Atom;
+
+fn main() {
+    // Reads and parses "Flagfile" from the current directory
+    flagfile_lib::init();
+
+    // Build a context with runtime values
+    let ctx: Context = HashMap::from([
+        ("tier", "premium".into()),
+        ("country", "NL".into()),
+    ]);
+
+    match flagfile_lib::ff("FF-premium-features", &ctx) {
+        Some(FlagReturn::OnOff(true)) => println!("Flag is on"),
+        Some(FlagReturn::OnOff(false)) => println!("Flag is off"),
+        Some(FlagReturn::Json(v)) => println!("Config: {}", v),
+        Some(FlagReturn::Integer(n)) => println!("Value: {}", n),
+        Some(FlagReturn::Str(s)) => println!("String: {}", s),
+        None => println!("Flag not found or no rule matched"),
+    }
+}
+```
 
 ## Features language summary:
 
