@@ -9,7 +9,7 @@ pub mod parse;
 pub mod parse_flagfile;
 
 pub use eval::Context;
-pub use parse_flagfile::{FlagReturn, Rule, TestAnnotation, extract_test_annotations};
+pub use parse_flagfile::{extract_test_annotations, FlagReturn, Rule, TestAnnotation};
 
 static FLAGS: OnceLock<HashMap<String, Vec<Rule>>> = OnceLock::new();
 
@@ -123,16 +123,14 @@ mod tests {
         let rules = &fvs[0]["FF-premium"];
 
         // matching context
-        let ctx: Context =
-            HashMap::from([("plan", Atom::String("premium".to_string()))]);
+        let ctx: Context = HashMap::from([("plan", Atom::String("premium".to_string()))]);
         assert!(matches!(
             evaluate_rules(rules, &ctx),
             Some(FlagReturn::OnOff(true))
         ));
 
         // non-matching context falls through to default
-        let ctx: Context =
-            HashMap::from([("plan", Atom::String("free".to_string()))]);
+        let ctx: Context = HashMap::from([("plan", Atom::String("free".to_string()))]);
         assert!(matches!(
             evaluate_rules(rules, &ctx),
             Some(FlagReturn::OnOff(false))
@@ -168,9 +166,7 @@ mod tests {
         let rules = &fvs[0]["FF-level"];
         let ctx = Context::new();
         let result = evaluate_rules(rules, &ctx);
-        assert!(
-            matches!(result, Some(FlagReturn::Str(ref s)) if s == "debug")
-        );
+        assert!(matches!(result, Some(FlagReturn::Str(ref s)) if s == "debug"));
     }
 
     #[test]
@@ -180,8 +176,7 @@ mod tests {
 }"#;
         let (_, fvs) = parse_flagfile::parse_flagfile(content).unwrap();
         let rules = &fvs[0]["FF-strict"];
-        let ctx: Context =
-            HashMap::from([("plan", Atom::String("free".to_string()))]);
+        let ctx: Context = HashMap::from([("plan", Atom::String("free".to_string()))]);
         assert!(evaluate_rules(rules, &ctx).is_none());
     }
 
@@ -225,15 +220,13 @@ FF-gated {
         ));
         assert!(ff("FF-nonexistent", &ctx).is_none());
 
-        let ctx: Context =
-            HashMap::from([("tier", Atom::String("premium".to_string()))]);
+        let ctx: Context = HashMap::from([("tier", Atom::String("premium".to_string()))]);
         assert!(matches!(
             ff("FF-gated", &ctx),
             Some(FlagReturn::OnOff(true))
         ));
 
-        let ctx: Context =
-            HashMap::from([("tier", Atom::String("free".to_string()))]);
+        let ctx: Context = HashMap::from([("tier", Atom::String("free".to_string()))]);
         assert!(matches!(
             ff("FF-gated", &ctx),
             Some(FlagReturn::OnOff(false))

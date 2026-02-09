@@ -137,15 +137,27 @@ fn semver_comparison_test() {
     let (i2, expr2) = parse(rule2).unwrap();
     assert_eq!(i2, "");
     assert_eq!(
-        eval(&expr2, &HashMap::from([("appVersion", Atom::Semver(4, 31, 9))])).unwrap(),
+        eval(
+            &expr2,
+            &HashMap::from([("appVersion", Atom::Semver(4, 31, 9))])
+        )
+        .unwrap(),
         true
     );
     assert_eq!(
-        eval(&expr2, &HashMap::from([("appVersion", Atom::Semver(4, 32, 0))])).unwrap(),
+        eval(
+            &expr2,
+            &HashMap::from([("appVersion", Atom::Semver(4, 32, 0))])
+        )
+        .unwrap(),
         false
     );
     assert_eq!(
-        eval(&expr2, &HashMap::from([("appVersion", Atom::Semver(5, 0, 0))])).unwrap(),
+        eval(
+            &expr2,
+            &HashMap::from([("appVersion", Atom::Semver(5, 0, 0))])
+        )
+        .unwrap(),
         false
     );
 }
@@ -154,10 +166,7 @@ fn semver_comparison_test() {
 fn semver_from_str_context_test() {
     // Semver values provided as strings via From<&str> should parse as Semver
     let context: Context = HashMap::from([("version", "2.1.0".into())]);
-    assert_eq!(
-        *context.get("version").unwrap(),
-        Atom::Semver(2, 1, 0)
-    );
+    assert_eq!(*context.get("version").unwrap(), Atom::Semver(2, 1, 0));
 
     let (_, expr) = parse("version >= 2.0.0").unwrap();
     assert_eq!(eval(&expr, &context).unwrap(), true);

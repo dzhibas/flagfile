@@ -77,7 +77,10 @@ async fn handle_eval(
     Query(params): Query<HashMap<String, String>>,
 ) -> Response {
     let store = state.store.read().await;
-    let plain = params.get("ff_output").map(|v| v == "plain").unwrap_or(false);
+    let plain = params
+        .get("ff_output")
+        .map(|v| v == "plain")
+        .unwrap_or(false);
 
     let Some(rules) = store.flags.get(&flag_name) else {
         if plain {
@@ -139,14 +142,11 @@ async fn handle_eval(
         }
         None => {
             if plain {
-                return (StatusCode::UNPROCESSABLE_ENTITY, "no rule matched")
-                    .into_response();
+                return (StatusCode::UNPROCESSABLE_ENTITY, "no rule matched").into_response();
             }
             (
                 StatusCode::UNPROCESSABLE_ENTITY,
-                axum::Json(
-                    serde_json::json!({"error": "no rule matched", "flag": flag_name}),
-                ),
+                axum::Json(serde_json::json!({"error": "no rule matched", "flag": flag_name})),
             )
                 .into_response()
         }
@@ -154,9 +154,7 @@ async fn handle_eval(
 }
 
 /// Convert OFREP context (JSON values) to flagfile Context (string-based Atoms).
-fn build_context_from_ofrep(
-    raw: &HashMap<String, serde_json::Value>,
-) -> HashMap<String, String> {
+fn build_context_from_ofrep(raw: &HashMap<String, serde_json::Value>) -> HashMap<String, String> {
     raw.iter()
         .map(|(k, v)| {
             let s = match v {
@@ -191,11 +189,7 @@ fn evaluate_flag_with_reason(
     None
 }
 
-fn flag_return_to_ofrep(
-    key: &str,
-    ret: &FlagReturn,
-    reason: &str,
-) -> OFREPEvalSuccess {
+fn flag_return_to_ofrep(key: &str, ret: &FlagReturn, reason: &str) -> OFREPEvalSuccess {
     match ret {
         FlagReturn::OnOff(val) => OFREPEvalSuccess {
             key: key.to_string(),
@@ -308,11 +302,7 @@ async fn handle_ofrep_bulk(
         flags.push(serde_json::to_value(result).unwrap());
     }
 
-    (
-        StatusCode::OK,
-        Json(OFREPBulkResponse { flags }),
-    )
-        .into_response()
+    (StatusCode::OK, Json(OFREPBulkResponse { flags })).into_response()
 }
 
 fn parse_flags(content: &str) -> Option<HashMap<String, Vec<Rule>>> {
@@ -346,10 +336,7 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
 
     let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
         if let Ok(event) = res {
-            if matches!(
-                event.kind,
-                EventKind::Modify(_) | EventKind::Create(_)
-            ) {
+            if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
                 let _ = tx.try_send(());
             }
         }
@@ -409,11 +396,7 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
     }
 }
 
-pub async fn run_serve(
-    flagfile_arg: Option<String>,
-    port_arg: Option<u16>,
-    config_path: &str,
-) {
+pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, config_path: &str) {
     // Load config from file if it exists
     let config: ServeConfig = std::fs::read_to_string(config_path)
         .ok()

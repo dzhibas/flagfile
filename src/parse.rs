@@ -64,13 +64,16 @@ fn parse_date(i: &str) -> IResult<&str, Atom> {
 
 fn parse_semver(i: &str) -> IResult<&str, Atom> {
     let parser = tuple((digit1, char('.'), digit1, char('.'), digit1));
-    map(parser, |(major, _, minor, _, patch): (&str, _, &str, _, &str)| {
-        Atom::Semver(
-            major.parse().unwrap(),
-            minor.parse().unwrap(),
-            patch.parse().unwrap(),
-        )
-    })(i)
+    map(
+        parser,
+        |(major, _, minor, _, patch): (&str, _, &str, _, &str)| {
+            Atom::Semver(
+                major.parse().unwrap(),
+                minor.parse().unwrap(),
+                patch.parse().unwrap(),
+            )
+        },
+    )(i)
 }
 
 fn parse_string(i: &str) -> IResult<&str, Atom> {
@@ -141,7 +144,11 @@ fn parse_variable_node_modifier(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse_variable_node_or_modified(i: &str) -> IResult<&str, AstNode> {
-    alt((parse_nullary_function, parse_variable_node_modifier, parse_variable_node))(i)
+    alt((
+        parse_nullary_function,
+        parse_variable_node_modifier,
+        parse_variable_node,
+    ))(i)
 }
 
 fn parse_constant(i: &str) -> IResult<&str, AstNode> {

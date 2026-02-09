@@ -44,16 +44,14 @@ impl PartialEq<Atom> for Atom {
             (Atom::Semver(a1, b1, c1), Atom::Semver(a2, b2, c2)) => {
                 a1 == a2 && b1 == b2 && c1 == c2
             }
-            (Atom::Semver(a, b, c), Atom::Float(f))
-            | (Atom::Float(f), Atom::Semver(a, b, c)) => {
+            (Atom::Semver(a, b, c), Atom::Float(f)) | (Atom::Float(f), Atom::Semver(a, b, c)) => {
                 if let Some((maj, min, patch)) = float_to_semver(*f) {
                     *a == maj && *b == min && *c == patch
                 } else {
                     false
                 }
             }
-            (Atom::Semver(a, b, c), Atom::Number(n))
-            | (Atom::Number(n), Atom::Semver(a, b, c)) => {
+            (Atom::Semver(a, b, c), Atom::Number(n)) | (Atom::Number(n), Atom::Semver(a, b, c)) => {
                 if *n >= 0 {
                     *a == *n as u32 && *b == 0 && *c == 0
                 } else {
@@ -72,7 +70,9 @@ impl PartialOrd for Atom {
                 Atom::Number(v2) => Some(v.cmp(v2)),
                 Atom::Float(v2) => f64::from(*v).partial_cmp(v2),
                 Atom::Semver(a2, b2, c2) => {
-                    if *v < 0 { return None; }
+                    if *v < 0 {
+                        return None;
+                    }
                     let maj = *v as u32;
                     Some(maj.cmp(a2).then(0u32.cmp(b2)).then(0u32.cmp(c2)))
                 }
@@ -93,15 +93,15 @@ impl PartialOrd for Atom {
                 _ => None,
             },
             Atom::Semver(a1, b1, c1) => match other {
-                Atom::Semver(a2, b2, c2) => {
-                    Some(a1.cmp(a2).then(b1.cmp(b2)).then(c1.cmp(c2)))
-                }
+                Atom::Semver(a2, b2, c2) => Some(a1.cmp(a2).then(b1.cmp(b2)).then(c1.cmp(c2))),
                 Atom::Float(f) => {
                     let (maj, min, patch) = float_to_semver(*f)?;
                     Some(a1.cmp(&maj).then(b1.cmp(&min)).then(c1.cmp(&patch)))
                 }
                 Atom::Number(n) => {
-                    if *n < 0 { return None; }
+                    if *n < 0 {
+                        return None;
+                    }
                     let maj = *n as u32;
                     Some(a1.cmp(&maj).then(b1.cmp(&0).then(c1.cmp(&0))))
                 }

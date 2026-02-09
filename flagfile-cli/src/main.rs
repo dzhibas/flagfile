@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::{eval, Context};
-use flagfile_lib::parse_flagfile::{parse_flagfile, extract_test_annotations, FlagReturn, Rule};
+use flagfile_lib::parse_flagfile::{extract_test_annotations, parse_flagfile, FlagReturn, Rule};
 use ignore::WalkBuilder;
 use regex::Regex;
 
@@ -23,7 +23,7 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Command {
-    Init,     // creates empty file with demo flag
+    Init, // creates empty file with demo flag
     List {
         /// Path to the Flagfile
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
@@ -151,9 +151,7 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
                 false
             }
         }
-        FlagReturn::Integer(val) => {
-            expected.parse::<i64>().map_or(false, |e| *val == e)
-        }
+        FlagReturn::Integer(val) => expected.parse::<i64>().map_or(false, |e| *val == e),
         FlagReturn::Str(val) => {
             // Strip surrounding quotes if present
             let expected_str = expected
@@ -239,8 +237,10 @@ fn run_list(flagfile_path: &str) {
     };
 
     if !remainder.trim().is_empty() {
-        eprintln!("Parsing failed: unexpected content near: {}",
-            remainder.trim().lines().next().unwrap_or(""));
+        eprintln!(
+            "Parsing failed: unexpected content near: {}",
+            remainder.trim().lines().next().unwrap_or("")
+        );
         process::exit(1);
     }
 
@@ -269,8 +269,10 @@ fn run_validate(flagfile_path: &str) {
     };
 
     if !remainder.trim().is_empty() {
-        eprintln!("Parsing failed: unexpected content near: {}",
-            remainder.trim().lines().next().unwrap_or(""));
+        eprintln!(
+            "Parsing failed: unexpected content near: {}",
+            remainder.trim().lines().next().unwrap_or("")
+        );
         process::exit(1);
     }
 
@@ -285,7 +287,10 @@ fn run_validate(flagfile_path: &str) {
     }
 
     println!();
-    println!("{} valid, {} flags, {} rules", flagfile_path, total_flags, total_rules);
+    println!(
+        "{} valid, {} flags, {} rules",
+        flagfile_path, total_flags, total_rules
+    );
 }
 
 fn run_tests(flagfile_path: &str, testfile_path: &str) {
@@ -355,10 +360,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 
             total += 1;
 
-            let context: Context = pairs
-                .iter()
-                .map(|(k, v)| (*k, Atom::from(*v)))
-                .collect();
+            let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
 
             let Some(rules) = flags.get(flag_name) else {
                 println!("FAIL  {} - flag not found", line);
@@ -405,10 +407,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 
             total += 1;
 
-            let context: Context = pairs
-                .iter()
-                .map(|(k, v)| (*k, Atom::from(*v)))
-                .collect();
+            let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
 
             let Some(rules) = flags.get(flag_name) else {
                 println!(
@@ -443,7 +442,10 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 
     // 6. Summary
     println!();
-    println!("{} passed, {} failed out of {} tests", passed, failed, total);
+    println!(
+        "{} passed, {} failed out of {} tests",
+        passed, failed, total
+    );
 
     if failed > 0 {
         process::exit(1);
@@ -491,10 +493,7 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
         .iter()
         .filter_map(|arg| {
             let eq_pos = arg.find('=')?;
-            Some((
-                arg[..eq_pos].as_ref(),
-                Atom::from(&arg[eq_pos + 1..]),
-            ))
+            Some((arg[..eq_pos].as_ref(), Atom::from(&arg[eq_pos + 1..])))
         })
         .collect();
 
@@ -512,73 +511,72 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
 
 fn run_find(path: &str, search: Option<&str>) {
     let regex_pattern = match search {
-        Some(term) => format!(r"\bFF[-_][a-zA-Z0-9_-]*{}[a-zA-Z0-9_-]*",
-            regex::escape(term)),
+        Some(term) => format!(
+            r"\bFF[-_][a-zA-Z0-9_-]*{}[a-zA-Z0-9_-]*",
+            regex::escape(term)
+        ),
         None => r"\bFF[-_][a-zA-Z0-9_-]+".to_string(),
     };
     let pattern = Regex::new(&regex_pattern).unwrap();
     let use_color = io::stdout().is_terminal();
     let stdout = Mutex::new(io::stdout());
 
-    WalkBuilder::new(path)
-        .build_parallel()
-        .run(|| {
-            let pattern = pattern.clone();
-            let stdout = &stdout;
-            Box::new(move |entry| {
-                let entry = match entry {
-                    Ok(e) => e,
-                    Err(_) => return ignore::WalkState::Continue,
+    WalkBuilder::new(path).build_parallel().run(|| {
+        let pattern = pattern.clone();
+        let stdout = &stdout;
+        Box::new(move |entry| {
+            let entry = match entry {
+                Ok(e) => e,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+                return ignore::WalkState::Continue;
+            }
+
+            let path = entry.path();
+
+            let file = match std::fs::File::open(path) {
+                Ok(f) => f,
+                Err(_) => return ignore::WalkState::Continue,
+            };
+
+            let reader = io::BufReader::new(file);
+            let display_path = path.display();
+
+            // Batch output per file to reduce lock contention
+            let mut matches = Vec::new();
+            for (line_idx, line) in reader.lines().enumerate() {
+                let line = match line {
+                    Ok(l) => l,
+                    Err(_) => break, // binary file or encoding error
                 };
 
-                if !entry.file_type().map_or(false, |ft| ft.is_file()) {
-                    return ignore::WalkState::Continue;
-                }
-
-                let path = entry.path();
-
-                let file = match std::fs::File::open(path) {
-                    Ok(f) => f,
-                    Err(_) => return ignore::WalkState::Continue,
-                };
-
-                let reader = io::BufReader::new(file);
-                let display_path = path.display();
-
-                // Batch output per file to reduce lock contention
-                let mut matches = Vec::new();
-                for (line_idx, line) in reader.lines().enumerate() {
-                    let line = match line {
-                        Ok(l) => l,
-                        Err(_) => break, // binary file or encoding error
+                if pattern.is_match(&line) {
+                    let colored_line = if use_color {
+                        pattern.replace_all(&line, "\x1b[31m$0\x1b[0m").into_owned()
+                    } else {
+                        line
                     };
-
-                    if pattern.is_match(&line) {
-                        let colored_line = if use_color {
-                            pattern.replace_all(
-                                &line,
-                                "\x1b[31m$0\x1b[0m",
-                            ).into_owned()
-                        } else {
-                            line
-                        };
-                        matches.push(format!(
-                            "{}:{}:{}",
-                            display_path, line_idx + 1, colored_line
-                        ));
-                    }
+                    matches.push(format!(
+                        "{}:{}:{}",
+                        display_path,
+                        line_idx + 1,
+                        colored_line
+                    ));
                 }
+            }
 
-                if !matches.is_empty() {
-                    let mut out = stdout.lock().unwrap();
-                    for m in &matches {
-                        let _ = writeln!(out, "{}", m);
-                    }
+            if !matches.is_empty() {
+                let mut out = stdout.lock().unwrap();
+                for m in &matches {
+                    let _ = writeln!(out, "{}", m);
                 }
+            }
 
-                ignore::WalkState::Continue
-            })
-        });
+            ignore::WalkState::Continue
+        })
+    });
 }
 
 #[tokio::main]
@@ -589,12 +587,16 @@ async fn main() {
         Command::List { flagfile } => run_list(&flagfile),
         Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Test { flagfile, testfile } => run_tests(&flagfile, &testfile),
-        Command::Eval { flagfile, flag_name, context } => {
-            run_eval(&flagfile, &flag_name, &context)
-        }
+        Command::Eval {
+            flagfile,
+            flag_name,
+            context,
+        } => run_eval(&flagfile, &flag_name, &context),
         Command::Find { path, search } => run_find(&path, search.as_deref()),
-        Command::Serve { flagfile, port, config } => {
-            serve::run_serve(flagfile, port, &config).await
-        }
+        Command::Serve {
+            flagfile,
+            port,
+            config,
+        } => serve::run_serve(flagfile, port, &config).await,
     }
 }
