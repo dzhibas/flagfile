@@ -1,6 +1,8 @@
-# <img src="https://github.com/dzhibas/flagfile/blob/main/public/flagfile-inverse.svg?raw=true" width=100px/> Flagfile
+# <img src="https://github.com/dzhibas/flagfile/blob/main/public/flagfile-inverse.svg?raw=true" width=300px/>
 
 ![Tests passing](https://github.com/dzhibas/flagfile/actions/workflows/tests.yml/badge.svg)
+
+Flagfile
 
 it's developer friendly feature flagging solution where you define all your flags in Flagfile in this format: [Flagfile.example](Flagfile.example)
 
