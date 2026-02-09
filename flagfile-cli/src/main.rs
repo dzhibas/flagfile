@@ -1,7 +1,7 @@
 mod serve;
 
 use std::collections::HashMap;
-use std::io::{self, BufRead, Write};
+use std::io::{self, BufRead, IsTerminal, Write};
 use std::process;
 use std::sync::Mutex;
 
@@ -454,6 +454,7 @@ fn run_find(path: &str, search: Option<&str>) {
         None => r"FF[-_][a-zA-Z0-9_-]+".to_string(),
     };
     let pattern = Regex::new(&regex_pattern).unwrap();
+    let use_color = io::stdout().is_terminal();
     let stdout = Mutex::new(io::stdout());
 
     WalkBuilder::new(path)
@@ -490,8 +491,17 @@ fn run_find(path: &str, search: Option<&str>) {
                     };
 
                     if pattern.is_match(&line) {
+                        let colored_line = if use_color {
+                            pattern.replace_all(
+                                &line,
+                                "\x1b[31m$0\x1b[0m",
+                            ).into_owned()
+                        } else {
+                            line
+                        };
                         matches.push(format!(
-                            "{}:{}:{}", display_path, line_idx + 1, line
+                            "{}:{}:{}",
+                            display_path, line_idx + 1, colored_line
                         ));
                     }
                 }
