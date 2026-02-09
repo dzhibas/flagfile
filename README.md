@@ -4,23 +4,13 @@
 
 Flagfile
 
-it's developer friendly feature flagging solution where you define all your flags in Flagfile in this format: [Flagfile.example](Flagfile.example)
+it's developer and devops friendly feature flagging solution with cli command to manage thise where you define all your flags with rules and tests for those in Flagfile in this format: [Flagfile.example](Flagfile.example)
 
-its boolean expression parser library which was initially written in pest.rs (https://github.com/dzhibas/bool_expr_parser) and later rewrote everything in Nom rust lib
+it has a cli available through `brew install dzhibas/tap/flagfile-cli` which allows you to init, run tests, validate syntax, serve flags through openfeature-api, find flags in codebase and evaluate flags through command line
 
-Feature rules can be describe in a expresions similar to all developers and DevOps and does not need any intermediate json format to express these
-```
-country == NL and created > 2024-02-15 and userId not in (122133, 122132323, 2323423)
-```
+it also have libraries to work with flagfile in each language, check our `examples/` folder
 
-```rust
-let rule = "country == NL and created > 2024-02-15 and userId not in (122133, 122132323, 2323423)";
-let (i, expr) = parse(&rule).expect("parse error");
-let flag_value = eval(&expr, &HashMap::from([("country", "NL"), ("userId", "2132321"), ("created", "2024-02-02")]);
-dbg!(flag_value);
-```
-
-## Usage as a Rust library
+## Usage in Rust
 
 Add the dependency to your `Cargo.toml`:
 
@@ -32,37 +22,53 @@ flagfile-lib = "0.3"
 Then use `init()` to load a `Flagfile` from the current directory and `ff()` to evaluate flags:
 
 ```rust
+use flagfile_lib::{Context, ff};
 use std::collections::HashMap;
-use flagfile_lib::{init, ff, FlagReturn, Context};
-use flagfile_lib::ast::Atom;
 
 fn main() {
-    // Reads and parses "Flagfile" from the current directory
     flagfile_lib::init();
 
-    // Build a context with runtime values
-    let ctx: Context = HashMap::from([
-        ("tier", "premium".into()),
-        ("country", "NL".into()),
-    ]);
+    let ctx: Context = HashMap::from([("tier", "premium".into()), ("country", "nl".into())]);
+    let flag: bool = ff("FF-feature-y", &ctx).expect("Flag not found").into();
 
-    match flagfile_lib::ff("FF-premium-features", &ctx) {
-        Some(FlagReturn::OnOff(true)) => println!("Flag is on"),
-        Some(FlagReturn::OnOff(false)) => println!("Flag is off"),
-        Some(FlagReturn::Json(v)) => println!("Config: {}", v),
-        Some(FlagReturn::Integer(n)) => println!("Value: {}", n),
-        Some(FlagReturn::Str(s)) => println!("String: {}", s),
-        None => println!("Flag not found or no rule matched"),
+    if flag {
+        println!("Flag is on");
+    } else {
+        println!("Flag is off");
     }
+}
+```
+
+## Usage in Javascript/Typescript
+
+add dependency in package.json of `flagfile-js`. then `ff init` and then
+
+```js
+import { init, ff } from "flagfile-ts";
+
+init();
+
+const ctx = {
+  tier: "premium",
+  countryCode: "nl",
+};
+
+if (ff("FF-feature-y", ctx)) {
+  console.log("Flag is on");
+} else {
+  console.log("Flag is off");
 }
 ```
 
 ## Features language summary:
 
 *   Feature flag name definition: `FF-<name>` or `FF_<name>`
+
+it's choosen specifically so that it prefixed with FF, cause cli provides a way to find it in codebase repo if you will need to clean it up with `ff find` or `ff find -s premium`
+
 *   Short notation: `FF-name -> value`
 *   Block notation: `FF-name { rules... defaultValue }`
-*   Values: `true`, `TRUE`, `false`, `FALSE`, `json({"key": "value"})`
+*   Values: `true`, `TRUE`, `false`, `FALSE`, `json({"key": "value"})`, int or string
 *   Rules: `condition1 && condition2 -> value`
 *   Default value in block: A final `value` without `->`
 *   Conditions:
@@ -73,9 +79,14 @@ fn main() {
     *   Contains / regex match: `~` (contains or regex match), `!~` (does not contain or does not match regex)
     *   Operands: Identifiers, string literals, number literals, date literals (`YYYY-MM-DD`), regex literals (`/pattern/`), `NOW()`
     *   Tuple/List for `in`/`not in`: `(1,2,3)`
+    *   String contains with `name ~ nik` and negating does not contains `name !~ nik`
+    *   Regex match with `name ~ /.*nik.*/` and negating with ` !~ `
+    *   Function calls to `upper(), lower(), now()` so that `lower(name) ~ nik`
+    *   SemVer check so that `appVersion >= 5.3.2`
 *   Comments: singleline `// ...` and multiline `/* ... */`
 *   In Block notation can have multiple rules to evaluate
 *   Multi-line rules
+*   Inline tests with leaving in comment block annotation `@test flag(context) == true` and it will be tested with `ff test`
 
 ## Flagfile
 
