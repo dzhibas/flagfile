@@ -173,6 +173,82 @@ fn semver_from_str_context_test() {
 }
 
 #[test]
+fn contains_and_regex_match_test() {
+    // contains match
+    let (i, expr) = parse("name ~ Nik").unwrap();
+    assert_eq!(i, "");
+    assert_eq!(
+        eval(
+            &expr,
+            &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+        )
+        .unwrap(),
+        true
+    );
+
+    // contains match with function call
+    let (i, expr) = parse("lower(name) ~ nik").unwrap();
+    assert_eq!(i, "");
+    assert_eq!(
+        eval(
+            &expr,
+            &HashMap::from([("name", Atom::String("NIKOLAJUS".into()))])
+        )
+        .unwrap(),
+        true
+    );
+
+
+    // not-contains match
+    let (i2, expr2) = parse("name !~ Nik").unwrap();
+    assert_eq!(i2, "");
+    assert_eq!(
+        eval(
+            &expr2,
+            &HashMap::from([("name", Atom::String("John".into()))])
+        )
+        .unwrap(),
+        true
+    );
+
+    // regex match
+    let (i3, expr3) = parse("name ~ /.*ola.*/").unwrap();
+    assert_eq!(i3, "");
+    assert_eq!(
+        eval(
+            &expr3,
+            &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+        )
+        .unwrap(),
+        true
+    );
+
+    // not-regex match
+    let (i4, expr4) = parse("lower(name) !~ /.*ola.*/").unwrap();
+    assert_eq!(i4, "");
+    assert_eq!(
+        eval(
+            &expr4,
+            &HashMap::from([("name", Atom::String("Simonas".into()))])
+        )
+        .unwrap(),
+        true
+    );
+
+    // regex match with utf8 chars
+    let (i4, expr4) = parse("lower(name) ~ /.*žolė.*/").unwrap();
+    assert_eq!(i4, "");
+    assert_eq!(
+        eval(
+            &expr4,
+            &HashMap::from([("name", Atom::String("Kažkur ŽOLĖ žalesnė".into()))])
+        )
+        .unwrap(),
+        true
+    );
+}
+
+#[test]
 fn flagfile_with_semver_parses() {
     let data = include_str!("../Flagfile.example");
     let (i, v) = parse_flagfile(data).unwrap();

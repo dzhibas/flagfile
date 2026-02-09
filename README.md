@@ -68,7 +68,8 @@ fn main() {
     *   Logical op (case-insensitive): `and`, `or`
     *   Grouping: `(...)`
     *   Membership (case-insensitive): `in`, `not in`
-    *   Operands: Identifiers, string literals, number literals, date literals (`YYYY-MM-DD`), `NOW()`
+    *   Contains / regex match: `~` (contains or regex match), `!~` (does not contain or does not match regex)
+    *   Operands: Identifiers, string literals, number literals, date literals (`YYYY-MM-DD`), regex literals (`/pattern/`), `NOW()`
     *   Tuple/List for `in`/`not in`: `(1,2,3)`
 *   Comments: singleline `// ...` and multiline `/* ... */`
 *   In Block notation can have multiple rules to evaluate

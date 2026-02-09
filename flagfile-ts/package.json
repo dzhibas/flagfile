@@ -1,6 +1,6 @@
 {
   "name": "flagfile-ts",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "TypeScript implementation of the flagfile feature flag library",
   "type": "module",
   "main": "dist/index.js",

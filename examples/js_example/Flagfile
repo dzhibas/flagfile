@@ -5,3 +5,18 @@ FF-feature-y {
 FF-simple -> true
 FF-log -> "debug"
 FF-version -> 3
+
+
+// check if name contains Nik
+// @test FF-contains-feature-check(name="Nikolajus") == true
+FF-contains-feature-check {
+    lower(name) ~ nik -> true // contains
+    false
+}
+
+// check name against regexp /.*ola.*/
+// @test FF-regexp-feature-check(name="Check Nikolajus match") == true
+FF-regexp-feature-check {
+    lower(name) ~ /.*ola.*/ -> true // matches regex
+    false
+}

@@ -2,7 +2,9 @@ use std::collections::HashMap;
 
 use chrono::Local;
 
-use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
+use regex::Regex;
+
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp, MatchOp};
 
 pub type Context<'a> = HashMap<&'a str, Atom>;
 
@@ -106,6 +108,34 @@ pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
                 }
             }
             result
+        }
+        AstNode::Match(var, op, rhs) => {
+            let context_val = get_variable_value_from_context(var, context);
+            if let Some(c_val) = &context_val {
+                let haystack = c_val.to_string();
+                let rhs_atom = match rhs.as_ref() {
+                    AstNode::Constant(a) => a,
+                    _ => return Ok(false),
+                };
+                let matched = match rhs_atom {
+                    Atom::Regex(pattern) => {
+                        match Regex::new(pattern) {
+                            Ok(re) => re.is_match(&haystack),
+                            Err(_) => false,
+                        }
+                    }
+                    other => {
+                        let needle = other.to_string();
+                        haystack.contains(&needle)
+                    }
+                };
+                match op {
+                    MatchOp::Contains => matched,
+                    MatchOp::NotContains => !matched,
+                }
+            } else {
+                false
+            }
         }
         AstNode::Logic(expr1, op, expr2) => {
             let expr1_eval = eval(expr1, context).unwrap();
@@ -441,6 +471,94 @@ mod tests {
                 &HashMap::from([("version", Atom::Float(5.4))])
             )
             .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_contains() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("name ~ Nik").unwrap().1,
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("name ~ Nik").unwrap().1,
+                &HashMap::from([("name", Atom::String("John".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_not_contains() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("name !~ Nik").unwrap().1,
+                &HashMap::from([("name", Atom::String("John".into()))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("name !~ Nik").unwrap().1,
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_regex() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("name ~ /.*ola.*/").unwrap().1,
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("name ~ /.*ola.*/").unwrap().1,
+                &HashMap::from([("name", Atom::String("John".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_not_regex() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("name !~ /.*ola.*/").unwrap().1,
+                &HashMap::from([("name", Atom::String("John".into()))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("name !~ /.*ola.*/").unwrap().1,
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_missing_variable() {
+        assert_eq!(
+            false,
+            eval(&parse("name ~ Nik").unwrap().1, &HashMap::from([])).unwrap()
         );
     }
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { parse, parseAtom } from './parser.js';
-import { ComparisonOp, LogicOp, ArrayOp, FnCall } from './ast.js';
+import { ComparisonOp, LogicOp, ArrayOp, MatchOp, FnCall } from './ast.js';
 
 describe('parseAtom', () => {
     it('parses booleans', () => {
@@ -169,6 +169,67 @@ describe('parse expressions', () => {
         if (r.ok) {
             expect(r.rest).toBe('');
             expect(r.value.type).toBe('Compare');
+        }
+    });
+
+    it('parses match contains: name ~ Nik', () => {
+        const r = parse('name ~ Nik');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.Contains);
+            }
+        }
+    });
+
+    it('parses match not contains: name !~ Nik', () => {
+        const r = parse('name !~ Nik');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.NotContains);
+            }
+        }
+    });
+
+    it('parses match regex: name ~ /.*ola.*/', () => {
+        const r = parse('name ~ /.*ola.*/');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.Contains);
+                expect(r.value.right.type).toBe('Constant');
+                if (r.value.right.type === 'Constant') {
+                    expect(r.value.right.atom.type).toBe('Regex');
+                }
+            }
+        }
+    });
+
+    it('parses match not regex: name !~ /.*ola.*/', () => {
+        const r = parse('name !~ /.*ola.*/');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.NotContains);
+            }
+        }
+    });
+
+    it('parses match in logic expr: name ~ Nik and age > 18', () => {
+        const r = parse('name ~ Nik and age > 18');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Logic');
         }
     });
 

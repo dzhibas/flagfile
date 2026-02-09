@@ -4,6 +4,7 @@ import {
     ComparisonOp,
     ArrayOp,
     LogicOp,
+    MatchOp,
     FnCall,
     atomEquals,
     atomCompare,
@@ -107,6 +108,26 @@ export function evaluate(expr: AstNode, context: Context): boolean {
                 expr.right.type === 'Constant' ? expr.right.atom : null;
             if (contextVal === null || rhsAtom === null) return false;
             return evalComparison(contextVal, expr.op, rhsAtom);
+        }
+
+        case 'Match': {
+            const contextVal = getVariableValueFromContext(expr.left, context);
+            if (contextVal === null) return false;
+            const haystack = atomToString(contextVal);
+            const rhsAtom = expr.right.type === 'Constant' ? expr.right.atom : null;
+            if (rhsAtom === null) return false;
+            let matched: boolean;
+            if (rhsAtom.type === 'Regex') {
+                try {
+                    matched = new RegExp(rhsAtom.value).test(haystack);
+                } catch {
+                    matched = false;
+                }
+            } else {
+                const needle = atomToString(rhsAtom);
+                matched = haystack.includes(needle);
+            }
+            return expr.op === MatchOp.Contains ? matched : !matched;
         }
 
         case 'Array': {

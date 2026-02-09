@@ -232,6 +232,46 @@ describe('array membership', () => {
     });
 });
 
+// ── Match (contains / regex) ──────────────────────────────────────
+
+describe('match contains and regex', () => {
+    it('contains: true when substring found', () => {
+        expect(eval_('name ~ Nik', { name: atomString('Nikolajus') })).toBe(true);
+    });
+
+    it('contains: false when substring not found', () => {
+        expect(eval_('name ~ Nik', { name: atomString('John') })).toBe(false);
+    });
+
+    it('not contains: true when substring not found', () => {
+        expect(eval_('name !~ Nik', { name: atomString('John') })).toBe(true);
+    });
+
+    it('not contains: false when substring found', () => {
+        expect(eval_('name !~ Nik', { name: atomString('Nikolajus') })).toBe(false);
+    });
+
+    it('regex match: true when pattern matches', () => {
+        expect(eval_('name ~ /.*ola.*/', { name: atomString('Nikolajus') })).toBe(true);
+    });
+
+    it('regex match: false when pattern does not match', () => {
+        expect(eval_('name ~ /.*ola.*/', { name: atomString('John') })).toBe(false);
+    });
+
+    it('not regex: true when pattern does not match', () => {
+        expect(eval_('name !~ /.*ola.*/', { name: atomString('John') })).toBe(true);
+    });
+
+    it('not regex: false when pattern matches', () => {
+        expect(eval_('name !~ /.*ola.*/', { name: atomString('Nikolajus') })).toBe(false);
+    });
+
+    it('missing variable returns false', () => {
+        expect(eval_('name ~ Nik', {})).toBe(false);
+    });
+});
+
 // ── Semver comparisons ────────────────────────────────────────────
 
 describe('semver comparisons', () => {

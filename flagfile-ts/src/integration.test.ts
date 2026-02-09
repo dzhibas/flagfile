@@ -61,6 +61,8 @@ describe('integration: Flagfile.example parsing', () => {
         expect(flags.has('FF-feature-complex-ticket-234234')).toBe(true);
         expect(flags.has('FF-sdk-upgrade')).toBe(true);
         expect(flags.has('FF-timer-feature')).toBe(true);
+        expect(flags.has('FF-contains-feature-check')).toBe(true);
+        expect(flags.has('FF-regexp-feature-check')).toBe(true);
     });
 });
 
@@ -172,6 +174,22 @@ describe('integration: Flagfile.tests validation', () => {
         const rules = flags.get('FF-log-level')!;
         const val = evaluateFlag(rules, {});
         expect(val).toEqual({ type: 'Str', value: 'debug' });
+    });
+
+    // FF-contains-feature-check(name="Nikolajus") == true
+    it('FF-contains-feature-check with name="Nikolajus" → true', () => {
+        const rules = flags.get('FF-contains-feature-check')!;
+        const ctx: Context = { name: atomString('Nikolajus') };
+        const val = evaluateFlag(rules, ctx);
+        expect(val).toEqual({ type: 'OnOff', value: true });
+    });
+
+    // FF-regexp-feature-check(name="Check Nikolajus match") == true
+    it('FF-regexp-feature-check with name="Check Nikolajus match" → true', () => {
+        const rules = flags.get('FF-regexp-feature-check')!;
+        const ctx: Context = { name: atomString('Check Nikolajus match') };
+        const val = evaluateFlag(rules, ctx);
+        expect(val).toEqual({ type: 'OnOff', value: true });
     });
 
     // FF-button-color == "blue"

@@ -13,6 +13,7 @@ pub enum Atom {
     Date(NaiveDate),
     DateTime(String),
     Semver(u32, u32, u32),
+    Regex(String),
     // Timestamp(i64)
 }
 
@@ -58,6 +59,7 @@ impl PartialEq<Atom> for Atom {
                     false
                 }
             }
+            (Atom::Regex(r1), Atom::Regex(r2)) => r1 == r2,
             _ => false,
         }
     }
@@ -123,6 +125,7 @@ impl fmt::Display for Atom {
             Atom::Date(var) => write!(f, "{var}"),
             Atom::DateTime(var) => write!(f, "{var}"),
             Atom::Semver(major, minor, patch) => write!(f, "{major}.{minor}.{patch}"),
+            Atom::Regex(p) => write!(f, "/{p}/"),
         }
     }
 }
@@ -145,10 +148,6 @@ pub enum ComparisonOp {
     MoreEq,
     LessEq,
     NotEq,
-    // RegexMatch =~
-    // NotRegexMatch !=~
-    // Contains =*
-    // DoesNotContain !=*
 }
 
 impl ComparisonOp {
@@ -164,6 +163,21 @@ impl ComparisonOp {
         }
     }
 }
+#[derive(Debug, Clone, PartialEq)]
+pub enum MatchOp {
+    Contains,
+    NotContains,
+}
+
+impl fmt::Display for MatchOp {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MatchOp::Contains => write!(f, "~"),
+            MatchOp::NotContains => write!(f, "!~"),
+        }
+    }
+}
+
 impl fmt::Display for ComparisonOp {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -214,6 +228,7 @@ pub enum AstNode {
     Constant(Atom),
     List(Vec<Atom>),
     Compare(Box<AstNode>, ComparisonOp, Box<AstNode>),
+    Match(Box<AstNode>, MatchOp, Box<AstNode>),
     Array(Box<AstNode>, ArrayOp, Box<AstNode>),
     Logic(Box<AstNode>, LogicOp, Box<AstNode>),
     Scope { expr: Box<AstNode>, negate: bool },

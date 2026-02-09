@@ -112,3 +112,19 @@ FF-timer-feature {
     NOW() > 2026-02-07 -> true
     false
 }
+
+// check if name contains Nik
+// @test FF-contains-feature-check(name="Nikolajus") == true
+FF-contains-feature-check {
+    lower(name) ~ nik -> true // contains
+    name !~ Nik -> false // does not contain
+    false
+}
+
+// check name against regexp /.*ola.*/
+// @test FF-regexp-feature-check(name="Check Nikolajus match") == true
+FF-regexp-feature-check {
+    UPPER(name) ~ /.*OLA.*/ -> true // matches regex
+    name !~ /.*ola.*/ -> false // does not match regexp
+    false
+}

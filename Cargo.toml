@@ -1,6 +1,6 @@
 [package]
 name = "flagfile-lib"
-version = "0.4.0"
+version = "0.4.2"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 repository = "https://github.com/dzhibas/flagfile"
@@ -31,6 +31,7 @@ lto = "thin"
 [dependencies]
 chrono = "0.4.34"
 nom = "7.1.3"
+regex = "1"
 serde_json = "1.0.114"
 wasm-bindgen = "0.2"
 

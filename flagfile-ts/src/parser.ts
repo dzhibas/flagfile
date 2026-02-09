@@ -4,6 +4,7 @@ import {
     ComparisonOp,
     LogicOp,
     ArrayOp,
+    MatchOp,
     FnCall,
     atomString,
     atomNumber,
@@ -12,6 +13,7 @@ import {
     atomVariable,
     atomDate,
     atomSemver,
+    atomRegex,
 } from './ast.js';
 
 // ── Parser result type ─────────────────────────────────────────────
@@ -308,11 +310,56 @@ function parseArrayExpr(i: string): ParseResult<AstNode> {
     });
 }
 
+// ── Regex literal parser ───────────────────────────────────────────
+
+function parseRegexLiteral(i: string): ParseResult<Atom> {
+    if (i[0] !== '/') return fail();
+    const end = i.indexOf('/', 1);
+    if (end === -1) return fail();
+    const pattern = i.slice(1, end);
+    return ok(i.slice(end + 1), atomRegex(pattern));
+}
+
+// ── Match operators: ~ and !~ ──────────────────────────────────────
+
+function parseMatchOp(i: string): ParseResult<MatchOp> {
+    if (i.startsWith('!~')) return ok(i.slice(2), MatchOp.NotContains);
+    if (i.startsWith('~')) return ok(i.slice(1), MatchOp.Contains);
+    return fail();
+}
+
+function parseMatchRhs(i: string): ParseResult<AstNode> {
+    return alt(
+        () => {
+            const r = parseRegexLiteral(i);
+            if (!r.ok) return fail<AstNode>();
+            return ok(r.rest, { type: 'Constant' as const, atom: r.value });
+        },
+        () => parseConstant(i),
+    );
+}
+
+function parseMatchExpr(i: string): ParseResult<AstNode> {
+    const varR = parseVariableNodeOrModified(i);
+    if (!varR.ok) return fail();
+    const opR = parseMatchOp(skipWs(varR.rest));
+    if (!opR.ok) return fail();
+    const rhsR = parseMatchRhs(skipWs(opR.rest));
+    if (!rhsR.ok) return fail();
+    return ok(rhsR.rest, {
+        type: 'Match',
+        left: varR.value,
+        op: opR.value,
+        right: rhsR.value,
+    });
+}
+
 // ── Compare or Array expr ──────────────────────────────────────────
 
 function parseCompareOrArrayExpr(i: string): ParseResult<AstNode> {
     return alt(
         () => parseArrayExpr(i),
+        () => parseMatchExpr(i),
         () => parseCompareExpr(i),
     );
 }

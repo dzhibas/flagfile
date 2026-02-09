@@ -8,7 +8,8 @@ export type Atom =
     | { type: 'Variable'; value: string }
     | { type: 'Date'; value: string }         // YYYY-MM-DD
     | { type: 'DateTime'; value: string }
-    | { type: 'Semver'; major: number; minor: number; patch: number };
+    | { type: 'Semver'; major: number; minor: number; patch: number }
+    | { type: 'Regex'; value: string };
 
 // ── Operators ──────────────────────────────────────────────────────
 
@@ -31,6 +32,11 @@ export enum ArrayOp {
     NotIn = 'NotIn',
 }
 
+export enum MatchOp {
+    Contains = 'Contains',
+    NotContains = 'NotContains',
+}
+
 export enum FnCall {
     Upper = 'Upper',
     Lower = 'Lower',
@@ -46,6 +52,7 @@ export type AstNode =
     | { type: 'Constant'; atom: Atom }
     | { type: 'List'; items: Atom[] }
     | { type: 'Compare'; left: AstNode; op: ComparisonOp; right: AstNode }
+    | { type: 'Match'; left: AstNode; op: MatchOp; right: AstNode }
     | { type: 'Array'; left: AstNode; op: ArrayOp; right: AstNode }
     | { type: 'Logic'; left: AstNode; op: LogicOp; right: AstNode }
     | { type: 'Scope'; expr: AstNode; negate: boolean };
@@ -94,6 +101,9 @@ export function atomDateTime(v: string): Atom {
 export function atomSemver(major: number, minor: number, patch: number): Atom {
     return { type: 'Semver', major, minor, patch };
 }
+export function atomRegex(v: string): Atom {
+    return { type: 'Regex', value: v };
+}
 
 // ── Atom comparison helpers (mirrors Rust PartialEq / PartialOrd) ──
 
@@ -130,6 +140,7 @@ export function atomEquals(a: Atom, b: Atom): boolean {
     if (a.type === 'Boolean' && b.type === 'Boolean') return a.value === b.value;
     if (a.type === 'Date' && b.type === 'Date') return a.value === b.value;
     if (a.type === 'DateTime' && b.type === 'DateTime') return a.value === b.value;
+    if (a.type === 'Regex' && b.type === 'Regex') return a.value === b.value;
 
     // Semver comparisons
     if (a.type === 'Semver' && b.type === 'Semver') {
@@ -218,5 +229,6 @@ export function atomToString(a: Atom): string {
         case 'Date': return a.value;
         case 'DateTime': return a.value;
         case 'Semver': return `${a.major}.${a.minor}.${a.patch}`;
+        case 'Regex': return `/${a.value}/`;
     }
 }

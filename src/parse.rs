@@ -10,7 +10,7 @@ use nom::{
     IResult,
 };
 
-use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp, MatchOp};
 
 /// Took from nom recipes
 pub fn ws<'a, F, O, E: ParseError<&'a str>>(
@@ -196,8 +196,40 @@ fn parse_compare_expr(i: &str) -> IResult<&str, AstNode> {
     })(i)
 }
 
+fn parse_regex_literal(i: &str) -> IResult<&str, Atom> {
+    let (i, _) = tag("/")(i)?;
+    let (i, pattern) = take_until("/")(i)?;
+    let (i, _) = tag("/")(i)?;
+    Ok((i, Atom::Regex(pattern.to_string())))
+}
+
+fn parse_match_op(i: &str) -> IResult<&str, MatchOp> {
+    alt((
+        map(tag("!~"), |_| MatchOp::NotContains),
+        map(tag("~"), |_| MatchOp::Contains),
+    ))(i)
+}
+
+fn parse_match_rhs(i: &str) -> IResult<&str, AstNode> {
+    alt((
+        map(parse_regex_literal, AstNode::Constant),
+        parse_constant,
+    ))(i)
+}
+
+fn parse_match_expr(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((
+        parse_variable_node_or_modified,
+        ws(parse_match_op),
+        parse_match_rhs,
+    ));
+    map(parser, |(var, op, val)| {
+        AstNode::Match(Box::new(var), op, Box::new(val))
+    })(i)
+}
+
 fn parse_compare_or_array_expr(i: &str) -> IResult<&str, AstNode> {
-    alt((parse_array_expr, parse_compare_expr))(i)
+    alt((parse_array_expr, parse_match_expr, parse_compare_expr))(i)
 }
 
 fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
@@ -468,6 +500,43 @@ mod tests {
     model in (ms,mx,m3,my) and !(created >= 2024-01-01
         and demo == false) and ((a=2) and not (c=3))"###;
         let (i, _v) = parse(expression).unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_match_contains() {
+        let (i, _v) = parse("name ~ Nik").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_match_not_contains() {
+        let (i, _v) = parse("name !~ Nik").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_match_regex() {
+        let (i, _v) = parse("name ~ /.*ola.*/").unwrap();
+        assert_eq!(i, "");
+    }
+
+
+    #[test]
+    fn test_parse_match_regex_with_function_call() {
+        let (i, _v) = parse("upper(name) ~ /.*OLA.*/").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_match_not_regex() {
+        let (i, _v) = parse("name !~ /.*ola.*/").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_match_in_logic_expr() {
+        let (i, _v) = parse("name ~ Nik and age > 18").unwrap();
         assert_eq!(i, "");
     }
 }
