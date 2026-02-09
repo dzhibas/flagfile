@@ -2,6 +2,8 @@
 name = "rust_example"
 version = "0.1.2"
 edition = "2024"
+repository = "https://github.com/dzhibas/flagfile"
+dist = false
 
 [dependencies]
 flagfile-lib = { path = "../.." }
