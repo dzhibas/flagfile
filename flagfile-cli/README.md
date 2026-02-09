@@ -2,6 +2,12 @@
 
 Command-line tool for working with Flagfile feature flags.
 
+## Installation
+
+```bash
+brew install dzhibas/tap/flagfile-cli
+```
+
 ## Getting started
 
 Initialize a new project with a sample Flagfile and test file:
