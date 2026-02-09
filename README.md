@@ -1,4 +1,4 @@
-# <img src="https://github.com/dzhibas/flagfile/blob/main/public/flagfile.svg?raw=true" width=100px/> Flagfile
+# <img src="https://github.com/dzhibas/flagfile/blob/main/public/flagfile-inverse.svg?raw=true" width=100px/> Flagfile
 
 ![Tests passing](https://github.com/dzhibas/flagfile/actions/workflows/tests.yml/badge.svg)
 
