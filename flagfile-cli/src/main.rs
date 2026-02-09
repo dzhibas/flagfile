@@ -8,7 +8,7 @@ use std::sync::Mutex;
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::{eval, Context};
-use flagfile_lib::parse_flagfile::{parse_flagfile, FlagReturn, Rule};
+use flagfile_lib::parse_flagfile::{parse_flagfile, extract_test_annotations, FlagReturn, Rule};
 use ignore::WalkBuilder;
 use regex::Regex;
 
@@ -319,61 +319,123 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
         }
     }
 
-    // 3. Read test file
+    // Extract inline @test annotations
+    let inline_tests = extract_test_annotations(&flagfile_content);
+
+    // 3. Read test file (optional if inline tests exist)
     let tests_content = match std::fs::read_to_string(testfile_path) {
-        Ok(content) => content,
+        Ok(content) => Some(content),
         Err(_) => {
-            eprintln!("{} does not exist", testfile_path);
-            process::exit(1);
+            if inline_tests.is_empty() {
+                eprintln!("{} does not exist", testfile_path);
+                process::exit(1);
+            }
+            None
         }
     };
 
-    // 4. Parse and run each test
     let mut passed = 0;
     let mut failed = 0;
     let mut total = 0;
 
-    for line in tests_content.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with("//") {
-            continue;
+    // 4. Run tests from test file
+    if let Some(ref content) = tests_content {
+        println!("--- {} ---", testfile_path);
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+
+            let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
+                eprintln!("SKIP  Invalid test line: {}", line);
+                continue;
+            };
+
+            total += 1;
+
+            let context: Context = pairs
+                .iter()
+                .map(|(k, v)| (*k, Atom::from(*v)))
+                .collect();
+
+            let Some(rules) = flags.get(flag_name) else {
+                println!("FAIL  {} - flag not found", line);
+                failed += 1;
+                continue;
+            };
+
+            let result = evaluate_flag(rules, &context);
+
+            match result {
+                Some(ref ret) if result_matches(ret, expected) => {
+                    println!("PASS  {}", line);
+                    passed += 1;
+                }
+                Some(_) => {
+                    println!("FAIL  {}", line);
+                    failed += 1;
+                }
+                None => {
+                    println!("FAIL  {} - no rule matched", line);
+                    failed += 1;
+                }
+            }
         }
+    }
 
-        let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
-            eprintln!("SKIP  Invalid test line: {}", line);
-            continue;
-        };
+    // 5. Run inline @test annotations
+    if !inline_tests.is_empty() {
+        if tests_content.is_some() {
+            println!();
+        }
+        println!("--- inline @test ({}) ---", flagfile_path);
 
-        total += 1;
+        for annotation in &inline_tests {
+            let line = annotation.assertion.as_str();
 
-        // Build context
-        let context: Context = pairs
-            .iter()
-            .map(|(k, v)| (*k, Atom::from(*v)))
-            .collect();
+            let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
+                eprintln!(
+                    "SKIP  Invalid @test annotation: {} (line {})",
+                    line, annotation.line_number
+                );
+                continue;
+            };
 
-        // Look up flag
-        let Some(rules) = flags.get(flag_name) else {
-            println!("FAIL  {} - flag not found", line);
-            failed += 1;
-            continue;
-        };
+            total += 1;
 
-        // Evaluate
-        let result = evaluate_flag(rules, &context);
+            let context: Context = pairs
+                .iter()
+                .map(|(k, v)| (*k, Atom::from(*v)))
+                .collect();
 
-        match result {
-            Some(ref ret) if result_matches(ret, expected) => {
-                println!("PASS  {}", line);
-                passed += 1;
-            }
-            Some(_) => {
-                println!("FAIL  {}", line);
+            let Some(rules) = flags.get(flag_name) else {
+                println!(
+                    "FAIL  {} - flag not found (line {})",
+                    line, annotation.line_number
+                );
                 failed += 1;
-            }
-            None => {
-                println!("FAIL  {} - no rule matched", line);
-                failed += 1;
+                continue;
+            };
+
+            let result = evaluate_flag(rules, &context);
+
+            match result {
+                Some(ref ret) if result_matches(ret, expected) => {
+                    println!("PASS  {} (line {})", line, annotation.line_number);
+                    passed += 1;
+                }
+                Some(_) => {
+                    println!("FAIL  {} (line {})", line, annotation.line_number);
+                    failed += 1;
+                }
+                None => {
+                    println!(
+                        "FAIL  {} - no rule matched (line {})",
+                        line, annotation.line_number
+                    );
+                    failed += 1;
+                }
             }
         }
     }

@@ -44,6 +44,93 @@ pub enum Rule {
 
 pub type FlagValue<'a> = HashMap<&'a str, Vec<Rule>>;
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct TestAnnotation {
+    pub assertion: String,
+    pub line_number: usize, // 1-based
+}
+
+/// Extract the assertion from a comment line containing `@test`.
+/// Strips leading `*` decoration (from block comments) and whitespace.
+fn extract_test_from_comment_line(line: &str) -> Option<String> {
+    let trimmed = line.trim().trim_start_matches('*').trim();
+    if let Some(rest) = trimmed.strip_prefix("@test ") {
+        let assertion = rest.trim();
+        if !assertion.is_empty() {
+            return Some(assertion.to_string());
+        }
+    }
+    None
+}
+
+/// Scan raw file content for `@test` annotations in both `//` and `/* */` comments.
+/// Returns a list of test assertions with their 1-based line numbers.
+pub fn extract_test_annotations(content: &str) -> Vec<TestAnnotation> {
+    let mut results = Vec::new();
+    let mut in_block_comment = false;
+
+    for (idx, line) in content.lines().enumerate() {
+        let line_number = idx + 1;
+
+        if in_block_comment {
+            if let Some(end_pos) = line.find("*/") {
+                // Check the part of the line before `*/`
+                let before_close = &line[..end_pos];
+                if let Some(assertion) = extract_test_from_comment_line(before_close) {
+                    results.push(TestAnnotation {
+                        assertion,
+                        line_number,
+                    });
+                }
+                in_block_comment = false;
+            } else if let Some(assertion) = extract_test_from_comment_line(line) {
+                results.push(TestAnnotation {
+                    assertion,
+                    line_number,
+                });
+            }
+            continue;
+        }
+
+        // Check for line comment
+        if let Some(pos) = line.find("//") {
+            let comment_body = &line[pos + 2..];
+            if let Some(assertion) = extract_test_from_comment_line(comment_body) {
+                results.push(TestAnnotation {
+                    assertion,
+                    line_number,
+                });
+            }
+        }
+
+        // Check for block comment opening
+        if let Some(start_pos) = line.find("/*") {
+            if let Some(end_pos) = line[start_pos + 2..].find("*/") {
+                // Block comment opens and closes on the same line
+                let block_body = &line[start_pos + 2..start_pos + 2 + end_pos];
+                if let Some(assertion) = extract_test_from_comment_line(block_body) {
+                    results.push(TestAnnotation {
+                        assertion,
+                        line_number,
+                    });
+                }
+            } else {
+                // Block comment opens but doesn't close on this line
+                let after_open = &line[start_pos + 2..];
+                if let Some(assertion) = extract_test_from_comment_line(after_open) {
+                    results.push(TestAnnotation {
+                        assertion,
+                        line_number,
+                    });
+                }
+                in_block_comment = true;
+            }
+        }
+    }
+
+    results
+}
+
 /// Parses and throws away: // comment EOL
 fn parse_comment(i: &str) -> IResult<&str, ()> {
     value((), pair(ws(tag("//")), is_not("\n\r")))(i)
@@ -226,6 +313,68 @@ mod tests {
         dbg!(i, &v);
         assert_eq!(true, v.len() > 0);
         assert_eq!(i.to_string().trim(), "");
+    }
+
+    #[test]
+    fn test_extract_test_single_line_comment() {
+        let content = "// @test FF-foo(x=1) == true\nFF-foo -> true\n";
+        let annotations = extract_test_annotations(content);
+        assert_eq!(annotations.len(), 1);
+        assert_eq!(annotations[0].assertion, "FF-foo(x=1) == true");
+        assert_eq!(annotations[0].line_number, 1);
+    }
+
+    #[test]
+    fn test_extract_test_block_comment() {
+        let content = "/**\n * @test FF-bar == false\n */\nFF-bar -> false\n";
+        let annotations = extract_test_annotations(content);
+        assert_eq!(annotations.len(), 1);
+        assert_eq!(annotations[0].assertion, "FF-bar == false");
+        assert_eq!(annotations[0].line_number, 2);
+    }
+
+    #[test]
+    fn test_extract_test_multiple_annotations() {
+        let content = r#"// @test FF-a == true
+FF-a -> true
+/**
+ * @test FF-b(x=1) == false
+ */
+FF-b -> false
+// @test FF-c() == true
+FF-c -> true
+"#;
+        let annotations = extract_test_annotations(content);
+        assert_eq!(annotations.len(), 3);
+        assert_eq!(annotations[0].assertion, "FF-a == true");
+        assert_eq!(annotations[1].assertion, "FF-b(x=1) == false");
+        assert_eq!(annotations[2].assertion, "FF-c() == true");
+    }
+
+    #[test]
+    fn test_extract_test_no_annotations() {
+        let content = "// just a comment\nFF-foo -> true\n/* no tests here */\n";
+        let annotations = extract_test_annotations(content);
+        assert_eq!(annotations.len(), 0);
+    }
+
+    #[test]
+    fn test_extract_test_flagfile_example() {
+        let data = include_str!("../Flagfile.example");
+        let annotations = extract_test_annotations(data);
+        assert_eq!(annotations.len(), 3);
+        assert_eq!(
+            annotations[0].assertion,
+            "FF-feature-y(countryCode=nl) == true"
+        );
+        assert_eq!(annotations[0].line_number, 41);
+        assert_eq!(
+            annotations[1].assertion,
+            "FF-flag-with-annotations-2 == false"
+        );
+        assert_eq!(annotations[1].line_number, 101);
+        assert_eq!(annotations[2].assertion, "FF-timer-feature() == true");
+        assert_eq!(annotations[2].line_number, 108);
     }
 }
 

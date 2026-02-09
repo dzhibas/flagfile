@@ -37,6 +37,8 @@ FF_featureOneOrTwo -> FALSE
 FF_Feature23432 -> TRUE
 
 // you can have feature with multiple rules in it with default flag value returned in end
+// we can have test of feature embeded together with feature flag which can be ran with `ff test`
+// @test FF-feature-y(countryCode=nl) == true
 FF-feature-y {
     // if country is NL return True
     lower(countryCode) == nl -> true
@@ -94,11 +96,16 @@ FF-flag-with-annotations -> true
 /**
  * @author Nikolajus K
  * @expires 2024-12-31 00:00:00
+ *
+ * test can be also in block comments
+ * @test FF-flag-with-annotations-2 == false
  */
 FF-flag-with-annotations-2 -> false
 
 /**
  multiline comments
+ or test can be in multiline comments
+ @test FF-timer-feature() == true
  */
 FF-timer-feature {
     // turn on only on evaluation time after 22nd feb

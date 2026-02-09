@@ -9,7 +9,7 @@ pub mod parse;
 pub mod parse_flagfile;
 
 pub use eval::Context;
-pub use parse_flagfile::{FlagReturn, Rule};
+pub use parse_flagfile::{FlagReturn, Rule, TestAnnotation, extract_test_annotations};
 
 static FLAGS: OnceLock<HashMap<String, Vec<Rule>>> = OnceLock::new();
 
