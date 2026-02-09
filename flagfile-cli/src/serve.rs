@@ -244,7 +244,7 @@ async fn handle_ofrep_single(
     let string_ctx = body
         .context
         .as_ref()
-        .map(|c| build_context_from_ofrep(c))
+        .map(build_context_from_ofrep)
         .unwrap_or_default();
 
     let context: Context = string_ctx
@@ -279,7 +279,7 @@ async fn handle_ofrep_bulk(
     let string_ctx = body
         .context
         .as_ref()
-        .map(|c| build_context_from_ofrep(c))
+        .map(build_context_from_ofrep)
         .unwrap_or_default();
 
     let context: Context = string_ctx

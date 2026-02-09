@@ -13,11 +13,11 @@ use nom::{
 use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp};
 
 /// Took from nom recipes
-pub fn ws<'a, F: 'a, O, E: ParseError<&'a str>>(
+pub fn ws<'a, F, O, E: ParseError<&'a str>>(
     inner: F,
 ) -> impl FnMut(&'a str) -> IResult<&'a str, O, E>
 where
-    F: Fn(&'a str) -> IResult<&'a str, O, E>,
+    F: Fn(&'a str) -> IResult<&'a str, O, E> + 'a,
 {
     delimited(multispace0, inner, multispace0)
 }

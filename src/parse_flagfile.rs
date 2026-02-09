@@ -144,7 +144,7 @@ fn multiline_comment(i: &str) -> IResult<&str, ()> {
 fn parse_json(i: &str) -> IResult<&str, FlagReturn> {
     let parser = delimited(ws(tag("json(")), take_until(")"), ws(tag(")")));
     map(parser, |v| {
-        FlagReturn::Json(serde_json::from_str(&v).unwrap())
+        FlagReturn::Json(serde_json::from_str(v).unwrap())
     })(i)
 }
 
@@ -192,7 +192,7 @@ fn parse_return_val(i: &str) -> IResult<&str, FlagReturn> {
     ))(i)
 }
 
-fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue> {
+fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue<'_>> {
     let parser = tuple((ws(parse_flag_name), ws(tag("->")), parse_return_val));
     map(parser, |(n, _, v)| {
         HashMap::from([(n, vec![Rule::Value(v)])])
@@ -205,7 +205,7 @@ fn parse_rule_expr(i: &str) -> IResult<&str, Rule> {
 }
 
 fn parse_rule_static(i: &str) -> IResult<&str, Rule> {
-    map(parse_return_val, |v| Rule::Value(v))(i)
+    map(parse_return_val, Rule::Value)(i)
 }
 
 fn parse_rules(i: &str) -> IResult<&str, Rule> {
@@ -223,7 +223,7 @@ fn parse_rules_list(i: &str) -> IResult<&str, Vec<Rule>> {
     many1(parse_rules_or_comments)(i)
 }
 
-fn parse_function(i: &str) -> IResult<&str, FlagValue> {
+fn parse_function(i: &str) -> IResult<&str, FlagValue<'_>> {
     let parser = pair(
         ws(parse_flag_name),
         delimited(ws(tag("{")), parse_rules_list, ws(tag("}"))),
@@ -233,7 +233,7 @@ fn parse_function(i: &str) -> IResult<&str, FlagValue> {
     })(i)
 }
 
-pub fn parse_flagfile(i: &str) -> IResult<&str, Vec<FlagValue>> {
+pub fn parse_flagfile(i: &str) -> IResult<&str, Vec<FlagValue<'_>>> {
     let parser = preceded(
         many0(alt((parse_comment, multiline_comment))),
         alt((parse_anonymous_func, parse_function)),

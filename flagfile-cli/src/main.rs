@@ -80,7 +80,9 @@ enum Command {
 
 /// Parse a test line like: FF-name(key=val,key=val) == EXPECTED
 /// Also supports no-context form: FF-name == EXPECTED
-fn parse_test_line(line: &str) -> Option<(&str, Vec<(&str, &str)>, &str)> {
+type TestLine<'a> = (&'a str, Vec<(&'a str, &'a str)>, &'a str);
+
+fn parse_test_line(line: &str) -> Option<TestLine<'_>> {
     let line = line.trim();
     if line.is_empty() {
         return None;
@@ -151,7 +153,7 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
                 false
             }
         }
-        FlagReturn::Integer(val) => expected.parse::<i64>().map_or(false, |e| *val == e),
+        FlagReturn::Integer(val) => expected.parse::<i64>() == Ok(*val),
         FlagReturn::Str(val) => {
             // Strip surrounding quotes if present
             let expected_str = expected
@@ -530,7 +532,7 @@ fn run_find(path: &str, search: Option<&str>) {
                 Err(_) => return ignore::WalkState::Continue,
             };
 
-            if !entry.file_type().map_or(false, |ft| ft.is_file()) {
+            if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 return ignore::WalkState::Continue;
             }
 
