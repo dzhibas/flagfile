@@ -36,6 +36,17 @@ impl From<FlagReturn> for bool {
     }
 }
 
+impl From<FlagReturn> for String {
+    fn from(val: FlagReturn) -> Self {
+        match val {
+            FlagReturn::OnOff(b) => b.to_string(),
+            FlagReturn::Integer(n) => n.to_string(),
+            FlagReturn::Str(s) => s,
+            FlagReturn::Json(v) => v.to_string(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Rule {
     Value(FlagReturn),
