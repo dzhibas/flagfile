@@ -1,12 +1,11 @@
 [package]
 name = "flagfile-cli"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 description = "CLI tool for managing and evaluating Flagfile feature flags"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 repository = "https://github.com/dzhibas/flagfile"
 homepage = "https://github.com/dzhibas/flagfile"
-dist = true
 
 [[bin]]
 name = "ff"
@@ -15,11 +14,6 @@ path = "src/main.rs"
 [[bin]]
 name = "flagfile"
 path = "src/main.rs"
-
-# The profile that 'dist' will build with
-[profile.dist]
-inherits = "release"
-lto = "thin"
 
 [dependencies]
 axum = "0.8"

@@ -442,7 +442,7 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
 
     let app = Router::new()
         .route("/flagfile", get(handle_flagfile))
-        .route("/eval/{flag_name}", get(handle_eval))
+        .route("/v1/eval/{flag_name}", get(handle_eval))
         .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
         .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
         .with_state(state);

@@ -1,29 +1,11 @@
-### testing ofrep
-POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-feature-flat-on-off
-Content-Type: application/json
-
-{}
+### Testing rest api
+GET http://0.0.0.0:8080/v1/eval/FF-feature-flat-on-off
 ###
 
-### testing ofrep
-POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-feature-y
-Content-Type: application/json
-
-{
-    "context": {
-        "countryCode": "NL"
-    }
-}
+### Testing rest api
+GET http://0.0.0.0:8080/v1/eval/FF-feature-flat-on-off?ff_output=plain
 ###
 
-
-### testing ofrep
-POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags
-Content-Type: application/json
-
-{
-    "context": {
-        "countryCode": "nl"
-    }
-}
+### Testing rest api with context
+GET http://0.0.0.0:8080/v1/eval/FF-feature-y?countryCode=nl
 ###
