@@ -23,6 +23,8 @@ use crate::{
 pub enum FlagReturn {
     OnOff(bool),
     Json(Value),
+    Integer(i64),
+    Str(String),
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +59,24 @@ fn parse_bool(i: &str) -> IResult<&str, FlagReturn> {
     })(i)
 }
 
+fn parse_integer_return(i: &str) -> IResult<&str, FlagReturn> {
+    let parser = nom::combinator::recognize(pair(
+        nom::combinator::opt(tag("-")),
+        nom::character::complete::digit1,
+    ));
+    map(parser, |num: &str| {
+        FlagReturn::Integer(num.parse().unwrap())
+    })(i)
+}
+
+fn parse_string_return(i: &str) -> IResult<&str, FlagReturn> {
+    let parser_a = delimited(tag("\""), take_until("\""), tag("\""));
+    let parser_b = delimited(tag("'"), take_until("'"), tag("'"));
+    map(alt((parser_a, parser_b)), |s: &str| {
+        FlagReturn::Str(s.to_string())
+    })(i)
+}
+
 /// Opinionated feature flag name
 /// it should always start with "FF-" < as this allows later auditing of the code and find all
 /// flags
@@ -68,7 +88,12 @@ fn parse_flag_name(i: &str) -> IResult<&str, &str> {
 }
 
 fn parse_return_val(i: &str) -> IResult<&str, FlagReturn> {
-    alt((ws(parse_bool), ws(parse_json)))(i)
+    alt((
+        ws(parse_bool),
+        ws(parse_json),
+        ws(parse_string_return),
+        ws(parse_integer_return),
+    ))(i)
 }
 
 fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue> {
@@ -149,6 +174,39 @@ mod tests {
         let (i, v) = parse_function(data).unwrap();
         assert_eq!(true, v.len() == 1);
         assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_integer_return() {
+        let data = "FF-api-timeout -> 5000";
+        let (i, v) = parse_anonymous_func(data).unwrap();
+        assert_eq!(i, "");
+        let rules = v.get("FF-api-timeout").unwrap();
+        assert_eq!(rules.len(), 1);
+        assert!(matches!(&rules[0], Rule::Value(FlagReturn::Integer(5000))));
+    }
+
+    #[test]
+    fn test_parse_string_return() {
+        let data = r#"FF-log-level -> "debug""#;
+        let (i, v) = parse_anonymous_func(data).unwrap();
+        assert_eq!(i, "");
+        let rules = v.get("FF-log-level").unwrap();
+        assert_eq!(rules.len(), 1);
+        assert!(matches!(&rules[0], Rule::Value(FlagReturn::Str(s)) if s == "debug"));
+    }
+
+    #[test]
+    fn test_parse_integer_in_block() {
+        let data = r#"FF-timeout {
+    plan == premium -> 10000
+    5000
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let rules = v.get("FF-timeout").unwrap();
+        assert_eq!(rules.len(), 2);
+        assert!(matches!(&rules[1], Rule::Value(FlagReturn::Integer(5000))));
     }
 
     #[test]

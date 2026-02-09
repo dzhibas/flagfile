@@ -75,36 +75,41 @@ enum Command {
 }
 
 /// Parse a test line like: FF-name(key=val,key=val) == EXPECTED
+/// Also supports no-context form: FF-name == EXPECTED
 fn parse_test_line(line: &str) -> Option<(&str, Vec<(&str, &str)>, &str)> {
     let line = line.trim();
     if line.is_empty() {
         return None;
     }
 
-    // Find the flag name (up to '(')
-    let paren_open = line.find('(')?;
-    let flag_name = &line[..paren_open];
+    if let Some(paren_open) = line.find('(') {
+        // Form with context: FF-name(key=val,...) == EXPECTED
+        let paren_close = line.find(')')?;
+        let flag_name = &line[..paren_open];
+        let params_str = &line[paren_open + 1..paren_close];
 
-    // Find closing paren
-    let paren_close = line.find(')')?;
-    let params_str = &line[paren_open + 1..paren_close];
+        let pairs: Vec<(&str, &str)> = params_str
+            .split(',')
+            .filter_map(|pair| {
+                let pair = pair.trim();
+                let eq_pos = pair.find('=')?;
+                Some((&pair[..eq_pos], &pair[eq_pos + 1..]))
+            })
+            .collect();
 
-    // Parse key=value pairs
-    let pairs: Vec<(&str, &str)> = params_str
-        .split(',')
-        .filter_map(|pair| {
-            let pair = pair.trim();
-            let eq_pos = pair.find('=')?;
-            Some((&pair[..eq_pos], &pair[eq_pos + 1..]))
-        })
-        .collect();
+        let rest = &line[paren_close + 1..];
+        let eq_pos = rest.find("==")?;
+        let expected = rest[eq_pos + 2..].trim();
 
-    // Find == and extract expected value
-    let rest = &line[paren_close + 1..];
-    let eq_pos = rest.find("==")?;
-    let expected = rest[eq_pos + 2..].trim();
+        Some((flag_name, pairs, expected))
+    } else {
+        // No-context form: FF-name == EXPECTED
+        let eq_pos = line.find("==")?;
+        let flag_name = line[..eq_pos].trim();
+        let expected = line[eq_pos + 2..].trim();
 
-    Some((flag_name, pairs, expected))
+        Some((flag_name, vec![], expected))
+    }
 }
 
 /// Evaluate a flag against context, returning the matched FlagReturn
@@ -141,6 +146,17 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
             } else {
                 false
             }
+        }
+        FlagReturn::Integer(val) => {
+            expected.parse::<i64>().map_or(false, |e| *val == e)
+        }
+        FlagReturn::Str(val) => {
+            // Strip surrounding quotes if present
+            let expected_str = expected
+                .strip_prefix('"')
+                .and_then(|s| s.strip_suffix('"'))
+                .unwrap_or(expected);
+            val == expected_str
         }
     }
 }
@@ -418,6 +434,8 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
     match evaluate_flag(rules, &context) {
         Some(FlagReturn::OnOff(val)) => println!("{}", val),
         Some(FlagReturn::Json(val)) => println!("{}", val),
+        Some(FlagReturn::Integer(val)) => println!("{}", val),
+        Some(FlagReturn::Str(val)) => println!("{}", val),
         None => {
             eprintln!("No rule matched for '{}'", flag_name);
             process::exit(1);

@@ -4,7 +4,12 @@ FF-sdk-upgrade(appVersion=6.0.0) == TRUE
 FF-sdk-upgrade(appVersion=4.31.9) == FALSE
 FF-sdk-upgrade(appVersion=5.3.44) == TRUE
 FF-sdk-upgrade(appVersion=5.2.1) == false
-FF-timer-feature() == true
+FF-timer-feature == true
 FF-feature-y(countryCode=nl) == true
 FF-feature-y(countryCode=NL) == true
 FF-feature-y(countryCode=DE) == false
+FF-api-timeout == 5000
+FF-max-retries == 3
+FF-log-level == "debug"
+FF-button-color == "blue"
+FF-theme-config() == {"primaryColor":"#007bff","secondaryColor":"#6c757d","darkMode":true,"animations":true}

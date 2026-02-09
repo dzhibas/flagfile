@@ -117,6 +117,26 @@ async fn handle_eval(
             )
                 .into_response()
         }
+        Some(FlagReturn::Integer(val)) => {
+            if plain {
+                return (StatusCode::OK, val.to_string()).into_response();
+            }
+            (
+                StatusCode::OK,
+                axum::Json(serde_json::json!({"flag": flag_name, "value": val})),
+            )
+                .into_response()
+        }
+        Some(FlagReturn::Str(val)) => {
+            if plain {
+                return (StatusCode::OK, val.clone()).into_response();
+            }
+            (
+                StatusCode::OK,
+                axum::Json(serde_json::json!({"flag": flag_name, "value": val})),
+            )
+                .into_response()
+        }
         None => {
             if plain {
                 return (StatusCode::UNPROCESSABLE_ENTITY, "no rule matched")
@@ -189,6 +209,20 @@ fn flag_return_to_ofrep(
             reason: reason.to_string(),
             variant: "json".to_string(),
             value: val.clone(),
+            metadata: serde_json::json!({}),
+        },
+        FlagReturn::Integer(val) => OFREPEvalSuccess {
+            key: key.to_string(),
+            reason: reason.to_string(),
+            variant: val.to_string(),
+            value: serde_json::json!(*val),
+            metadata: serde_json::json!({}),
+        },
+        FlagReturn::Str(val) => OFREPEvalSuccess {
+            key: key.to_string(),
+            reason: reason.to_string(),
+            variant: val.clone(),
+            value: serde_json::Value::String(val.clone()),
             metadata: serde_json::json!({}),
         },
     }

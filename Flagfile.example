@@ -1,3 +1,22 @@
+// Basic on/off switches
+FF-new-ui -> true
+FF-beta-features -> false
+FF-maintenance-mode -> false
+
+// Configuration values
+FF-api-timeout -> 5000
+FF-max-retries -> 3
+FF-log-level -> "debug"
+
+// Feature variants
+FF-button-color -> "blue"
+FF-theme-config -> json({
+  "primaryColor": "#007bff",
+  "secondaryColor": "#6c757d",
+  "darkMode": true,
+  "animations": true
+})
+
 // once you dont have rules you can use short notation to return boolean
 FF-feature-flat-on-off -> true
 
