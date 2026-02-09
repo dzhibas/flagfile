@@ -58,6 +58,10 @@ enum Command {
         /// Directory to search in
         #[arg(default_value = ".")]
         path: String,
+
+        /// Search term to filter flag names (case-insensitive substring match)
+        #[arg(short = 's', long = "search")]
+        search: Option<String>,
     },
     Serve {
         /// Path to the Flagfile
@@ -443,8 +447,13 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
     }
 }
 
-fn run_find(path: &str) {
-    let pattern = Regex::new(r"FF[-_][a-zA-Z0-9_-]+").unwrap();
+fn run_find(path: &str, search: Option<&str>) {
+    let regex_pattern = match search {
+        Some(term) => format!(r"FF[-_][a-zA-Z0-9_-]*{}[a-zA-Z0-9_-]*",
+            regex::escape(term)),
+        None => r"FF[-_][a-zA-Z0-9_-]+".to_string(),
+    };
+    let pattern = Regex::new(&regex_pattern).unwrap();
     let stdout = Mutex::new(io::stdout());
 
     WalkBuilder::new(path)
@@ -510,7 +519,7 @@ async fn main() {
         Command::Eval { flagfile, flag_name, context } => {
             run_eval(&flagfile, &flag_name, &context)
         }
-        Command::Find { path } => run_find(&path),
+        Command::Find { path, search } => run_find(&path, search.as_deref()),
         Command::Serve { flagfile, port, config } => {
             serve::run_serve(flagfile, port, &config).await
         }

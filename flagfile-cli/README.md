@@ -57,6 +57,10 @@ Find all flag references across your source code (respects `.gitignore`):
 ```bash
 ff find
 ff find src/
+
+# Filter by flag name substring
+ff find src/ -s demo
+ff find . --search premium
 ```
 
 Output is in grep-style `file:line:content` format.
