@@ -186,6 +186,20 @@ mod tests {
     }
 
     #[test]
+    fn test_flag_return_into_bool() {
+        let val: bool = FlagReturn::OnOff(true).into();
+        assert!(val);
+        let val: bool = FlagReturn::OnOff(false).into();
+        assert!(!val);
+    }
+
+    #[test]
+    #[should_panic(expected = "cannot convert non-boolean FlagReturn to bool")]
+    fn test_flag_return_into_bool_panics_on_non_bool() {
+        let _: bool = FlagReturn::Integer(42).into();
+    }
+
+    #[test]
     fn test_init_from_str_and_ff() {
         // This test can only run once per process due to OnceLock.
         // If other tests already called init, this will panic, so we

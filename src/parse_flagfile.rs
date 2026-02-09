@@ -27,6 +27,15 @@ pub enum FlagReturn {
     Str(String),
 }
 
+impl From<FlagReturn> for bool {
+    fn from(val: FlagReturn) -> Self {
+        match val {
+            FlagReturn::OnOff(b) => b,
+            _ => panic!("cannot convert non-boolean FlagReturn to bool"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum Rule {
     Value(FlagReturn),
