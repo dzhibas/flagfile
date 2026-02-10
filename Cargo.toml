@@ -9,6 +9,7 @@ repository = "https://github.com/dzhibas/flagfile"
 resolver = "2"
 
 members = ["flagfile-cli", ".", "examples/rust_example"]
+default-members = [".", "flagfile-cli"]
 
 [lints.rust]
 unsafe_code = "forbid"
