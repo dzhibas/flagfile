@@ -4,11 +4,80 @@ items tracking to be done
 
 Flagfile-Parser
 
+missing features:
+
+- [ ] startsWith endsWith
+
+ startsWith / endsWith
+
+ Syntax: ^~ (startsWith), ~$ (endsWith), with negated forms !^~ and !~$
+
+      FF-internal-users {
+          email ~$ "@company.com" -> true
+          false
+      }
+      FF-admin-pages {
+          path ^~ "/admin" -> true
+          false
+      }
+
+ - [ ] set not set
+
+      FF-new-onboarding {
+          userId is set and signupDate > 2025-01-01 -> true
+          userId is not set -> false
+          false
+      }
+
+- [ ] percentage()
+
+ Syntax: percentage(variable, threshold) or percentage(variable, threshold, "salt")
+
+      FF-new-checkout {
+          percentage(userId, 5, "FF-new-checkout") -> true
+          false
+      }
+
+      FF-gradual-migration {
+          percentage(orgId, 50, "migration") and plan == "premium" -> true
+          percentage(orgId, 10, "migration") -> true
+          false
+      }
+
+- [ ] date support exists, but DateTime / ISO Timestamps needed
+
+      FF-launch-event {
+          now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z -> true
+          false
+      }
+
+ - [ ] mod() for bucketing into buckets
+
+      Syntax: mod(variable, divisor) returns a number usable in comparisons
+
+      FF-ab-test {
+          mod(userId, 2) == 0 -> json({"variant": "A"})
+          mod(userId, 2) == 1 -> json({"variant": "B"})
+      }
+
+ - [ ] contains any we have, we need somehow contains all function
+
+      FF-beta-only {
+          tags in (beta_tester, internal) -> true
+          false
+      }
+      FF-required-roles {
+          roles all (admin, editor) -> true
+          false
+      }
+
+- [ ] syntax version annotation at the top aka // @version 1
+
 - [x] date > timestamp comparison
 - [x] parse NOW function
 - [x] evaluator for Flagfile
 - [x] restructure and rename project into Flagfile.rs / into workspaces
-- [ ] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
+- [x] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
 
 Flagfile-Relay
 
