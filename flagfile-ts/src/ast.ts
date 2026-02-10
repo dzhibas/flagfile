@@ -35,6 +35,10 @@ export enum ArrayOp {
 export enum MatchOp {
     Contains = 'Contains',
     NotContains = 'NotContains',
+    StartsWith = 'StartsWith',
+    NotStartsWith = 'NotStartsWith',
+    EndsWith = 'EndsWith',
+    NotEndsWith = 'NotEndsWith',
 }
 
 export enum FnCall {

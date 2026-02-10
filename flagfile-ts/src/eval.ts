@@ -125,9 +125,30 @@ export function evaluate(expr: AstNode, context: Context): boolean {
                 }
             } else {
                 const needle = atomToString(rhsAtom);
-                matched = haystack.includes(needle);
+                switch (expr.op) {
+                    case MatchOp.StartsWith:
+                    case MatchOp.NotStartsWith:
+                        matched = haystack.startsWith(needle);
+                        break;
+                    case MatchOp.EndsWith:
+                    case MatchOp.NotEndsWith:
+                        matched = haystack.endsWith(needle);
+                        break;
+                    default:
+                        matched = haystack.includes(needle);
+                        break;
+                }
             }
-            return expr.op === MatchOp.Contains ? matched : !matched;
+            switch (expr.op) {
+                case MatchOp.Contains:
+                case MatchOp.StartsWith:
+                case MatchOp.EndsWith:
+                    return matched;
+                case MatchOp.NotContains:
+                case MatchOp.NotStartsWith:
+                case MatchOp.NotEndsWith:
+                    return !matched;
+            }
         }
 
         case 'Array': {

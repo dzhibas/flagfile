@@ -192,6 +192,38 @@ describe('integration: Flagfile.tests validation', () => {
         expect(val).toEqual({ type: 'OnOff', value: true });
     });
 
+    // FF-email-domain-check(email="user@company.com") == true
+    it('FF-email-domain-check with email="user@company.com" → true', () => {
+        const rules = flags.get('FF-email-domain-check')!;
+        const ctx: Context = { email: atomString('user@company.com') };
+        const val = evaluateFlag(rules, ctx);
+        expect(val).toEqual({ type: 'OnOff', value: true });
+    });
+
+    // FF-email-domain-check(email="user@other.com") == false
+    it('FF-email-domain-check with email="user@other.com" → false', () => {
+        const rules = flags.get('FF-email-domain-check')!;
+        const ctx: Context = { email: atomString('user@other.com') };
+        const val = evaluateFlag(rules, ctx);
+        expect(val).toEqual({ type: 'OnOff', value: false });
+    });
+
+    // FF-admin-path-check(path="/admin/settings") == true
+    it('FF-admin-path-check with path="/admin/settings" → true', () => {
+        const rules = flags.get('FF-admin-path-check')!;
+        const ctx: Context = { path: atomString('/admin/settings') };
+        const val = evaluateFlag(rules, ctx);
+        expect(val).toEqual({ type: 'OnOff', value: true });
+    });
+
+    // FF-admin-path-check(path="/user/profile") == false
+    it('FF-admin-path-check with path="/user/profile" → false', () => {
+        const rules = flags.get('FF-admin-path-check')!;
+        const ctx: Context = { path: atomString('/user/profile') };
+        const val = evaluateFlag(rules, ctx);
+        expect(val).toEqual({ type: 'OnOff', value: false });
+    });
+
     // FF-button-color == "blue"
     it('FF-button-color → "blue"', () => {
         const rules = flags.get('FF-button-color')!;

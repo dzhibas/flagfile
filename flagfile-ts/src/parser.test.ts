@@ -233,6 +233,75 @@ describe('parse expressions', () => {
         }
     });
 
+    it('parses startsWith: path ^~ "/admin"', () => {
+        const r = parse('path ^~ "/admin"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.StartsWith);
+            }
+        }
+    });
+
+    it('parses endsWith: email ~$ "@company.com"', () => {
+        const r = parse('email ~$ "@company.com"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.EndsWith);
+            }
+        }
+    });
+
+    it('parses notStartsWith: name !^~ "test"', () => {
+        const r = parse('name !^~ "test"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.NotStartsWith);
+            }
+        }
+    });
+
+    it('parses notEndsWith: name !~$ ".tmp"', () => {
+        const r = parse('name !~$ ".tmp"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.NotEndsWith);
+            }
+        }
+    });
+
+    it('parses startsWith in logic expr: path ^~ "/api" and method == "GET"', () => {
+        const r = parse('path ^~ "/api" and method == "GET"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Logic');
+        }
+    });
+
+    it('parses startsWith with function: lower(name) ^~ "admin"', () => {
+        const r = parse('lower(name) ^~ "admin"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Match');
+            if (r.value.type === 'Match') {
+                expect(r.value.op).toBe(MatchOp.StartsWith);
+            }
+        }
+    });
+
     it('rejects array with comparison op', () => {
         // "a == 2 and b >= (1,2,3)" should not fully parse
         const r = parse('a == 2 and b >= (1,2,3)');

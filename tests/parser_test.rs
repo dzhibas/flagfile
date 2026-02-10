@@ -198,7 +198,6 @@ fn contains_and_regex_match_test() {
         true
     );
 
-
     // not-contains match
     let (i2, expr2) = parse("name !~ Nik").unwrap();
     assert_eq!(i2, "");
@@ -242,6 +241,98 @@ fn contains_and_regex_match_test() {
         eval(
             &expr4,
             &HashMap::from([("name", Atom::String("Kažkur ŽOLĖ žalesnė".into()))])
+        )
+        .unwrap(),
+        true
+    );
+}
+
+#[test]
+fn starts_with_and_ends_with_test() {
+    // startsWith
+    let (i, expr) = parse("path ^~ \"/admin\"").unwrap();
+    assert_eq!(i, "");
+    assert_eq!(
+        eval(
+            &expr,
+            &HashMap::from([("path", Atom::String("/admin/settings".into()))])
+        )
+        .unwrap(),
+        true
+    );
+    assert_eq!(
+        eval(
+            &expr,
+            &HashMap::from([("path", Atom::String("/user/profile".into()))])
+        )
+        .unwrap(),
+        false
+    );
+
+    // endsWith
+    let (i2, expr2) = parse("email ~$ \"@company.com\"").unwrap();
+    assert_eq!(i2, "");
+    assert_eq!(
+        eval(
+            &expr2,
+            &HashMap::from([("email", Atom::String("user@company.com".into()))])
+        )
+        .unwrap(),
+        true
+    );
+    assert_eq!(
+        eval(
+            &expr2,
+            &HashMap::from([("email", Atom::String("user@other.com".into()))])
+        )
+        .unwrap(),
+        false
+    );
+
+    // notStartsWith
+    let (_, expr3) = parse("name !^~ \"test\"").unwrap();
+    assert_eq!(
+        eval(
+            &expr3,
+            &HashMap::from([("name", Atom::String("production".into()))])
+        )
+        .unwrap(),
+        true
+    );
+    assert_eq!(
+        eval(
+            &expr3,
+            &HashMap::from([("name", Atom::String("testing123".into()))])
+        )
+        .unwrap(),
+        false
+    );
+
+    // notEndsWith
+    let (_, expr4) = parse("name !~$ \".tmp\"").unwrap();
+    assert_eq!(
+        eval(
+            &expr4,
+            &HashMap::from([("name", Atom::String("file.txt".into()))])
+        )
+        .unwrap(),
+        true
+    );
+    assert_eq!(
+        eval(
+            &expr4,
+            &HashMap::from([("name", Atom::String("data.tmp".into()))])
+        )
+        .unwrap(),
+        false
+    );
+
+    // combined with function: lower(name) ^~ "admin"
+    let (_, expr5) = parse("lower(name) ^~ \"admin\"").unwrap();
+    assert_eq!(
+        eval(
+            &expr5,
+            &HashMap::from([("name", Atom::String("ADMIN_USER".into()))])
         )
         .unwrap(),
         true

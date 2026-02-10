@@ -205,16 +205,17 @@ fn parse_regex_literal(i: &str) -> IResult<&str, Atom> {
 
 fn parse_match_op(i: &str) -> IResult<&str, MatchOp> {
     alt((
+        map(tag("!^~"), |_| MatchOp::NotStartsWith),
+        map(tag("!~$"), |_| MatchOp::NotEndsWith),
         map(tag("!~"), |_| MatchOp::NotContains),
+        map(tag("^~"), |_| MatchOp::StartsWith),
+        map(tag("~$"), |_| MatchOp::EndsWith),
         map(tag("~"), |_| MatchOp::Contains),
     ))(i)
 }
 
 fn parse_match_rhs(i: &str) -> IResult<&str, AstNode> {
-    alt((
-        map(parse_regex_literal, AstNode::Constant),
-        parse_constant,
-    ))(i)
+    alt((map(parse_regex_literal, AstNode::Constant), parse_constant))(i)
 }
 
 fn parse_match_expr(i: &str) -> IResult<&str, AstNode> {
@@ -521,7 +522,6 @@ mod tests {
         assert_eq!(i, "");
     }
 
-
     #[test]
     fn test_parse_match_regex_with_function_call() {
         let (i, _v) = parse("upper(name) ~ /.*OLA.*/").unwrap();
@@ -537,6 +537,74 @@ mod tests {
     #[test]
     fn test_parse_match_in_logic_expr() {
         let (i, _v) = parse("name ~ Nik and age > 18").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_match_starts_with() {
+        let (i, v) = parse("path ^~ \"/admin\"").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            v,
+            AstNode::Match(
+                Box::new(AstNode::Variable(Atom::Variable("path".into()))),
+                MatchOp::StartsWith,
+                Box::new(AstNode::Constant(Atom::String("/admin".into()))),
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_match_ends_with() {
+        let (i, v) = parse("email ~$ \"@company.com\"").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            v,
+            AstNode::Match(
+                Box::new(AstNode::Variable(Atom::Variable("email".into()))),
+                MatchOp::EndsWith,
+                Box::new(AstNode::Constant(Atom::String("@company.com".into()))),
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_match_not_starts_with() {
+        let (i, v) = parse("name !^~ \"test\"").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            v,
+            AstNode::Match(
+                Box::new(AstNode::Variable(Atom::Variable("name".into()))),
+                MatchOp::NotStartsWith,
+                Box::new(AstNode::Constant(Atom::String("test".into()))),
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_match_not_ends_with() {
+        let (i, v) = parse("name !~$ \".tmp\"").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            v,
+            AstNode::Match(
+                Box::new(AstNode::Variable(Atom::Variable("name".into()))),
+                MatchOp::NotEndsWith,
+                Box::new(AstNode::Constant(Atom::String(".tmp".into()))),
+            )
+        );
+    }
+
+    #[test]
+    fn test_parse_starts_with_in_logic_expr() {
+        let (i, _v) = parse("path ^~ \"/api\" and method == \"GET\"").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_ends_with_with_function() {
+        let (i, _v) = parse("lower(name) ^~ \"admin\"").unwrap();
         assert_eq!(i, "");
     }
 }

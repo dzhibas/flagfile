@@ -272,6 +272,73 @@ describe('match contains and regex', () => {
     });
 });
 
+// ── StartsWith / EndsWith ─────────────────────────────────────────
+
+describe('startsWith and endsWith', () => {
+    it('startsWith: true when string starts with prefix', () => {
+        expect(eval_('path ^~ "/admin"', { path: atomString('/admin/settings') })).toBe(true);
+    });
+
+    it('startsWith: false when string does not start with prefix', () => {
+        expect(eval_('path ^~ "/admin"', { path: atomString('/user/profile') })).toBe(false);
+    });
+
+    it('endsWith: true when string ends with suffix', () => {
+        expect(eval_('email ~$ "@company.com"', { email: atomString('user@company.com') })).toBe(true);
+    });
+
+    it('endsWith: false when string does not end with suffix', () => {
+        expect(eval_('email ~$ "@company.com"', { email: atomString('user@other.com') })).toBe(false);
+    });
+
+    it('notStartsWith: true when string does not start with prefix', () => {
+        expect(eval_('name !^~ "test"', { name: atomString('production') })).toBe(true);
+    });
+
+    it('notStartsWith: false when string starts with prefix', () => {
+        expect(eval_('name !^~ "test"', { name: atomString('testing123') })).toBe(false);
+    });
+
+    it('notEndsWith: true when string does not end with suffix', () => {
+        expect(eval_('name !~$ ".tmp"', { name: atomString('file.txt') })).toBe(true);
+    });
+
+    it('notEndsWith: false when string ends with suffix', () => {
+        expect(eval_('name !~$ ".tmp"', { name: atomString('data.tmp') })).toBe(false);
+    });
+
+    it('edge: empty string startsWith/endsWith empty string → true', () => {
+        expect(eval_('name ^~ ""', { name: atomString('') })).toBe(true);
+        expect(eval_('name ~$ ""', { name: atomString('') })).toBe(true);
+    });
+
+    it('edge: exact match (string equals prefix/suffix entirely) → true', () => {
+        expect(eval_('name ^~ "hello"', { name: atomString('hello') })).toBe(true);
+        expect(eval_('name ~$ "hello"', { name: atomString('hello') })).toBe(true);
+    });
+
+    it('combined with logic: path ^~ "/api" and method == "GET"', () => {
+        expect(eval_('path ^~ "/api" and method == "GET"', {
+            path: atomString('/api/users'),
+            method: atomString('GET'),
+        })).toBe(true);
+        expect(eval_('path ^~ "/api" and method == "GET"', {
+            path: atomString('/home'),
+            method: atomString('GET'),
+        })).toBe(false);
+    });
+
+    it('combined with function: lower(name) ^~ "admin"', () => {
+        expect(eval_('lower(name) ^~ "admin"', { name: atomString('ADMIN_USER') })).toBe(true);
+        expect(eval_('lower(name) ^~ "admin"', { name: atomString('USER_ADMIN') })).toBe(false);
+    });
+
+    it('missing variable returns false', () => {
+        expect(eval_('name ^~ "test"', {})).toBe(false);
+        expect(eval_('name ~$ "test"', {})).toBe(false);
+    });
+});
+
 // ── Semver comparisons ────────────────────────────────────────────
 
 describe('semver comparisons', () => {

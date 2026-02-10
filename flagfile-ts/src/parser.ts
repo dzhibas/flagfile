@@ -323,7 +323,11 @@ function parseRegexLiteral(i: string): ParseResult<Atom> {
 // ── Match operators: ~ and !~ ──────────────────────────────────────
 
 function parseMatchOp(i: string): ParseResult<MatchOp> {
+    if (i.startsWith('!^~')) return ok(i.slice(3), MatchOp.NotStartsWith);
+    if (i.startsWith('!~$')) return ok(i.slice(3), MatchOp.NotEndsWith);
     if (i.startsWith('!~')) return ok(i.slice(2), MatchOp.NotContains);
+    if (i.startsWith('^~')) return ok(i.slice(2), MatchOp.StartsWith);
+    if (i.startsWith('~$')) return ok(i.slice(2), MatchOp.EndsWith);
     if (i.startsWith('~')) return ok(i.slice(1), MatchOp.Contains);
     return fail();
 }

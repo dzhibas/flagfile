@@ -121,6 +121,22 @@ FF-contains-feature-check {
     false
 }
 
+// check if email ends with a specific domain
+// @test FF-email-domain-check(email="user@company.com") == true
+// @test FF-email-domain-check(email="user@other.com") == false
+FF-email-domain-check {
+    email ~$ "@company.com" -> true
+    false
+}
+
+// check if path starts with /admin
+// @test FF-admin-path-check(path="/admin/settings") == true
+// @test FF-admin-path-check(path="/user/profile") == false
+FF-admin-path-check {
+    path ^~ "/admin" -> true
+    false
+}
+
 // check name against regexp /.*ola.*/
 // @test FF-regexp-feature-check(name="Check Nikolajus match") == true
 FF-regexp-feature-check {

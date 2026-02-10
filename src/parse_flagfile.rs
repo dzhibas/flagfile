@@ -373,7 +373,7 @@ FF-c -> true
     fn test_extract_test_flagfile_example() {
         let data = include_str!("../Flagfile.example");
         let annotations = extract_test_annotations(data);
-        assert_eq!(annotations.len(), 5);
+        assert_eq!(annotations.len(), 9);
         assert_eq!(
             annotations[0].assertion,
             "FF-feature-y(countryCode=nl) == true"
@@ -393,9 +393,29 @@ FF-c -> true
         assert_eq!(annotations[3].line_number, 117);
         assert_eq!(
             annotations[4].assertion,
-            "FF-regexp-feature-check(name=\"Check Nikolajus match\") == true"
+            "FF-email-domain-check(email=\"user@company.com\") == true"
         );
         assert_eq!(annotations[4].line_number, 125);
+        assert_eq!(
+            annotations[5].assertion,
+            "FF-email-domain-check(email=\"user@other.com\") == false"
+        );
+        assert_eq!(annotations[5].line_number, 126);
+        assert_eq!(
+            annotations[6].assertion,
+            "FF-admin-path-check(path=\"/admin/settings\") == true"
+        );
+        assert_eq!(annotations[6].line_number, 133);
+        assert_eq!(
+            annotations[7].assertion,
+            "FF-admin-path-check(path=\"/user/profile\") == false"
+        );
+        assert_eq!(annotations[7].line_number, 134);
+        assert_eq!(
+            annotations[8].assertion,
+            "FF-regexp-feature-check(name=\"Check Nikolajus match\") == true"
+        );
+        assert_eq!(annotations[8].line_number, 141);
     }
 }
 

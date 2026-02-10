@@ -6,22 +6,8 @@ Flagfile-Parser
 
 missing features:
 
-- [ ] startsWith endsWith
-
- startsWith / endsWith
-
- Syntax: ^~ (startsWith), ~$ (endsWith), with negated forms !^~ and !~$
-
-      FF-internal-users {
-          email ~$ "@company.com" -> true
-          false
-      }
-      FF-admin-pages {
-          path ^~ "/admin" -> true
-          false
-      }
-
- - [ ] set not set
+- [x] startsWith endsWith - Syntax: ^~ (startsWith), ~$ (endsWith), with negated forms !^~ and !~$
+- [ ] set not set
 
       FF-new-onboarding {
           userId is set and signupDate > 2025-01-01 -> true
@@ -71,7 +57,8 @@ missing features:
           false
       }
 
-- [ ] syntax version annotation at the top aka // @version 1
+- [ ] syntax version annotation at the top aka // @version=1
+- [ ] global setting to treat everything case-insensitive for example // @case-insensitive=true. its like all strings would go through lower() modifier
 
 - [x] date > timestamp comparison
 - [x] parse NOW function

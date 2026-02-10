@@ -167,6 +167,10 @@ impl ComparisonOp {
 pub enum MatchOp {
     Contains,
     NotContains,
+    StartsWith,
+    NotStartsWith,
+    EndsWith,
+    NotEndsWith,
 }
 
 impl fmt::Display for MatchOp {
@@ -174,6 +178,10 @@ impl fmt::Display for MatchOp {
         match self {
             MatchOp::Contains => write!(f, "~"),
             MatchOp::NotContains => write!(f, "!~"),
+            MatchOp::StartsWith => write!(f, "^~"),
+            MatchOp::NotStartsWith => write!(f, "!^~"),
+            MatchOp::EndsWith => write!(f, "~$"),
+            MatchOp::NotEndsWith => write!(f, "!~$"),
         }
     }
 }

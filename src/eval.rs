@@ -117,21 +117,27 @@ pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
                     AstNode::Constant(a) => a,
                     _ => return Ok(false),
                 };
-                let matched = match rhs_atom {
+                let needle = match rhs_atom {
                     Atom::Regex(pattern) => {
-                        match Regex::new(pattern) {
+                        let re_matched = match Regex::new(pattern) {
                             Ok(re) => re.is_match(&haystack),
                             Err(_) => false,
-                        }
+                        };
+                        return Ok(match op {
+                            MatchOp::Contains => re_matched,
+                            MatchOp::NotContains => !re_matched,
+                            _ => false,
+                        });
                     }
-                    other => {
-                        let needle = other.to_string();
-                        haystack.contains(&needle)
-                    }
+                    other => other.to_string(),
                 };
                 match op {
-                    MatchOp::Contains => matched,
-                    MatchOp::NotContains => !matched,
+                    MatchOp::Contains => haystack.contains(&needle),
+                    MatchOp::NotContains => !haystack.contains(&needle),
+                    MatchOp::StartsWith => haystack.starts_with(&needle),
+                    MatchOp::NotStartsWith => !haystack.starts_with(&needle),
+                    MatchOp::EndsWith => haystack.ends_with(&needle),
+                    MatchOp::NotEndsWith => !haystack.ends_with(&needle),
                 }
             } else {
                 false
@@ -559,6 +565,198 @@ mod tests {
         assert_eq!(
             false,
             eval(&parse("name ~ Nik").unwrap().1, &HashMap::from([])).unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_starts_with() {
+        // startsWith: true when string starts with prefix
+        assert_eq!(
+            true,
+            eval(
+                &parse("path ^~ \"/admin\"").unwrap().1,
+                &HashMap::from([("path", Atom::String("/admin/settings".into()))])
+            )
+            .unwrap()
+        );
+        // startsWith: false when string does not start with prefix
+        assert_eq!(
+            false,
+            eval(
+                &parse("path ^~ \"/admin\"").unwrap().1,
+                &HashMap::from([("path", Atom::String("/user/profile".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_ends_with() {
+        // endsWith: true when string ends with suffix
+        assert_eq!(
+            true,
+            eval(
+                &parse("email ~$ \"@company.com\"").unwrap().1,
+                &HashMap::from([("email", Atom::String("user@company.com".into()))])
+            )
+            .unwrap()
+        );
+        // endsWith: false when string does not end with suffix
+        assert_eq!(
+            false,
+            eval(
+                &parse("email ~$ \"@company.com\"").unwrap().1,
+                &HashMap::from([("email", Atom::String("user@other.com".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_not_starts_with() {
+        // notStartsWith: true when string does not start with prefix
+        assert_eq!(
+            true,
+            eval(
+                &parse("name !^~ \"test\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("production".into()))])
+            )
+            .unwrap()
+        );
+        // notStartsWith: false when string starts with prefix
+        assert_eq!(
+            false,
+            eval(
+                &parse("name !^~ \"test\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("testing123".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_match_not_ends_with() {
+        // notEndsWith: true when string does not end with suffix
+        assert_eq!(
+            true,
+            eval(
+                &parse("name !~$ \".tmp\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("file.txt".into()))])
+            )
+            .unwrap()
+        );
+        // notEndsWith: false when string ends with suffix
+        assert_eq!(
+            false,
+            eval(
+                &parse("name !~$ \".tmp\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("data.tmp".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_starts_ends_with_edge_empty_string() {
+        // empty string startsWith empty string → true
+        assert_eq!(
+            true,
+            eval(
+                &parse("name ^~ \"\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("".into()))])
+            )
+            .unwrap()
+        );
+        // empty string endsWith empty string → true
+        assert_eq!(
+            true,
+            eval(
+                &parse("name ~$ \"\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_starts_ends_with_exact_match() {
+        // exact match: string equals prefix entirely → true
+        assert_eq!(
+            true,
+            eval(
+                &parse("name ^~ \"hello\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("hello".into()))])
+            )
+            .unwrap()
+        );
+        // exact match: string equals suffix entirely → true
+        assert_eq!(
+            true,
+            eval(
+                &parse("name ~$ \"hello\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("hello".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_starts_with_combined_with_logic() {
+        // path ^~ "/api" and method == "GET"
+        assert_eq!(
+            true,
+            eval(
+                &parse("path ^~ \"/api\" and method == \"GET\"").unwrap().1,
+                &HashMap::from([
+                    ("path", Atom::String("/api/users".into())),
+                    ("method", Atom::String("GET".into()))
+                ])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("path ^~ \"/api\" and method == \"GET\"").unwrap().1,
+                &HashMap::from([
+                    ("path", Atom::String("/home".into())),
+                    ("method", Atom::String("GET".into()))
+                ])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_starts_with_combined_with_function() {
+        // lower(name) ^~ "admin"
+        assert_eq!(
+            true,
+            eval(
+                &parse("lower(name) ^~ \"admin\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("ADMIN_USER".into()))])
+            )
+            .unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(
+                &parse("lower(name) ^~ \"admin\"").unwrap().1,
+                &HashMap::from([("name", Atom::String("USER_ADMIN".into()))])
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_starts_ends_with_missing_variable() {
+        assert_eq!(
+            false,
+            eval(&parse("name ^~ \"test\"").unwrap().1, &HashMap::from([])).unwrap()
+        );
+        assert_eq!(
+            false,
+            eval(&parse("name ~$ \"test\"").unwrap().1, &HashMap::from([])).unwrap()
         );
     }
 

@@ -6,7 +6,6 @@ FF-simple -> true
 FF-log -> "debug"
 FF-version -> 3
 
-
 // check if name contains Nik
 // @test FF-contains-feature-check(name="Nikolajus") == true
 FF-contains-feature-check {
@@ -18,5 +17,12 @@ FF-contains-feature-check {
 // @test FF-regexp-feature-check(name="Check Nikolajus match") == true
 FF-regexp-feature-check {
     lower(name) ~ /.*ola.*/ -> true // matches regex
+    false
+}
+
+// starts with and ends with
+FF-email-domain-check {
+    email ~$ "@tesla.com" -> true
+    lower(email) ^~ "nikolajus" -> true
     false
 }
