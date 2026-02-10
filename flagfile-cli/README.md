@@ -132,3 +132,13 @@ Returns `404` if the flag is not found, `422` if no rule matched the given conte
 - [x] ff serve
 - [ ] ff fmt — formats Flagfile
 - [ ] ff edit — opens browser UI with simple editor of Flagfile
+
+distributed functions
+
+- [ ] ff push - pushes flags with namespace into distributed service (ff serve with raft consensus with one writer)
+                same ff push would be used in git action automation where each merge into main or release branch
+                would trigger:
+                    ff validate
+                    ff test
+                    ff push --server x --namespace y --version git-hash
+- [ ] ff rollback - --namespace y --to-version previous-git-hash
