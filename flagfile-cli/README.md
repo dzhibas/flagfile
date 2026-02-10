@@ -130,6 +130,7 @@ Returns `404` if the flag is not found, `422` if no rule matched the given conte
 - [x] ff eval
 - [x] ff find
 - [x] ff serve
+- [ ] ff merge -- if we want to merge per environment flagfile values? aka Flagfile.stage vs Flagfile.local vs Flagfile.prod into Flagfile
 - [ ] ff fmt — formats Flagfile
 - [ ] ff edit — opens browser UI with simple editor of Flagfile
 
