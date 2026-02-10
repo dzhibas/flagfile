@@ -16,7 +16,13 @@ Add the dependency to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-flagfile-lib = "0.3"
+flagfile-lib = "0.4"
+```
+or until it becomes more stable and will be published into crates.io
+
+```toml
+[depedencies]
+flagfile-lib = { git = "https://github.com/dzhibas/flagfile.git" }
 ```
 
 Then use `init()` to load a `Flagfile` from the current directory and `ff()` to evaluate flags:
