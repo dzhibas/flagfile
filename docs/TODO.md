@@ -11,8 +11,8 @@
       }
 
       FF-gradual-migration {
-          percentage(50, "migration") and plan == "premium" -> true
-          percentage(10, "migration") -> true
+          percentage(50%, orgId) and plan == "premium" -> true
+          percentage(10%, orgId) -> true
           false
       }
 
