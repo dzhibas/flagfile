@@ -28,6 +28,10 @@ enum Command {
         /// Path to the Flagfile
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
         flagfile: String,
+
+        /// Show flag descriptions
+        #[arg(short = 'd', long = "description")]
+        description: bool,
     },
     Validate {
         /// Path to the Flagfile to validate
@@ -253,7 +257,7 @@ fn run_init() {
     println!("Created Flagfile and Flagfile.tests");
 }
 
-fn run_list(flagfile_path: &str) {
+fn run_list(flagfile_path: &str, show_description: bool) {
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
         Err(_) => {
@@ -279,8 +283,16 @@ fn run_list(flagfile_path: &str) {
     }
 
     for fv in &parsed.flags {
-        for (name, _) in fv.iter() {
-            println!("{}", name);
+        for (name, def) in fv.iter() {
+            if show_description {
+                if let Some(ref desc) = def.metadata.description {
+                    println!("{} ({})", name, desc);
+                } else {
+                    println!("{}", name);
+                }
+            } else {
+                println!("{}", name);
+            }
         }
     }
 }
@@ -318,7 +330,11 @@ fn run_validate(flagfile_path: &str) {
         for (name, def) in fv.iter() {
             total_flags += 1;
             total_rules += def.rules.len();
-            println!("  {} ({} rules)", name, def.rules.len());
+            if let Some(ref desc) = def.metadata.description {
+                println!("  {} ({} rules) - {}", name, def.rules.len(), desc);
+            } else {
+                println!("  {} ({} rules)", name, def.rules.len());
+            }
         }
     }
 
@@ -684,7 +700,7 @@ async fn main() {
     let cli = Args::parse();
     match cli.cmd {
         Command::Init => run_init(),
-        Command::List { flagfile } => run_list(&flagfile),
+        Command::List { flagfile, description } => run_list(&flagfile, description),
         Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Test { flagfile, testfile, env } => run_tests(&flagfile, &testfile, env.as_deref()),
         Command::Eval {
