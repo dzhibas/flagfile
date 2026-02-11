@@ -263,6 +263,11 @@ Beyond freeform `//` comments, structured rule descriptions help with audit logs
 - [x] restructure and rename project into Flagfile.rs / into workspaces
 - [x] introduce new comparison ops - regex match (and does not match), contains (and does not contain)
 
+
+CLI
+
+- [ ] migration tool, to migrate from one product to Flagfile syntax. Lets say LD flag json dump to Flagfile syntax
+
 Flagfile-Relay
 
 relay is actually `ff serve` which exposes rest api, open-feature api
