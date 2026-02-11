@@ -1,0 +1,268 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Flagfile",
+  "scopeName": "source.flagfile",
+  "patterns": [
+    { "include": "#comments" },
+    { "include": "#segment-definition" },
+    { "include": "#annotations" },
+    { "include": "#flag-definition" },
+    { "include": "#expressions" }
+  ],
+  "repository": {
+    "comments": {
+      "patterns": [
+        {
+          "name": "comment.line.double-slash.flagfile",
+          "match": "//.*$",
+          "patterns": [
+            {
+              "name": "keyword.other.test.flagfile",
+              "match": "@test\\b"
+            }
+          ]
+        },
+        {
+          "name": "comment.block.flagfile",
+          "begin": "/\\*",
+          "end": "\\*/",
+          "patterns": [
+            {
+              "name": "keyword.other.test.flagfile",
+              "match": "@test\\b"
+            }
+          ]
+        }
+      ]
+    },
+    "segment-definition": {
+      "patterns": [
+        {
+          "match": "(@segment)\\s+([a-zA-Z_][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "keyword.control.segment.flagfile" },
+            "2": { "name": "entity.name.type.segment.flagfile" }
+          }
+        }
+      ]
+    },
+    "annotations": {
+      "patterns": [
+        {
+          "match": "(@(?:owner|ticket|description))\\s+(\"[^\"]*\"|'[^']*')",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.flagfile" },
+            "2": { "name": "string.quoted.annotation.flagfile" }
+          }
+        },
+        {
+          "match": "(@deprecated)\\s+(\"[^\"]*\"|'[^']*')",
+          "captures": {
+            "1": { "name": "invalid.deprecated.annotation.flagfile" },
+            "2": { "name": "string.quoted.annotation.flagfile" }
+          }
+        },
+        {
+          "match": "(@expires)\\s+(\\d{4}-\\d{2}-\\d{2})",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.flagfile" },
+            "2": { "name": "constant.other.date.flagfile" }
+          }
+        },
+        {
+          "match": "(@type)\\s+(release|experiment|ops|permission|variant)",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.flagfile" },
+            "2": { "name": "support.type.flagtype.flagfile" }
+          }
+        },
+        {
+          "match": "(@requires)\\s+(FF[-_][a-zA-Z0-9_-]+)",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.flagfile" },
+            "2": { "name": "entity.name.function.flag.flagfile" }
+          }
+        },
+        {
+          "match": "(@test)\\s+(.+)$",
+          "captures": {
+            "1": { "name": "keyword.other.annotation.flagfile" },
+            "2": { "name": "string.unquoted.test-assertion.flagfile" }
+          }
+        },
+        {
+          "match": "(@env)\\s+([a-zA-Z][a-zA-Z0-9_-]*)",
+          "captures": {
+            "1": { "name": "keyword.control.env.flagfile" },
+            "2": { "name": "constant.other.environment.flagfile" }
+          }
+        }
+      ]
+    },
+    "flag-definition": {
+      "patterns": [
+        {
+          "match": "(FF[-_][a-zA-Z0-9_-]+)",
+          "name": "entity.name.function.flag.flagfile"
+        }
+      ]
+    },
+    "expressions": {
+      "patterns": [
+        { "include": "#arrow-operator" },
+        { "include": "#functions" },
+        { "include": "#json-block" },
+        { "include": "#regex-literal" },
+        { "include": "#strings" },
+        { "include": "#datetime" },
+        { "include": "#dates" },
+        { "include": "#semver" },
+        { "include": "#numbers" },
+        { "include": "#booleans" },
+        { "include": "#operators" },
+        { "include": "#keywords" },
+        { "include": "#percentage" },
+        { "include": "#variables" }
+      ]
+    },
+    "arrow-operator": {
+      "match": "->",
+      "name": "keyword.operator.arrow.flagfile"
+    },
+    "functions": {
+      "patterns": [
+        {
+          "match": "\\b(lower|upper|LOWER|UPPER|now|NOW|coalesce|segment|percentage)\\s*(?=\\()",
+          "name": "support.function.flagfile"
+        }
+      ]
+    },
+    "json-block": {
+      "begin": "\\b(json)\\s*\\(",
+      "end": "\\)",
+      "beginCaptures": {
+        "1": { "name": "support.function.json.flagfile" }
+      },
+      "name": "meta.json-block.flagfile",
+      "contentName": "source.json.embedded.flagfile",
+      "patterns": [
+        { "include": "#json-inner" }
+      ]
+    },
+    "json-inner": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.json.flagfile",
+          "match": "\"[^\"]*\""
+        },
+        {
+          "name": "constant.numeric.json.flagfile",
+          "match": "-?\\d+(\\.\\d+)?([eE][+-]?\\d+)?"
+        },
+        {
+          "name": "constant.language.json.flagfile",
+          "match": "\\b(true|false|null)\\b"
+        },
+        {
+          "begin": "\\{",
+          "end": "\\}",
+          "patterns": [{ "include": "#json-inner" }]
+        },
+        {
+          "begin": "\\[",
+          "end": "\\]",
+          "patterns": [{ "include": "#json-inner" }]
+        }
+      ]
+    },
+    "regex-literal": {
+      "name": "string.regexp.flagfile",
+      "match": "/[^/\\n]+/"
+    },
+    "strings": {
+      "patterns": [
+        {
+          "name": "string.quoted.double.flagfile",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.flagfile",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "string.quoted.single.flagfile",
+          "begin": "'",
+          "end": "'",
+          "patterns": [
+            {
+              "name": "constant.character.escape.flagfile",
+              "match": "\\\\."
+            }
+          ]
+        }
+      ]
+    },
+    "datetime": {
+      "match": "\\b\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z?\\b",
+      "name": "constant.other.datetime.flagfile"
+    },
+    "dates": {
+      "match": "\\b\\d{4}-\\d{2}-\\d{2}\\b",
+      "name": "constant.other.date.flagfile"
+    },
+    "semver": {
+      "match": "\\b\\d+\\.\\d+\\.\\d+\\b",
+      "name": "constant.other.semver.flagfile"
+    },
+    "numbers": {
+      "match": "\\b\\d+(\\.\\d+)?\\b",
+      "name": "constant.numeric.flagfile"
+    },
+    "booleans": {
+      "match": "\\b(?i)(true|false)\\b",
+      "name": "constant.language.boolean.flagfile"
+    },
+    "operators": {
+      "patterns": [
+        {
+          "match": "!=|<>|==|<=|>=|<|>|=",
+          "name": "keyword.operator.comparison.flagfile"
+        },
+        {
+          "match": "!\\^~|!~\\$|!~|\\^~|~\\$|~",
+          "name": "keyword.operator.match.flagfile"
+        }
+      ]
+    },
+    "keywords": {
+      "patterns": [
+        {
+          "match": "\\b(and|or|AND|OR)\\b",
+          "name": "keyword.operator.logical.flagfile"
+        },
+        {
+          "match": "\\b(not\\s+in|in)\\b",
+          "name": "keyword.operator.array.flagfile"
+        },
+        {
+          "match": "\\b(not|NOT)\\b",
+          "name": "keyword.operator.negation.flagfile"
+        }
+      ]
+    },
+    "percentage": {
+      "match": "\\b(\\d+(\\.\\d+)?)(%)",
+      "captures": {
+        "1": { "name": "constant.numeric.percentage.flagfile" },
+        "3": { "name": "keyword.operator.percentage.flagfile" }
+      }
+    },
+    "variables": {
+      "match": "\\b(?!FF[-_])[a-zA-Z_][a-zA-Z0-9_]*\\b",
+      "name": "variable.other.flagfile"
+    }
+  }
+}

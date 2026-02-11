@@ -1,0 +1,92 @@
+{
+  "name": "flagfile",
+  "displayName": "Flagfile",
+  "description": "Syntax highlighting, validation, linting and testing for Flagfile feature flag DSL",
+  "version": "0.1.0",
+  "publisher": "flagfile",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "activationEvents": [
+    "workspaceContains:Flagfile",
+    "workspaceContains:Flagfile.*"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "languages": [
+      {
+        "id": "flagfile",
+        "aliases": [
+          "Flagfile",
+          "flagfile"
+        ],
+        "filenames": [
+          "Flagfile"
+        ],
+        "extensions": [
+          ".example",
+          ".tests",
+          ".flags"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "flagfile",
+        "scopeName": "source.flagfile",
+        "path": "./syntaxes/flagfile.tmLanguage.json"
+      }
+    ],
+    "commands": [
+      {
+        "command": "flagfile.validate",
+        "title": "Flagfile: Validate"
+      },
+      {
+        "command": "flagfile.lint",
+        "title": "Flagfile: Lint"
+      },
+      {
+        "command": "flagfile.test",
+        "title": "Flagfile: Run Tests"
+      }
+    ],
+    "configuration": {
+      "title": "Flagfile",
+      "properties": {
+        "flagfile.executablePath": {
+          "type": "string",
+          "default": "ff",
+          "description": "Path to the ff CLI executable"
+        },
+        "flagfile.lintOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run lint automatically on save"
+        },
+        "flagfile.validateOnSave": {
+          "type": "boolean",
+          "default": true,
+          "description": "Run validation automatically on save"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "package": "npx @vscode/vsce package"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.85.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.3.0",
+    "@vscode/vsce": "^2.22.0"
+  }
+}
