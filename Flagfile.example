@@ -137,6 +137,20 @@ FF-admin-path-check {
     false
 }
 
+// Gradual rollout with percentage-based bucketing
+// @test FF-new-checkout(userId=20) == true
+FF-new-checkout {
+    percentage(50%, userId) -> true
+    false
+}
+
+// @test FF-gradual-migration(orgId=3, plan=premium) == true
+FF-gradual-migration {
+    percentage(50%, orgId) and plan == "premium" -> true
+    percentage(10%, orgId) -> true
+    false
+}
+
 // check name against regexp /.*ola.*/
 // @test FF-regexp-feature-check(name="Check Nikolajus match") == true
 FF-regexp-feature-check {

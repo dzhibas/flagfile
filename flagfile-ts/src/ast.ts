@@ -59,7 +59,8 @@ export type AstNode =
     | { type: 'Match'; left: AstNode; op: MatchOp; right: AstNode }
     | { type: 'Array'; left: AstNode; op: ArrayOp; right: AstNode }
     | { type: 'Logic'; left: AstNode; op: LogicOp; right: AstNode }
-    | { type: 'Scope'; expr: AstNode; negate: boolean };
+    | { type: 'Scope'; expr: AstNode; negate: boolean }
+    | { type: 'Percentage'; rate: number; field: AstNode; salt: string | null };
 
 // ── Flag return values ─────────────────────────────────────────────
 

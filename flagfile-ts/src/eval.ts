@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import {
     Atom,
     AstNode,
@@ -87,7 +88,7 @@ function evalComparison(contextVal: Atom, op: ComparisonOp, rhs: Atom): boolean 
 
 // ── Main evaluator ────────────────────────────────────────────────
 
-export function evaluate(expr: AstNode, context: Context): boolean {
+export function evaluate(expr: AstNode, context: Context, flagName?: string): boolean {
     switch (expr.type) {
         case 'Constant': {
             if (expr.atom.type === 'Boolean') {
@@ -175,8 +176,8 @@ export function evaluate(expr: AstNode, context: Context): boolean {
         }
 
         case 'Logic': {
-            const left = evaluate(expr.left, context);
-            const right = evaluate(expr.right, context);
+            const left = evaluate(expr.left, context, flagName);
+            const right = evaluate(expr.right, context, flagName);
             switch (expr.op) {
                 case LogicOp.And: return left && right;
                 case LogicOp.Or:  return left || right;
@@ -185,8 +186,24 @@ export function evaluate(expr: AstNode, context: Context): boolean {
         }
 
         case 'Scope': {
-            const result = evaluate(expr.expr, context);
+            const result = evaluate(expr.expr, context, flagName);
             return expr.negate ? !result : result;
+        }
+
+        case 'Percentage': {
+            const inner = getVariableValueFromContext(expr.field, context);
+            if (inner === null) return false;
+            const bucketKey = atomToString(inner);
+            const flag = flagName ?? 'unknown';
+            const input = expr.salt
+                ? `${flag}.${expr.salt}.${bucketKey}`
+                : `${flag}.${bucketKey}`;
+            const hex = createHash('sha1').update(input).digest('hex');
+            const substr = hex.slice(0, 15);
+            const value = parseInt(substr, 16);
+            const bucket = value % 100000;
+            const threshold = expr.rate * 1000;
+            return bucket < threshold;
         }
 
         default:

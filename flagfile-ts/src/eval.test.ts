@@ -426,3 +426,120 @@ describe('variable resolution', () => {
         expect(eval_('missing', {})).toBe(false);
     });
 });
+
+// ── Percentage rollout ────────────────────────────────────────────
+
+describe('percentage rollout', () => {
+    it('percentage 0% is always false', () => {
+        const r = parse('percentage(0%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const result = evaluate(r.value, { userId: atomString('user-123') }, 'FF-test-rollout');
+        expect(result).toBe(false);
+    });
+
+    it('percentage 100% is always true', () => {
+        const r = parse('percentage(100%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const result = evaluate(r.value, { userId: atomString('user-123') }, 'FF-test-rollout');
+        expect(result).toBe(true);
+    });
+
+    it('percentage is deterministic', () => {
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        const ctx = { userId: atomString('alice') };
+        const r1 = evaluate(r.value, ctx, 'FF-test');
+        const r2 = evaluate(r.value, ctx, 'FF-test');
+        expect(r1).toBe(r2);
+    });
+
+    it('percentage with missing variable returns false', () => {
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(evaluate(r.value, {}, 'FF-test')).toBe(false);
+    });
+
+    it('percentage with salt produces different bucketing', () => {
+        const r1 = parse('percentage(50%, userId)');
+        const r2 = parse('percentage(50%, userId, experiment_a)');
+        expect(r1.ok).toBe(true);
+        expect(r2.ok).toBe(true);
+        if (!r1.ok || !r2.ok) return;
+        // With enough users, salted vs unsalted should differ for at least some
+        let differ = false;
+        for (let i = 0; i < 100; i++) {
+            const ctx = { userId: atomString(`user-${i}`) };
+            const a = evaluate(r1.value, ctx, 'FF-test');
+            const b = evaluate(r2.value, ctx, 'FF-test');
+            if (a !== b) { differ = true; break; }
+        }
+        expect(differ).toBe(true);
+    });
+
+    // Cross-language test vectors (MUST match Rust implementation exactly)
+    // SHA-1 hex → first 15 chars → parse base-16 → mod 100000 = bucket → bucket < rate*1000
+
+    it('cross-language vector 1: FF-test-rollout.user-123 at 50% → true', () => {
+        // SHA-1("FF-test-rollout.user-123") = 60feafb1513ee86...
+        // bucket = 436826052989546118 % 100000 = 46118 < 50000 → true
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(evaluate(r.value, { userId: atomString('user-123') }, 'FF-test-rollout')).toBe(true);
+    });
+
+    it('cross-language vector 2: FF-test-rollout.user-456 at 50% → false', () => {
+        // SHA-1("FF-test-rollout.user-456") = 66438f4ed936777...
+        // bucket = 460555686507669367 % 100000 = 69367 >= 50000 → false
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(evaluate(r.value, { userId: atomString('user-456') }, 'FF-test-rollout')).toBe(false);
+    });
+
+    it('cross-language vector 3: FF-new-checkout.user-789 at 50% → true', () => {
+        // SHA-1("FF-new-checkout.user-789") = 57fc354f1e45f99...
+        // bucket = 396250061834837913 % 100000 = 37913 < 50000 → true
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(evaluate(r.value, { userId: atomString('user-789') }, 'FF-new-checkout')).toBe(true);
+    });
+
+    it('cross-language vector 4: with salt exp1, FF-test-rollout.exp1.alice at 50% → false', () => {
+        // SHA-1("FF-test-rollout.exp1.alice") = 8f91f05372579e5...
+        // bucket = 646582128764877285 % 100000 = 77285 >= 50000 → false
+        const r = parse('percentage(50%, userId, exp1)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(evaluate(r.value, { userId: atomString('alice') }, 'FF-test-rollout')).toBe(false);
+    });
+
+    it('cross-language vector 5: FF-test.alice at 50% → false', () => {
+        // SHA-1("FF-test.alice") = 76706ecbaa75e55...
+        // bucket = 533402694680272469 % 100000 = 72469 >= 50000 → false
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        expect(evaluate(r.value, { userId: atomString('alice') }, 'FF-test')).toBe(false);
+    });
+
+    it('percentage distribution is roughly correct', () => {
+        const r = parse('percentage(50%, userId)');
+        expect(r.ok).toBe(true);
+        if (!r.ok) return;
+        let trueCount = 0;
+        const total = 10000;
+        for (let i = 0; i < total; i++) {
+            const ctx = { userId: atomString(`user-${i}`) };
+            if (evaluate(r.value, ctx, 'FF-distribution-test')) trueCount++;
+        }
+        // Should be roughly 50% (within 5% tolerance)
+        expect(trueCount / total).toBeGreaterThan(0.45);
+        expect(trueCount / total).toBeLessThan(0.55);
+    });
+});

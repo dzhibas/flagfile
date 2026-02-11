@@ -245,6 +245,51 @@ fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
     })(i)
 }
 
+fn parse_percentage_salt(i: &str) -> IResult<&str, String> {
+    let (i, _) = ws(char(','))(i)?;
+    let i = i.trim_start();
+    let (i, salt_val) = recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0_count(alt((alphanumeric1, tag("_"), tag("-")))),
+    ))(i)?;
+    Ok((i, salt_val.to_string()))
+}
+
+fn parse_percentage(i: &str) -> IResult<&str, AstNode> {
+    let (i, _) = tag_no_case("percentage")(i)?;
+    let (i, _) = ws(char('('))(i)?;
+
+    // Parse rate: number followed by '%'
+    let (i, rate_str) = recognize(pair(
+        opt(alt((char('+'), char('-')))),
+        alt((
+            recognize(tuple((digit1, pair(char('.'), opt(digit1))))),
+            recognize(tuple((char('.'), digit1))),
+            digit1,
+        )),
+    ))(i)?;
+    let (i, _) = char('%')(i)?;
+    let rate: f64 = rate_str.parse().unwrap();
+
+    // Parse comma and field name
+    let (i, _) = ws(char(','))(i)?;
+    let (i, field) = ws(parse_variable_node)(i)?;
+
+    // Parse optional salt (third argument)
+    let (i, salt) = opt(parse_percentage_salt)(i)?;
+
+    let (i, _) = ws(char(')'))(i)?;
+
+    Ok((
+        i,
+        AstNode::Percentage {
+            rate,
+            field: Box::new(field),
+            salt,
+        },
+    ))
+}
+
 fn parse_parenthesized_expr(i: &str) -> IResult<&str, AstNode> {
     let parser = tuple((
         opt(alt((tag_no_case("not"), tag("!")))),
@@ -260,6 +305,7 @@ fn parse_parenthesized_expr(i: &str) -> IResult<&str, AstNode> {
 fn parse_expr(input: &str) -> IResult<&str, AstNode> {
     let (i, mut head) = alt((
         parse_parenthesized_expr,
+        parse_percentage,
         parse_logic_expr,
         parse_compare_or_array_expr,
         parse_constant,
@@ -267,7 +313,11 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
 
     let (i, tail) = many0(pair(
         ws(parse_logic_op),
-        alt((parse_compare_or_array_expr, parse_parenthesized_expr)),
+        alt((
+            parse_percentage,
+            parse_compare_or_array_expr,
+            parse_parenthesized_expr,
+        )),
     ))(i)?;
 
     for (op, expr) in tail {

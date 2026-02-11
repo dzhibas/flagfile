@@ -119,11 +119,15 @@ fn parse_test_line(line: &str) -> Option<TestLine<'_>> {
 }
 
 /// Evaluate a flag against context, returning the matched FlagReturn
-pub(crate) fn evaluate_flag(rules: &[Rule], context: &Context) -> Option<FlagReturn> {
+pub(crate) fn evaluate_flag(
+    rules: &[Rule],
+    context: &Context,
+    flag_name: Option<&str>,
+) -> Option<FlagReturn> {
     for rule in rules {
         match rule {
             Rule::BoolExpressionValue(expr, return_val) => {
-                if let Ok(true) = eval(expr, context) {
+                if let Ok(true) = eval(expr, context, flag_name) {
                     return Some(return_val.clone());
                 }
             }
@@ -370,7 +374,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
                 continue;
             };
 
-            let result = evaluate_flag(rules, &context);
+            let result = evaluate_flag(rules, &context, Some(flag_name));
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
@@ -420,7 +424,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
                 continue;
             };
 
-            let result = evaluate_flag(rules, &context);
+            let result = evaluate_flag(rules, &context, Some(flag_name));
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
@@ -499,7 +503,7 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
         })
         .collect();
 
-    match evaluate_flag(rules, &context) {
+    match evaluate_flag(rules, &context, Some(flag_name)) {
         Some(FlagReturn::OnOff(val)) => println!("{}", val),
         Some(FlagReturn::Json(val)) => println!("{}", val),
         Some(FlagReturn::Integer(val)) => println!("{}", val),

@@ -399,11 +399,54 @@ function parseParenthesizedExpr(i: string): ParseResult<AstNode> {
     });
 }
 
+// ── Percentage parser ──────────────────────────────────────────────
+
+function parsePercentage(i: string): ParseResult<AstNode> {
+    const lower = i.toLowerCase();
+    if (!lower.startsWith('percentage(')) return fail();
+    let rest = i.slice('percentage('.length);
+    rest = skipWs(rest);
+
+    // Parse rate: number followed by %
+    const rateM = rest.match(/^(\d+(?:\.\d+)?)%/);
+    if (!rateM) return fail();
+    const rate = parseFloat(rateM[1]);
+    rest = rest.slice(rateM[0].length);
+    rest = skipWs(rest);
+
+    // Expect comma
+    if (rest[0] !== ',') return fail();
+    rest = skipWs(rest.slice(1));
+
+    // Parse field (variable node)
+    const fieldR = parseVariableNode(rest);
+    if (!fieldR.ok) return fail();
+    rest = skipWs(fieldR.rest);
+
+    // Optional third argument: salt
+    let salt: string | null = null;
+    if (rest[0] === ',') {
+        rest = skipWs(rest.slice(1));
+        // Parse salt as a variable-like identifier
+        const saltM = rest.match(/^([a-zA-Z_][a-zA-Z0-9_]*)/);
+        if (!saltM) return fail();
+        salt = saltM[1];
+        rest = skipWs(rest.slice(saltM[0].length));
+    }
+
+    // Expect closing paren
+    if (rest[0] !== ')') return fail();
+    rest = rest.slice(1);
+
+    return ok(rest, { type: 'Percentage', rate, field: fieldR.value, salt });
+}
+
 // ── Main expression parser ─────────────────────────────────────────
 
 function parseExpr(input: string): ParseResult<AstNode> {
     let headR = alt<AstNode>(
         () => parseParenthesizedExpr(input),
+        () => parsePercentage(input),
         () => parseLogicExprOnce(input),
         () => parseCompareOrArrayExpr(input),
         () => parseConstant(input),
@@ -417,6 +460,7 @@ function parseExpr(input: string): ParseResult<AstNode> {
         const opR = parseLogicOp(skipWs(rest));
         if (!opR.ok) break;
         const rhsR = alt<AstNode>(
+            () => parsePercentage(skipWs(opR.rest)),
             () => parseCompareOrArrayExpr(skipWs(opR.rest)),
             () => parseParenthesizedExpr(skipWs(opR.rest)),
         );

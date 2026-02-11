@@ -2,62 +2,17 @@
 
 ## DSL features to add
 
-- [ ] percentage(rate, field?, salt?) - field and salt optional. use SHA-1
-      if salt not specified than flag name is used as salt
-
-      FF-new-checkout {
-          percentage(5%, userId) -> true
-          false
-      }
-
-      FF-gradual-migration {
-          percentage(50%, orgId) and plan == "premium" -> true
-          percentage(10%, orgId) -> true
-          false
-      }
-
-ALGORITHM: flagfile_bucket(flag_name, bucket_key, salt?)
-
-1. Build input string:
-   - If salt provided: "{flag_name}.{salt}.{bucket_key}"
-   - If no salt:       "{flag_name}.{bucket_key}"
-   
-   All strings are UTF-8. Concatenation uses literal "." separator.
-
-2. Compute SHA-1:
-   sha1_hex = lowercase hex string of SHA-1(input_bytes)
-   
-   Example: SHA-1("FF-checkout.alice") = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0"
-
-3. Take first 15 hex characters:
-   substr = sha1_hex[0..15]
-   
-   Example: "a1b2c3d4e5f6a7b"
-
-4. Parse as integer (base 16):
-   value = parseInt(substr, 16)
-   
-   Example: 0xa1b2c3d4e5f6a7b = 11667345614019896955 (but capped to 15 chars)
-
-5. Compute bucket (0 - 99999):
-   bucket = value % 100000
-   
-   Using 100,000 partitions (not 100) gives 0.001% granularity
-
-6. Compare:
-   bucket < (percentage * 1000) → IN rollout
-   
-   Example: 25% → bucket < 25000
-            0.5% → bucket < 500
-
 - [ ] date support exists, but DateTime / ISO Timestamps needed
+      think maybe of alternative dsl syntax for example:
+      @active [from|between|until] X [to Y]
 
       FF-launch-event {
           now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z -> true
           false
       }
 
- - [ ] mod() for bucketing into buckets
+ - [ ] mod() for bucketing into buckets (LOW prio)
+      ! this can be done with percentage(50%, userId) instead
 
       Syntax: mod(variable, divisor) returns a number usable in comparisons
 
@@ -325,6 +280,7 @@ Flagfile other crazy ideas
 
 Done
 
+- [x] percentage(rate, contextField?, salt?) - field and salt optional. use SHA-1
 - [x] startsWith endsWith - Syntax: ^~ (startsWith), ~$ (endsWith), with negated forms !^~ and !~$
 - [x] Atom parsing for Date
 - [x] Date converted to chrono datetime for comparison later

@@ -19,13 +19,14 @@ import {
 function evaluateFlag(
     rules: Rule[],
     context: Context,
+    flagName?: string,
 ): FlagReturn | null {
     for (const rule of rules) {
         if (rule.type === 'Value') {
             return rule.value;
         }
         if (rule.type === 'BoolExpressionValue') {
-            if (evaluate(rule.expr, context)) {
+            if (evaluate(rule.expr, context, flagName)) {
                 return rule.value;
             }
         }

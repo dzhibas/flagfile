@@ -19,7 +19,8 @@ fn test_parsing() {
         true,
         eval(
             &expr,
-            &HashMap::from([("a", "d".into()), ("c", "b".into()), ("z", "3".into()),])
+            &HashMap::from([("a", "d".into()), ("c", "b".into()), ("z", "3".into()),]),
+            None,
         )
         .unwrap()
     );
@@ -49,7 +50,7 @@ accountRole in (Admin,admin,"Admin/Order Manager")
     ]);
 
     let (i, expr) = parse(&rule).unwrap();
-    let val = eval(&expr, &context).unwrap();
+    let val = eval(&expr, &context, None).unwrap();
     assert_eq!(val, true);
     assert_eq!(i, ""); // empty remainder of parsed string
 }
@@ -74,7 +75,7 @@ fn scoped_test_case() {
     ]);
 
     let (i, expr) = parse(&rule).unwrap();
-    let val = eval(&expr, &context).unwrap();
+    let val = eval(&expr, &context, None).unwrap();
     assert_eq!(val, true);
     assert_eq!(i, ""); // empty remainder of parsed string
 }
@@ -90,7 +91,7 @@ fn scopes_bug_test() {
         ("e", Atom::Number(5)),
     ]);
     let (i, expr) = parse(rule).unwrap();
-    let val = eval(&expr, &context).unwrap();
+    let val = eval(&expr, &context, None).unwrap();
     assert_eq!(val, true);
     assert_eq!(i, "");
 }
@@ -108,7 +109,7 @@ fn scopes_bug_with_new_lines_around_test() {
         ("e", Atom::Number(5)),
     ]);
     let (i, expr) = parse(rule).unwrap();
-    let val = eval(&expr, &context).unwrap();
+    let val = eval(&expr, &context, None).unwrap();
     assert_eq!(val, true);
     assert_eq!(i, "");
 }
@@ -123,14 +124,14 @@ fn semver_comparison_test() {
     ]);
     let (i, expr) = parse(rule).unwrap();
     assert_eq!(i, "");
-    assert_eq!(eval(&expr, &context).unwrap(), true);
+    assert_eq!(eval(&expr, &context, None).unwrap(), true);
 
     // version 5.3.42 is NOT > 5.3.42
     let context_equal = HashMap::from([
         ("appVersion", Atom::Semver(5, 3, 42)),
         ("platform", Atom::String("ios".into())),
     ]);
-    assert_eq!(eval(&expr, &context_equal).unwrap(), false);
+    assert_eq!(eval(&expr, &context_equal, None).unwrap(), false);
 
     // Test: version < 4.32.0
     let rule2 = "appVersion < 4.32.0";
@@ -139,7 +140,8 @@ fn semver_comparison_test() {
     assert_eq!(
         eval(
             &expr2,
-            &HashMap::from([("appVersion", Atom::Semver(4, 31, 9))])
+            &HashMap::from([("appVersion", Atom::Semver(4, 31, 9))]),
+            None,
         )
         .unwrap(),
         true
@@ -147,7 +149,8 @@ fn semver_comparison_test() {
     assert_eq!(
         eval(
             &expr2,
-            &HashMap::from([("appVersion", Atom::Semver(4, 32, 0))])
+            &HashMap::from([("appVersion", Atom::Semver(4, 32, 0))]),
+            None,
         )
         .unwrap(),
         false
@@ -155,7 +158,8 @@ fn semver_comparison_test() {
     assert_eq!(
         eval(
             &expr2,
-            &HashMap::from([("appVersion", Atom::Semver(5, 0, 0))])
+            &HashMap::from([("appVersion", Atom::Semver(5, 0, 0))]),
+            None,
         )
         .unwrap(),
         false
@@ -169,7 +173,7 @@ fn semver_from_str_context_test() {
     assert_eq!(*context.get("version").unwrap(), Atom::Semver(2, 1, 0));
 
     let (_, expr) = parse("version >= 2.0.0").unwrap();
-    assert_eq!(eval(&expr, &context).unwrap(), true);
+    assert_eq!(eval(&expr, &context, None).unwrap(), true);
 }
 
 #[test]
@@ -180,7 +184,8 @@ fn contains_and_regex_match_test() {
     assert_eq!(
         eval(
             &expr,
-            &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+            &HashMap::from([("name", Atom::String("Nikolajus".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -192,7 +197,8 @@ fn contains_and_regex_match_test() {
     assert_eq!(
         eval(
             &expr,
-            &HashMap::from([("name", Atom::String("NIKOLAJUS".into()))])
+            &HashMap::from([("name", Atom::String("NIKOLAJUS".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -204,7 +210,8 @@ fn contains_and_regex_match_test() {
     assert_eq!(
         eval(
             &expr2,
-            &HashMap::from([("name", Atom::String("John".into()))])
+            &HashMap::from([("name", Atom::String("John".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -216,7 +223,8 @@ fn contains_and_regex_match_test() {
     assert_eq!(
         eval(
             &expr3,
-            &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+            &HashMap::from([("name", Atom::String("Nikolajus".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -228,7 +236,8 @@ fn contains_and_regex_match_test() {
     assert_eq!(
         eval(
             &expr4,
-            &HashMap::from([("name", Atom::String("Simonas".into()))])
+            &HashMap::from([("name", Atom::String("Simonas".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -240,7 +249,8 @@ fn contains_and_regex_match_test() {
     assert_eq!(
         eval(
             &expr4,
-            &HashMap::from([("name", Atom::String("Kažkur ŽOLĖ žalesnė".into()))])
+            &HashMap::from([("name", Atom::String("Kažkur ŽOLĖ žalesnė".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -255,7 +265,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr,
-            &HashMap::from([("path", Atom::String("/admin/settings".into()))])
+            &HashMap::from([("path", Atom::String("/admin/settings".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -263,7 +274,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr,
-            &HashMap::from([("path", Atom::String("/user/profile".into()))])
+            &HashMap::from([("path", Atom::String("/user/profile".into()))]),
+            None,
         )
         .unwrap(),
         false
@@ -275,7 +287,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr2,
-            &HashMap::from([("email", Atom::String("user@company.com".into()))])
+            &HashMap::from([("email", Atom::String("user@company.com".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -283,7 +296,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr2,
-            &HashMap::from([("email", Atom::String("user@other.com".into()))])
+            &HashMap::from([("email", Atom::String("user@other.com".into()))]),
+            None,
         )
         .unwrap(),
         false
@@ -294,7 +308,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr3,
-            &HashMap::from([("name", Atom::String("production".into()))])
+            &HashMap::from([("name", Atom::String("production".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -302,7 +317,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr3,
-            &HashMap::from([("name", Atom::String("testing123".into()))])
+            &HashMap::from([("name", Atom::String("testing123".into()))]),
+            None,
         )
         .unwrap(),
         false
@@ -313,7 +329,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr4,
-            &HashMap::from([("name", Atom::String("file.txt".into()))])
+            &HashMap::from([("name", Atom::String("file.txt".into()))]),
+            None,
         )
         .unwrap(),
         true
@@ -321,7 +338,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr4,
-            &HashMap::from([("name", Atom::String("data.tmp".into()))])
+            &HashMap::from([("name", Atom::String("data.tmp".into()))]),
+            None,
         )
         .unwrap(),
         false
@@ -332,7 +350,8 @@ fn starts_with_and_ends_with_test() {
     assert_eq!(
         eval(
             &expr5,
-            &HashMap::from([("name", Atom::String("ADMIN_USER".into()))])
+            &HashMap::from([("name", Atom::String("ADMIN_USER".into()))]),
+            None,
         )
         .unwrap(),
         true

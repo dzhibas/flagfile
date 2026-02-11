@@ -4,6 +4,8 @@ use chrono::Local;
 
 use regex::Regex;
 
+use sha1::{Digest, Sha1};
+
 use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp, MatchOp};
 
 pub type Context<'a> = HashMap<&'a str, Atom>;
@@ -39,7 +41,11 @@ fn get_variable_value_from_context<'a>(
     res.cloned()
 }
 
-pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
+pub fn eval<'a>(
+    expr: &AstNode,
+    context: &Context,
+    flag_name: Option<&str>,
+) -> Result<bool, &'a str> {
     let result = match expr {
         // true || false
         AstNode::Constant(var) => {
@@ -144,19 +150,44 @@ pub fn eval<'a>(expr: &AstNode, context: &Context) -> Result<bool, &'a str> {
             }
         }
         AstNode::Logic(expr1, op, expr2) => {
-            let expr1_eval = eval(expr1, context).unwrap();
-            let expr2_eval = eval(expr2, context).unwrap();
+            let expr1_eval = eval(expr1, context, flag_name).unwrap();
+            let expr2_eval = eval(expr2, context, flag_name).unwrap();
             match op {
                 LogicOp::And => expr1_eval && expr2_eval,
                 LogicOp::Or => expr1_eval || expr2_eval,
             }
         }
         AstNode::Scope { expr, negate } => {
-            let res = eval(expr, context).unwrap();
+            let res = eval(expr, context, flag_name).unwrap();
             match negate {
                 true => !res,
                 false => res,
             }
+        }
+        AstNode::Percentage { rate, field, salt } => {
+            let bucket_key = get_variable_value_from_context(field, context);
+            let bucket_key_str = match bucket_key {
+                Some(v) => v.to_string(),
+                None => return Ok(false),
+            };
+
+            let flag = flag_name.unwrap_or("unknown");
+
+            let input = match salt {
+                Some(s) => format!("{}.{}.{}", flag, s, bucket_key_str),
+                None => format!("{}.{}", flag, bucket_key_str),
+            };
+
+            let mut hasher = Sha1::new();
+            hasher.update(input.as_bytes());
+            let hash = hasher.finalize();
+            let hex = format!("{:x}", hash);
+
+            let substr = &hex[..15];
+            let value = u64::from_str_radix(substr, 16).unwrap_or(0);
+            let bucket = value % 100_000;
+            let threshold = (rate * 1000.0) as u64;
+            bucket < threshold
         }
         _ => false,
     };
@@ -176,7 +207,8 @@ mod tests {
             true,
             eval(
                 &expr,
-                &HashMap::from([("x", Atom::Number(1)), ("y", Atom::Number(2))])
+                &HashMap::from([("x", Atom::Number(1)), ("y", Atom::Number(2))]),
+                None,
             )
             .unwrap()
         );
@@ -186,7 +218,8 @@ mod tests {
             true,
             eval(
                 &expr,
-                &HashMap::from([("x", Atom::Number(12)), ("y", Atom::Number(2))])
+                &HashMap::from([("x", Atom::Number(12)), ("y", Atom::Number(2))]),
+                None,
             )
             .unwrap()
         );
@@ -199,7 +232,8 @@ mod tests {
                 &HashMap::from([
                     ("countryCode", Atom::String("LT".to_string())),
                     ("city", Atom::String("Palanga".to_string()))
-                ])
+                ]),
+                None,
             )
             .unwrap()
         );
@@ -215,7 +249,8 @@ mod tests {
                 &HashMap::from([
                     ("countryCode", Atom::String("LT".to_string())),
                     ("city", Atom::String("Palanga".to_string()))
-                ])
+                ]),
+                None,
             )
             .unwrap()
         );
@@ -228,7 +263,8 @@ mod tests {
             false,
             eval(
                 &expr,
-                &HashMap::from([("country", Atom::String("LT".to_string()))])
+                &HashMap::from([("country", Atom::String("LT".to_string()))]),
+                None,
             )
             .unwrap()
         );
@@ -239,7 +275,8 @@ mod tests {
             false,
             eval(
                 &expr,
-                &HashMap::from([("country", Atom::String("Lithuania".to_string()))])
+                &HashMap::from([("country", Atom::String("Lithuania".to_string()))]),
+                None,
             )
             .unwrap()
         );
@@ -249,7 +286,8 @@ mod tests {
             true,
             eval(
                 &expr,
-                &HashMap::from([("country", Atom::String("Netherlands".to_string()))])
+                &HashMap::from([("country", Atom::String("Netherlands".to_string()))]),
+                None,
             )
             .unwrap()
         );
@@ -262,14 +300,15 @@ mod tests {
             ("y", Atom::String("tree".to_string())),
         ]);
         let (_i, expr) = parse("y in ('one', 'two', 'tree')").unwrap();
-        let res = eval(&expr, &context).unwrap();
+        let res = eval(&expr, &context, None).unwrap();
         assert_eq!(res, true);
 
         assert_eq!(
             false,
             eval(
                 &expr,
-                &HashMap::from([("y", Atom::String("four".to_string())),])
+                &HashMap::from([("y", Atom::String("four".to_string())),]),
+                None,
             )
             .unwrap()
         );
@@ -278,7 +317,8 @@ mod tests {
             true,
             eval(
                 &parse("y not in ('one','two','tree')").unwrap().1,
-                &HashMap::from([("y", Atom::String("four".to_string())),])
+                &HashMap::from([("y", Atom::String("four".to_string())),]),
+                None,
             )
             .unwrap()
         );
@@ -290,7 +330,8 @@ mod tests {
             true,
             eval(
                 &parse("y in (one,two,tree)").unwrap().1,
-                &HashMap::from([("y", Atom::String("two".to_string())),])
+                &HashMap::from([("y", Atom::String("two".to_string())),]),
+                None,
             )
             .unwrap()
         );
@@ -303,12 +344,19 @@ mod tests {
             ("b", Atom::String("demo".to_string())),
         ]);
 
-        assert_eq!(eval(&parse("a < 4").unwrap().1, &context).unwrap(), true);
-        assert_eq!(eval(&parse("a < 3.3").unwrap().1, &context).unwrap(), true);
+        assert_eq!(
+            eval(&parse("a < 4").unwrap().1, &context, None).unwrap(),
+            true
+        );
+        assert_eq!(
+            eval(&parse("a < 3.3").unwrap().1, &context, None).unwrap(),
+            true
+        );
         assert_eq!(
             eval(
                 &parse("a > 3.15").unwrap().1,
-                &HashMap::from([("a", Atom::Float(3.14))])
+                &HashMap::from([("a", Atom::Float(3.14))]),
+                None,
             )
             .unwrap(),
             false
@@ -316,24 +364,44 @@ mod tests {
         assert_eq!(
             eval(
                 &parse("a < 3.1415").unwrap().1,
-                &HashMap::from([("a", Atom::Float(3.0))])
+                &HashMap::from([("a", Atom::Float(3.0))]),
+                None,
             )
             .unwrap(),
             true
         );
-        assert_eq!(eval(&parse("a>4").unwrap().1, &context).unwrap(), false);
-        assert_eq!(eval(&parse("a<=4").unwrap().1, &context).unwrap(), true);
-        assert_eq!(eval(&parse("a>=3").unwrap().1, &context).unwrap(), true);
-        assert_eq!(eval(&parse("a!=4").unwrap().1, &context).unwrap(), true);
-        assert_eq!(eval(&parse("a==4").unwrap().1, &context).unwrap(), false);
-        assert_eq!(eval(&parse("a==3").unwrap().1, &context).unwrap(), true);
+        assert_eq!(
+            eval(&parse("a>4").unwrap().1, &context, None).unwrap(),
+            false
+        );
+        assert_eq!(
+            eval(&parse("a<=4").unwrap().1, &context, None).unwrap(),
+            true
+        );
+        assert_eq!(
+            eval(&parse("a>=3").unwrap().1, &context, None).unwrap(),
+            true
+        );
+        assert_eq!(
+            eval(&parse("a!=4").unwrap().1, &context, None).unwrap(),
+            true
+        );
+        assert_eq!(
+            eval(&parse("a==4").unwrap().1, &context, None).unwrap(),
+            false
+        );
+        assert_eq!(
+            eval(&parse("a==3").unwrap().1, &context, None).unwrap(),
+            true
+        );
     }
     #[test]
     fn test_compare_string_expr_eval() {
         assert_eq!(
             eval(
                 &parse("car!='Tesla'").unwrap().1,
-                &HashMap::from([("car", Atom::String("BMW".into()))])
+                &HashMap::from([("car", Atom::String("BMW".into()))]),
+                None,
             )
             .unwrap(),
             true
@@ -341,7 +409,8 @@ mod tests {
         assert_eq!(
             eval(
                 &parse("car=='Tesla'").unwrap().1,
-                &HashMap::from([("car", Atom::String("Tesla".into()))])
+                &HashMap::from([("car", Atom::String("Tesla".into()))]),
+                None,
             )
             .unwrap(),
             true
@@ -352,11 +421,11 @@ mod tests {
     fn simple_constant_eval_test() {
         assert_eq!(
             false,
-            eval(&parse("false").unwrap().1, &HashMap::from([])).unwrap()
+            eval(&parse("false").unwrap().1, &HashMap::from([]), None).unwrap()
         );
         assert_eq!(
             true,
-            eval(&parse("TRUE").unwrap().1, &HashMap::from([])).unwrap()
+            eval(&parse("TRUE").unwrap().1, &HashMap::from([]), None).unwrap()
         );
     }
 
@@ -365,14 +434,20 @@ mod tests {
         let (_i, expr) = parse("created > 2024-02-02 and created <= 2024-02-13").unwrap();
         assert_eq!(
             true,
-            eval(&expr, &HashMap::from([("created", "2024-02-12".into())])).unwrap()
+            eval(
+                &expr,
+                &HashMap::from([("created", "2024-02-12".into())]),
+                None
+            )
+            .unwrap()
         );
 
         assert_eq!(
             false,
             eval(
                 &parse("created < 2024-02-02").unwrap().1,
-                &HashMap::from([("created", "2024-02-02".into())])
+                &HashMap::from([("created", "2024-02-02".into())]),
+                None,
             )
             .unwrap()
         );
@@ -385,7 +460,8 @@ mod tests {
             true,
             eval(
                 &parse("version > 5.3.42").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(6, 0, 0))])
+                &HashMap::from([("version", Atom::Semver(6, 0, 0))]),
+                None,
             )
             .unwrap()
         );
@@ -393,7 +469,8 @@ mod tests {
             false,
             eval(
                 &parse("version > 5.3.42").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(5, 3, 42))])
+                &HashMap::from([("version", Atom::Semver(5, 3, 42))]),
+                None,
             )
             .unwrap()
         );
@@ -401,7 +478,8 @@ mod tests {
             true,
             eval(
                 &parse("version > 5.3.42").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(5, 3, 43))])
+                &HashMap::from([("version", Atom::Semver(5, 3, 43))]),
+                None,
             )
             .unwrap()
         );
@@ -411,7 +489,8 @@ mod tests {
             true,
             eval(
                 &parse("version < 4.32.0").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(4, 31, 9))])
+                &HashMap::from([("version", Atom::Semver(4, 31, 9))]),
+                None,
             )
             .unwrap()
         );
@@ -419,7 +498,8 @@ mod tests {
             false,
             eval(
                 &parse("version < 4.32.0").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(4, 32, 0))])
+                &HashMap::from([("version", Atom::Semver(4, 32, 0))]),
+                None,
             )
             .unwrap()
         );
@@ -429,7 +509,8 @@ mod tests {
             true,
             eval(
                 &parse("version == 1.2.3").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(1, 2, 3))])
+                &HashMap::from([("version", Atom::Semver(1, 2, 3))]),
+                None,
             )
             .unwrap()
         );
@@ -439,7 +520,8 @@ mod tests {
             true,
             eval(
                 &parse("version >= 2.0.0").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(2, 0, 0))])
+                &HashMap::from([("version", Atom::Semver(2, 0, 0))]),
+                None,
             )
             .unwrap()
         );
@@ -447,7 +529,8 @@ mod tests {
             true,
             eval(
                 &parse("version <= 2.0.0").unwrap().1,
-                &HashMap::from([("version", Atom::Semver(1, 9, 99))])
+                &HashMap::from([("version", Atom::Semver(1, 9, 99))]),
+                None,
             )
             .unwrap()
         );
@@ -458,7 +541,8 @@ mod tests {
             true,
             eval(
                 &parse("version > 5.3.42").unwrap().1,
-                &HashMap::from([("version", Atom::Float(5.4))])
+                &HashMap::from([("version", Atom::Float(5.4))]),
+                None,
             )
             .unwrap()
         );
@@ -466,7 +550,8 @@ mod tests {
             false,
             eval(
                 &parse("version > 5.3.42").unwrap().1,
-                &HashMap::from([("version", Atom::Float(5.3))])
+                &HashMap::from([("version", Atom::Float(5.3))]),
+                None,
             )
             .unwrap()
         );
@@ -474,7 +559,8 @@ mod tests {
             true,
             eval(
                 &parse("version == 5.4.0").unwrap().1,
-                &HashMap::from([("version", Atom::Float(5.4))])
+                &HashMap::from([("version", Atom::Float(5.4))]),
+                None,
             )
             .unwrap()
         );
@@ -486,7 +572,8 @@ mod tests {
             true,
             eval(
                 &parse("name ~ Nik").unwrap().1,
-                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -494,7 +581,8 @@ mod tests {
             false,
             eval(
                 &parse("name ~ Nik").unwrap().1,
-                &HashMap::from([("name", Atom::String("John".into()))])
+                &HashMap::from([("name", Atom::String("John".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -506,7 +594,8 @@ mod tests {
             true,
             eval(
                 &parse("name !~ Nik").unwrap().1,
-                &HashMap::from([("name", Atom::String("John".into()))])
+                &HashMap::from([("name", Atom::String("John".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -514,7 +603,8 @@ mod tests {
             false,
             eval(
                 &parse("name !~ Nik").unwrap().1,
-                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -526,7 +616,8 @@ mod tests {
             true,
             eval(
                 &parse("name ~ /.*ola.*/").unwrap().1,
-                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -534,7 +625,8 @@ mod tests {
             false,
             eval(
                 &parse("name ~ /.*ola.*/").unwrap().1,
-                &HashMap::from([("name", Atom::String("John".into()))])
+                &HashMap::from([("name", Atom::String("John".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -546,7 +638,8 @@ mod tests {
             true,
             eval(
                 &parse("name !~ /.*ola.*/").unwrap().1,
-                &HashMap::from([("name", Atom::String("John".into()))])
+                &HashMap::from([("name", Atom::String("John".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -554,7 +647,8 @@ mod tests {
             false,
             eval(
                 &parse("name !~ /.*ola.*/").unwrap().1,
-                &HashMap::from([("name", Atom::String("Nikolajus".into()))])
+                &HashMap::from([("name", Atom::String("Nikolajus".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -564,7 +658,7 @@ mod tests {
     fn test_match_missing_variable() {
         assert_eq!(
             false,
-            eval(&parse("name ~ Nik").unwrap().1, &HashMap::from([])).unwrap()
+            eval(&parse("name ~ Nik").unwrap().1, &HashMap::from([]), None).unwrap()
         );
     }
 
@@ -575,7 +669,8 @@ mod tests {
             true,
             eval(
                 &parse("path ^~ \"/admin\"").unwrap().1,
-                &HashMap::from([("path", Atom::String("/admin/settings".into()))])
+                &HashMap::from([("path", Atom::String("/admin/settings".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -584,7 +679,8 @@ mod tests {
             false,
             eval(
                 &parse("path ^~ \"/admin\"").unwrap().1,
-                &HashMap::from([("path", Atom::String("/user/profile".into()))])
+                &HashMap::from([("path", Atom::String("/user/profile".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -597,7 +693,8 @@ mod tests {
             true,
             eval(
                 &parse("email ~$ \"@company.com\"").unwrap().1,
-                &HashMap::from([("email", Atom::String("user@company.com".into()))])
+                &HashMap::from([("email", Atom::String("user@company.com".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -606,7 +703,8 @@ mod tests {
             false,
             eval(
                 &parse("email ~$ \"@company.com\"").unwrap().1,
-                &HashMap::from([("email", Atom::String("user@other.com".into()))])
+                &HashMap::from([("email", Atom::String("user@other.com".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -619,7 +717,8 @@ mod tests {
             true,
             eval(
                 &parse("name !^~ \"test\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("production".into()))])
+                &HashMap::from([("name", Atom::String("production".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -628,7 +727,8 @@ mod tests {
             false,
             eval(
                 &parse("name !^~ \"test\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("testing123".into()))])
+                &HashMap::from([("name", Atom::String("testing123".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -641,7 +741,8 @@ mod tests {
             true,
             eval(
                 &parse("name !~$ \".tmp\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("file.txt".into()))])
+                &HashMap::from([("name", Atom::String("file.txt".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -650,7 +751,8 @@ mod tests {
             false,
             eval(
                 &parse("name !~$ \".tmp\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("data.tmp".into()))])
+                &HashMap::from([("name", Atom::String("data.tmp".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -663,7 +765,8 @@ mod tests {
             true,
             eval(
                 &parse("name ^~ \"\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("".into()))])
+                &HashMap::from([("name", Atom::String("".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -672,7 +775,8 @@ mod tests {
             true,
             eval(
                 &parse("name ~$ \"\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("".into()))])
+                &HashMap::from([("name", Atom::String("".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -685,7 +789,8 @@ mod tests {
             true,
             eval(
                 &parse("name ^~ \"hello\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("hello".into()))])
+                &HashMap::from([("name", Atom::String("hello".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -694,7 +799,8 @@ mod tests {
             true,
             eval(
                 &parse("name ~$ \"hello\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("hello".into()))])
+                &HashMap::from([("name", Atom::String("hello".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -710,7 +816,8 @@ mod tests {
                 &HashMap::from([
                     ("path", Atom::String("/api/users".into())),
                     ("method", Atom::String("GET".into()))
-                ])
+                ]),
+                None,
             )
             .unwrap()
         );
@@ -721,7 +828,8 @@ mod tests {
                 &HashMap::from([
                     ("path", Atom::String("/home".into())),
                     ("method", Atom::String("GET".into()))
-                ])
+                ]),
+                None,
             )
             .unwrap()
         );
@@ -734,7 +842,8 @@ mod tests {
             true,
             eval(
                 &parse("lower(name) ^~ \"admin\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("ADMIN_USER".into()))])
+                &HashMap::from([("name", Atom::String("ADMIN_USER".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -742,7 +851,8 @@ mod tests {
             false,
             eval(
                 &parse("lower(name) ^~ \"admin\"").unwrap().1,
-                &HashMap::from([("name", Atom::String("USER_ADMIN".into()))])
+                &HashMap::from([("name", Atom::String("USER_ADMIN".into()))]),
+                None,
             )
             .unwrap()
         );
@@ -752,11 +862,21 @@ mod tests {
     fn test_starts_ends_with_missing_variable() {
         assert_eq!(
             false,
-            eval(&parse("name ^~ \"test\"").unwrap().1, &HashMap::from([])).unwrap()
+            eval(
+                &parse("name ^~ \"test\"").unwrap().1,
+                &HashMap::from([]),
+                None
+            )
+            .unwrap()
         );
         assert_eq!(
             false,
-            eval(&parse("name ~$ \"test\"").unwrap().1, &HashMap::from([])).unwrap()
+            eval(
+                &parse("name ~$ \"test\"").unwrap().1,
+                &HashMap::from([]),
+                None
+            )
+            .unwrap()
         );
     }
 
@@ -770,7 +890,8 @@ mod tests {
                     ("a", "b".into()),
                     ("c", "non-exiting".into()),
                     ("e", "f".into())
-                ])
+                ]),
+                None,
             )
             .unwrap()
         );
@@ -778,7 +899,8 @@ mod tests {
             true,
             eval(
                 &parse("a=b and (c=d or e=f)").unwrap().1,
-                &HashMap::from([("a", "b".into()), ("c", "d".into()), ("e", "f-non".into())])
+                &HashMap::from([("a", "b".into()), ("c", "d".into()), ("e", "f-non".into())]),
+                None,
             )
             .unwrap()
         );
@@ -790,7 +912,8 @@ mod tests {
                     ("a", "non".into()),
                     ("c", "non-exiting".into()),
                     ("e", "f".into())
-                ])
+                ]),
+                None,
             )
             .unwrap()
         );
@@ -799,7 +922,8 @@ mod tests {
             true,
             eval(
                 &parse("a=b and c=d or e=f").unwrap().1,
-                &HashMap::from([("a", "non".into()), ("c", "non".into()), ("e", "f".into())])
+                &HashMap::from([("a", "non".into()), ("c", "non".into()), ("e", "f".into())]),
+                None,
             )
             .unwrap()
         );
@@ -807,9 +931,102 @@ mod tests {
             false,
             eval(
                 &parse("a=b and c=d or e=f").unwrap().1,
-                &HashMap::from([("a", "non".into()), ("c", "d".into()), ("e", "non".into())])
+                &HashMap::from([("a", "non".into()), ("c", "d".into()), ("e", "non".into())]),
+                None,
             )
             .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_percentage_parse() {
+        let (i, _) = parse("percentage(50%, userId)").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_percentage_with_salt_parse() {
+        let (i, _) = parse("percentage(25%, orgId, experiment_1)").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_percentage_combined_with_logic() {
+        let (i, _) = parse("percentage(50%, orgId) and plan == premium").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_percentage_deterministic() {
+        let (_, expr) = parse("percentage(50%, userId)").unwrap();
+        let ctx = HashMap::from([("userId", Atom::String("alice".into()))]);
+        let r1 = eval(&expr, &ctx, Some("FF-test")).unwrap();
+        let r2 = eval(&expr, &ctx, Some("FF-test")).unwrap();
+        assert_eq!(r1, r2);
+    }
+
+    #[test]
+    fn test_percentage_cross_language_vectors() {
+        // These test vectors MUST produce identical results in TypeScript.
+        // SHA-1 hex → first 15 chars → parse base-16 → mod 100000 = bucket → bucket < rate*1000
+
+        let (_, expr50) = parse("percentage(50%, userId)").unwrap();
+
+        // Vector 1: SHA-1("FF-test-rollout.user-123") = 60feafb1513ee86...
+        // bucket = 436826052989546118 % 100000 = 46118 < 50000 → true
+        let ctx1 = HashMap::from([("userId", Atom::String("user-123".into()))]);
+        assert_eq!(eval(&expr50, &ctx1, Some("FF-test-rollout")).unwrap(), true);
+
+        // Vector 2: SHA-1("FF-test-rollout.user-456") = 66438f4ed936777...
+        // bucket = 460555686507669367 % 100000 = 69367 >= 50000 → false
+        let ctx2 = HashMap::from([("userId", Atom::String("user-456".into()))]);
+        assert_eq!(
+            eval(&expr50, &ctx2, Some("FF-test-rollout")).unwrap(),
+            false
+        );
+
+        // Vector 3: SHA-1("FF-new-checkout.user-789") = 57fc354f1e45f99...
+        // bucket = 396250061834837913 % 100000 = 37913 < 50000 → true
+        let (_, expr50_2) = parse("percentage(50%, userId)").unwrap();
+        let ctx3 = HashMap::from([("userId", Atom::String("user-789".into()))]);
+        assert_eq!(
+            eval(&expr50_2, &ctx3, Some("FF-new-checkout")).unwrap(),
+            true
+        );
+
+        // Vector 4: with salt: SHA-1("FF-test-rollout.exp1.alice") = 8f91f05372579e5...
+        // bucket = 646582128764877285 % 100000 = 77285 >= 50000 → false
+        let (_, expr_salt) = parse("percentage(50%, userId, exp1)").unwrap();
+        let ctx4 = HashMap::from([("userId", Atom::String("alice".into()))]);
+        assert_eq!(
+            eval(&expr_salt, &ctx4, Some("FF-test-rollout")).unwrap(),
+            false
+        );
+
+        // Vector 5: rate=0% → always false
+        let (_, expr_zero) = parse("percentage(0%, userId)").unwrap();
+        assert_eq!(
+            eval(&expr_zero, &ctx1, Some("FF-test-rollout")).unwrap(),
+            false
+        );
+
+        // Vector 6: rate=100% → always true
+        let (_, expr_full) = parse("percentage(100%, userId)").unwrap();
+        assert_eq!(
+            eval(&expr_full, &ctx1, Some("FF-test-rollout")).unwrap(),
+            true
+        );
+
+        // Vector 7: SHA-1("FF-test.alice") = 76706ecbaa75e55...
+        // bucket = 533402694680272469 % 100000 = 72469 >= 50000 → false
+        assert_eq!(
+            eval(
+                &expr50,
+                &HashMap::from([("userId", Atom::String("alice".into()))]),
+                Some("FF-test")
+            )
+            .unwrap(),
+            false
         );
     }
 }

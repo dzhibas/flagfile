@@ -415,7 +415,7 @@ FF-c -> true
             annotations[8].assertion,
             "FF-regexp-feature-check(name=\"Check Nikolajus match\") == true"
         );
-        assert_eq!(annotations[8].line_number, 141);
+        assert_eq!(annotations[8].line_number, 153);
     }
 }
 

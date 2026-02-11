@@ -75,13 +75,14 @@ let FLAGS: Map<string, Rule[]> | null = null;
 function evaluateRules(
     rules: Rule[],
     context: Context,
+    flagName?: string,
 ): FlagReturn | null {
     for (const rule of rules) {
         if (rule.type === 'Value') {
             return rule.value;
         }
         if (rule.type === 'BoolExpressionValue') {
-            if (evaluate(rule.expr, context)) {
+            if (evaluate(rule.expr, context, flagName)) {
                 return rule.value;
             }
         }
@@ -145,7 +146,7 @@ export function ff(
     }
     const rules = FLAGS.get(flagName);
     if (!rules) return null;
-    const result = evaluateRules(rules, ctx ? toContext(ctx) : {});
+    const result = evaluateRules(rules, ctx ? toContext(ctx) : {}, flagName);
     return result ? unwrap(result) : null;
 }
 
@@ -166,7 +167,7 @@ export function ffRaw(
     }
     const rules = FLAGS.get(flagName);
     if (!rules) return null;
-    return evaluateRules(rules, ctx ? toContext(ctx) : {});
+    return evaluateRules(rules, ctx ? toContext(ctx) : {}, flagName);
 }
 
 /**

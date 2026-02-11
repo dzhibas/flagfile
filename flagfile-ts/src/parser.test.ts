@@ -310,4 +310,63 @@ describe('parse expressions', () => {
             expect(r.rest.trim()).not.toBe('');
         }
     });
+
+    it('parses percentage(5%, userId)', () => {
+        const r = parse('percentage(5%, userId)');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Percentage');
+            if (r.value.type === 'Percentage') {
+                expect(r.value.rate).toBe(5);
+                expect(r.value.salt).toBeNull();
+            }
+        }
+    });
+
+    it('parses percentage(50%, orgId, custom_salt)', () => {
+        const r = parse('percentage(50%, orgId, custom_salt)');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Percentage');
+            if (r.value.type === 'Percentage') {
+                expect(r.value.rate).toBe(50);
+                expect(r.value.salt).toBe('custom_salt');
+            }
+        }
+    });
+
+    it('parses percentage(0.5%, userId) with decimal rate', () => {
+        const r = parse('percentage(0.5%, userId)');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Percentage');
+            if (r.value.type === 'Percentage') {
+                expect(r.value.rate).toBe(0.5);
+            }
+        }
+    });
+
+    it('parses percentage combined with logic', () => {
+        const r = parse('percentage(50%, orgId) and plan == premium');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Logic');
+        }
+    });
+
+    it('parses percentage(100%, userId)', () => {
+        const r = parse('percentage(100%, userId)');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Percentage');
+            if (r.value.type === 'Percentage') {
+                expect(r.value.rate).toBe(100);
+            }
+        }
+    });
 });

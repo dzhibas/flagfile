@@ -60,14 +60,18 @@ pub fn ff(flag_name: &str, context: &Context) -> Option<FlagReturn> {
         .get()
         .expect("flagfile_lib::init() must be called before ff()");
     let rules = flags.get(flag_name)?;
-    evaluate_rules(rules, context)
+    evaluate_rules(rules, context, Some(flag_name))
 }
 
-fn evaluate_rules(rules: &[Rule], context: &Context) -> Option<FlagReturn> {
+fn evaluate_rules(
+    rules: &[Rule],
+    context: &Context,
+    flag_name: Option<&str>,
+) -> Option<FlagReturn> {
     for rule in rules {
         match rule {
             Rule::BoolExpressionValue(expr, return_val) => {
-                if let Ok(true) = eval::eval(expr, context) {
+                if let Ok(true) = eval::eval(expr, context, flag_name) {
                     return Some(return_val.clone());
                 }
             }
@@ -99,7 +103,7 @@ mod tests {
         let (_, fvs) = parse_flagfile::parse_flagfile(content).unwrap();
         let rules = &fvs[0]["FF-test-flag"];
         let ctx = Context::new();
-        let result = evaluate_rules(rules, &ctx);
+        let result = evaluate_rules(rules, &ctx, None);
         assert!(matches!(result, Some(FlagReturn::OnOff(true))));
     }
 
@@ -109,7 +113,7 @@ mod tests {
         let (_, fvs) = parse_flagfile::parse_flagfile(content).unwrap();
         let rules = &fvs[0]["FF-disabled"];
         let ctx = Context::new();
-        let result = evaluate_rules(rules, &ctx);
+        let result = evaluate_rules(rules, &ctx, None);
         assert!(matches!(result, Some(FlagReturn::OnOff(false))));
     }
 
@@ -125,14 +129,14 @@ mod tests {
         // matching context
         let ctx: Context = HashMap::from([("plan", Atom::String("premium".to_string()))]);
         assert!(matches!(
-            evaluate_rules(rules, &ctx),
+            evaluate_rules(rules, &ctx, None),
             Some(FlagReturn::OnOff(true))
         ));
 
         // non-matching context falls through to default
         let ctx: Context = HashMap::from([("plan", Atom::String("free".to_string()))]);
         assert!(matches!(
-            evaluate_rules(rules, &ctx),
+            evaluate_rules(rules, &ctx, None),
             Some(FlagReturn::OnOff(false))
         ));
     }
@@ -143,7 +147,7 @@ mod tests {
         let (_, fvs) = parse_flagfile::parse_flagfile(content).unwrap();
         let rules = &fvs[0]["FF-config"];
         let ctx = Context::new();
-        let result = evaluate_rules(rules, &ctx);
+        let result = evaluate_rules(rules, &ctx, None);
         assert!(matches!(result, Some(FlagReturn::Json(_))));
     }
 
@@ -154,7 +158,7 @@ mod tests {
         let rules = &fvs[0]["FF-timeout"];
         let ctx = Context::new();
         assert!(matches!(
-            evaluate_rules(rules, &ctx),
+            evaluate_rules(rules, &ctx, None),
             Some(FlagReturn::Integer(5000))
         ));
     }
@@ -165,7 +169,7 @@ mod tests {
         let (_, fvs) = parse_flagfile::parse_flagfile(content).unwrap();
         let rules = &fvs[0]["FF-level"];
         let ctx = Context::new();
-        let result = evaluate_rules(rules, &ctx);
+        let result = evaluate_rules(rules, &ctx, None);
         assert!(matches!(result, Some(FlagReturn::Str(ref s)) if s == "debug"));
     }
 
@@ -177,7 +181,7 @@ mod tests {
         let (_, fvs) = parse_flagfile::parse_flagfile(content).unwrap();
         let rules = &fvs[0]["FF-strict"];
         let ctx: Context = HashMap::from([("plan", Atom::String("free".to_string()))]);
-        assert!(evaluate_rules(rules, &ctx).is_none());
+        assert!(evaluate_rules(rules, &ctx, None).is_none());
     }
 
     #[test]

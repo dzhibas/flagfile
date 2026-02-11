@@ -99,7 +99,7 @@ async fn handle_eval(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag(rules, &context) {
+    match evaluate_flag(rules, &context, Some(flag_name.as_str())) {
         Some(FlagReturn::OnOff(val)) => {
             if plain {
                 return (StatusCode::OK, val.to_string()).into_response();
@@ -173,11 +173,12 @@ fn build_context_from_ofrep(raw: &HashMap<String, serde_json::Value>) -> HashMap
 fn evaluate_flag_with_reason(
     rules: &[Rule],
     context: &Context,
+    flag_name: Option<&str>,
 ) -> Option<(FlagReturn, &'static str)> {
     for rule in rules {
         match rule {
             Rule::BoolExpressionValue(expr, return_val) => {
-                if let Ok(true) = flagfile_lib::eval::eval(expr, context) {
+                if let Ok(true) = flagfile_lib::eval::eval(expr, context, flag_name) {
                     return Some((return_val.clone(), "TARGETING_MATCH"));
                 }
             }
@@ -252,7 +253,7 @@ async fn handle_ofrep_single(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag_with_reason(rules, &context) {
+    match evaluate_flag_with_reason(rules, &context, Some(key.as_str())) {
         Some((ret, reason)) => {
             let success = flag_return_to_ofrep(&key, &ret, reason);
             (StatusCode::OK, Json(success)).into_response()
@@ -289,7 +290,7 @@ async fn handle_ofrep_bulk(
 
     let mut flags = Vec::new();
     for (key, rules) in store.flags.iter() {
-        let result = match evaluate_flag_with_reason(rules, &context) {
+        let result = match evaluate_flag_with_reason(rules, &context, Some(key.as_str())) {
             Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
             None => OFREPEvalSuccess {
                 key: key.clone(),

@@ -239,7 +239,15 @@ pub enum AstNode {
     Match(Box<AstNode>, MatchOp, Box<AstNode>),
     Array(Box<AstNode>, ArrayOp, Box<AstNode>),
     Logic(Box<AstNode>, LogicOp, Box<AstNode>),
-    Scope { expr: Box<AstNode>, negate: bool },
+    Scope {
+        expr: Box<AstNode>,
+        negate: bool,
+    },
+    Percentage {
+        rate: f64,
+        field: Box<AstNode>,
+        salt: Option<String>,
+    },
 }
 
 impl AstNode {
