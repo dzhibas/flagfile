@@ -2,66 +2,7 @@
 
 ## DSL features to add
 
-- [ ] date support exists, but DateTime / ISO Timestamps needed
-      think maybe of alternative dsl syntax for example:
-      @active [from|between|until] X [to Y]
-
-      FF-launch-event {
-          now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z -> true
-          false
-      }
-
- - [ ] mod() for bucketing into buckets (LOW prio)
-      ! this can be done with percentage(50%, userId) instead
-
-      Syntax: mod(variable, divisor) returns a number usable in comparisons
-
-      FF-ab-test {
-          mod(userId, 2) == 0 -> json({"variant": "A"})
-          mod(userId, 2) == 1 -> json({"variant": "B"})
-      }
-
- - [ ] contains any we have, we need somehow contains all function
-
-      FF-beta-only {
-          tags in (beta_tester, internal) -> true
-          false
-      }
-      FF-required-roles {
-          roles all (admin, editor) -> true
-          false
-      }
-
-## Segments - not to repiet same conditions
-
-        // Define reusable segments at the top of Flagfile
-        @segment beta-testers {
-            email ~ /@company\.com$/
-            or userId in ("user-123", "user-456", "user-789")
-        }
-
-        @segment premium-eu {
-            tier == "premium" and countryCode in ("NL", "DE", "FR", "BE")
-        }
-
-        @segment mobile-users {
-            platform in ("ios", "android") and appVersion >= 2.0.0
-        }
-
-        // Use them in flags — clean, DRY, readable
-        FF-new-dashboard {
-            segment(beta-testers) -> true
-            segment(premium-eu) and percentage(50%, userId) -> true
-            false
-        }
-
-        FF-new-checkout {
-            segment(beta-testers) -> true
-            segment(mobile-users) -> json({"layout": "mobile-optimized"})
-            false
-        }
-
-## Imports (Multi-file Flagfiles)
+### Imports (Multi-file Flagfiles)
 
         // Flagfile
         @import "./segments.flagfile"        // local segments
@@ -81,59 +22,6 @@
         @segment enterprise {
             tier == "enterprise" and seats >= 50
         }
-
-## Flag Metadata / Annotations
-
-Flags need lifecycle management. Without metadata, flags accumulate as tech debt forever.
-
-        // Metadata as annotations above the flag
-        @owner "payments-team"
-        @expires 2026-06-01
-        @ticket "JIRA-1234"
-        @description "New 3DS2 authentication flow for EU payments"
-        @type release                    // release | experiment | ops | permission
-        FF-3ds2-auth {
-            segment(premium-eu) -> true
-            false
-        }
-
-        // Permanent operational flag — no expiry
-        @owner "platform-team"
-        @type ops
-        @description "Kill switch for notification service"
-        FF-kill-notifications -> true
-
-        // The CLI can then enforce governance:
-        // $ ff lint
-        // ⚠ FF-old-feature: expired 2025-12-01 (45 days ago)
-        // ⚠ FF-unnamed-flag: missing @owner
-        // ⚠ FF-experiment-x: type=experiment but no @expires set
-
-## Environments
-
-The same flag often needs different behavior in dev/staging/prod. we can have diff content deployed, but this way it can be done easier
-
-        FF-debug-logging {
-            @env dev -> true
-            @env stage -> true
-            @env prod -> false
-        }
-
-        // Or more usefully: different rollout speeds per environment
-        FF-new-search {
-            @env dev -> true
-            @env stage -> true
-            @env prod {
-                segment(beta-testers) -> true
-                percentage(25%, userId) -> true
-                false
-            }
-        }
-
-and in application env injected during init
-
-        // App startup
-        flagfile_lib::init_with_env("prod");
 
 ## Value type declaration for stricter linting
 
@@ -155,19 +43,6 @@ and in application env injected during init
 
         $ ff validate
         ✗ FF-retry-count: rule returns string "three" but flag is declared @type int
-
-## Flag Dependencies / Prerequisites
-
-        FF-new-checkout -> true
-
-        // This flag only evaluates if FF-new-checkout is true
-        @requires FF-new-checkout
-        FF-checkout-upsell {
-            percentage(50%, userId) -> true
-            false
-        }
-
-If FF-new-checkout is false, FF-checkout-upsell automatically returns false without evaluating rules
 
 ## Variants
 
@@ -192,37 +67,6 @@ Current approach uses JSON for variants, but a dedicated syntax is cleaner for A
 
 This makes it explicit that the flag is an experiment with named variants rather than arbitrary JSON values.
 
-## `coalesce()` / Null Handling
-
-When context values might be missing:
-
-        ```
-        FF-geo-features {
-            // Use countryCode if present, fall back to region, then "unknown"
-            coalesce(countryCode, region, "unknown") == "NL" -> true
-            false
-        }
-        ```
-### List / Array Values in Context
-
-Sometimes you need to check if a user has a particular role or feature entitlement:
-
-        ```
-        FF-admin-panel {
-            // roles is an array: ["viewer", "editor", "admin"]
-            "admin" in roles -> true
-            false
-        }
-
-        FF-advanced-export {
-            // Check if any of user's entitlements match
-            "export-csv" in entitlements or "export-all" in entitlements -> true
-            false
-        }
-        ```
-
-The key is that `in` works both ways — value in list (you already have this) AND value in context-array.
-
 ## Named rules (Structured)
 
 Beyond freeform `//` comments, structured rule descriptions help with audit logs or see which rule was triggered:
@@ -236,22 +80,6 @@ Beyond freeform `//` comments, structured rule descriptions help with audit logs
             @rule "Default payment provider"
             json({"provider": "adyen"})
         }
-        ```
-
-### `@deprecated` annotation
-
-        ```
-        @deprecated "Use FF-new-checkout instead"
-        @expires 2026-04-01
-        FF-old-checkout -> true
-
-        // $ ff lint
-        // ⚠ FF-old-checkout is deprecated: "Use FF-new-checkout instead"
-        // 
-        // $ ff find FF-old-checkout
-        // src/checkout.rs:42  let old = ff("FF-old-checkout", &ctx);
-        // src/checkout.rs:89  if ff("FF-old-checkout", &ctx) { ... }
-        // Found 2 references. Flag expires 2026-04-01.
         ```
 
 - [ ] syntax version annotation at the top aka @version=1

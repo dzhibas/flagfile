@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::io::{self, IsTerminal};
 use std::process;
 
@@ -42,6 +43,17 @@ pub fn run_lint(flagfile_path: &str) {
         "\u{26a0}"
     };
     let mut warnings = 0;
+
+    // Check for duplicate flag names
+    let mut seen_flags = HashSet::new();
+    for fv in &parsed.flags {
+        for (name, _) in fv.iter() {
+            if !seen_flags.insert(name) {
+                eprintln!("{} {} is defined more than once", warn_icon, name);
+                warnings += 1;
+            }
+        }
+    }
 
     for fv in &parsed.flags {
         for (name, def) in fv.iter() {

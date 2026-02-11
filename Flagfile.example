@@ -224,5 +224,5 @@ FF-admin-panel {
 }
 
 @deprecated "Use FF-new-checkout instead"
-@expires 2026-01-01
+@expires 2027-01-01
 FF-old-checkout -> true
