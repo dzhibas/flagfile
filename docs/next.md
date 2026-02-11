@@ -63,6 +63,7 @@ The key is that `in` works both ways — value in list (you already have this) A
 
         // $ ff lint
         // ⚠ FF-old-checkout is deprecated: "Use FF-new-checkout instead"
+        // ⚠ FF-old-checkout expired 2026-04-01
         // 
         // $ ff find FF-old-checkout
         // src/checkout.rs:42  let old = ff("FF-old-checkout", &ctx);

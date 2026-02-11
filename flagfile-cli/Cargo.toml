@@ -1,6 +1,6 @@
 [package]
 name = "flagfile-cli"
-version = "0.1.11"
+version = "0.1.12"
 edition = "2021"
 description = "CLI tool for managing and evaluating Flagfile feature flags"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
@@ -17,6 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 axum = "0.8"
+chrono = "0.4.43"
 clap = { version = "4.5.0", features = ["derive", "env"] }
 flagfile-lib = { path = ".." }
 ignore = "0.4"

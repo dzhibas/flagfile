@@ -175,6 +175,7 @@ FF-regexp-feature-check {
     false
 }
 
+@type experiment
 @test FF-launch-event == true
 FF-launch-event {
     now() > 2025-06-15T09:00:00Z and now() < 2027-01-15T18:00:00Z -> true
