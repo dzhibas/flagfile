@@ -16,5 +16,9 @@ jobs:
 
     steps:
     - uses: actions/checkout@v3
-    - name: Run tests
-      run: brew install dzhibas/tap/flagfile-cli && ff test
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+    - name: Build ff CLI
+      run: cargo build -p flagfile-cli --bin ff --release
+    - name: Run Flagfile tests
+      run: ./target/release/ff test
