@@ -45,9 +45,53 @@ fn main() {
 }
 ```
 
+### Usage in Rust
+
+| Function | Description |
+|----------|-------------|
+| `init()` | Reads `Flagfile` from current directory |
+| `init_with_env(env)` | Reads `Flagfile` and sets the environment for `@env` rules |
+| `init_from_str(content)` | Parses flagfile content from a string |
+| `init_from_str_with_env(content, env)` | Parses from string with environment |
+
+### With `@env` rules
+
+If your Flagfile uses `@env` rules to vary behavior per environment, use `init_with_env()`:
+
+```rust
+use flagfile_lib::{Context, ff};
+use std::collections::HashMap;
+
+fn main() {
+    // Set environment — @env rules will be evaluated against this
+    flagfile_lib::init_with_env("prod");
+
+    let ctx: Context = HashMap::from([("userId", "42".into())]);
+    let flag: bool = ff("FF-new-feature", &ctx).expect("Flag not found").into();
+    println!("Flag: {}", flag);
+}
+```
+
+Given a Flagfile like:
+
+```
+FF-new-feature {
+    @env dev -> true
+    @env stage -> true
+    @env prod {
+        percentage(25%, userId) -> true
+        false
+    }
+}
+```
+
+- `init_with_env("dev")` — `@env dev -> true` matches, flag returns `true`
+- `init_with_env("prod")` — `@env prod { ... }` block is evaluated with its sub-rules
+- `init()` (no env) — all `@env` rules are skipped, falls through to non-env rules or default
+
 ## Usage in Javascript/Typescript
 
-add dependency in package.json of `flagfile-js`. then `ff init` and then
+Add dependency in package.json of `flagfile-js`. Then `ff init` and then:
 
 ```js
 import { init, ff } from "flagfile-ts";
@@ -63,6 +107,28 @@ if (ff("FF-feature-y", ctx)) {
   console.log("Flag is on");
 } else {
   console.log("Flag is off");
+}
+```
+
+### Initialization functions
+
+| Function | Description |
+|----------|-------------|
+| `init()` | Reads `Flagfile` from current directory (Node.js only) |
+| `initWithEnv(env)` | Reads `Flagfile` and sets environment for `@env` rules |
+| `initFromString(content)` | Parses flagfile content from a string |
+| `initFromStringWithEnv(content, env)` | Parses from string with environment |
+
+### With `@env` rules
+
+```js
+import { initWithEnv, ff } from "flagfile-ts";
+
+// Set environment — @env rules will be evaluated against this
+initWithEnv("prod");
+
+if (ff("FF-new-feature", { userId: "42" })) {
+  console.log("Feature enabled");
 }
 ```
 
@@ -82,17 +148,30 @@ it's choosen specifically so that it prefixed with FF, cause cli provides a way 
     *   Logical op (case-insensitive): `and`, `or`
     *   Grouping: `(...)`
     *   Membership (case-insensitive): `in`, `not in`
+    *   Reverse membership: `"value" in contextVariable` (where variable holds an array)
     *   Contains / regex match: `~` (contains or regex match), `!~` (does not contain or does not match regex)
-    *   Operands: Identifiers, string literals, number literals, date literals (`YYYY-MM-DD`), regex literals (`/pattern/`), `NOW()`
+    *   Starts/ends with: `^~`, `~$`, `!^~`, `!~$`
+    *   Operands: Identifiers, string literals, number literals, date literals (`YYYY-MM-DD`), datetime literals (`YYYY-MM-DDTHH:MM:SSZ`), regex literals (`/pattern/`), `NOW()`
     *   Tuple/List for `in`/`not in`: `(1,2,3)`
     *   String contains with `name ~ nik` and negating does not contains `name !~ nik`
     *   Regex match with `name ~ /.*nik.*/` and negating with ` !~ `
-    *   Function calls to `upper(), lower(), now()` so that `lower(name) ~ nik`
+    *   Function calls: `upper()`, `lower()`, `now()`, `coalesce()`, `segment()`, `percentage()`
     *   SemVer check so that `appVersion >= 5.3.2`
 *   Comments: singleline `// ...` and multiline `/* ... */`
 *   In Block notation can have multiple rules to evaluate
 *   Multi-line rules
-*   Inline tests with leaving in comment block annotation `@test flag(context) == true` and it will be tested with `ff test`
+*   Inline tests: `// @test flag(context) == true` or standalone `@test flag(context) == true`
+*   Reusable segments: `@segment name { expression }` and `segment(name)` in rules
+*   Environment rules: `@env dev -> true` or `@env prod { rules... }`
+*   Flag dependencies: `@requires FF-other-flag` (flag only evaluates if prerequisite is true)
+*   Null handling: `coalesce(var1, var2, "fallback")` returns first non-null value
+*   Flag metadata annotations:
+    *   `@owner "team-name"` — flag ownership
+    *   `@expires 2026-06-01` — expiry date
+    *   `@ticket "JIRA-1234"` — tracking ticket
+    *   `@description "Human readable description"` — flag description
+    *   `@type release|experiment|ops|permission` — flag type
+    *   `@deprecated "Use FF-xyz instead"` — deprecation notice
 
 ## Flagfile
 
