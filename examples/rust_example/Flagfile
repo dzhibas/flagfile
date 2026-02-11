@@ -22,3 +22,17 @@ FF-admin-panel {
     "admin" in roles -> true
     false
 }
+
+
+/**
+  flag dependency feature check
+  */
+FF-dep-root-new-checkout -> true
+
+// This flag only evaluates if FF-dep-root-new-checkout is true
+// TODO: fix this
+@requires FF-dep-root-new-checkout
+FF-checkout-upsell {
+    userId in (20, 21, 22) -> true
+    false
+}
