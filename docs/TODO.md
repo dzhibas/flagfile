@@ -111,6 +111,10 @@ Flagfile other crazy ideas
 
 - [ ] Compile into other framework languages something like you have Flagfile and then convert to .net feature flagging
 
+## Documentation
+
+- [ ] create github pages documentation page. no donations no separate domain for this
+
 Done
 
 - [x] percentage(rate, contextField?, salt?) - field and salt optional. use SHA-1
