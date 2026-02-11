@@ -1,6 +1,24 @@
+// NL segment
+@segment country_nl {
+    lower(country) == nl
+}
+
+// feature check with env and segment
 FF-feature-y {
-    // if country is NL return True
-    lower(country) == nl -> true
+    @env prod {
+        segment(country_nl) -> false
+    }
+    segment(country_nl) -> true
+
     // else default to false
+    false
+}
+
+// reverse array
+// TODO: fix so tests args can have arrays
+@test FF-admin-panel(roles=["viewer", "editor", "admin"]) == true
+FF-admin-panel {
+    // roles is an array: ["viewer", "editor", "admin"]
+    "admin" in roles -> true
     false
 }

@@ -8,6 +8,8 @@ use sha1::{Digest, Sha1};
 
 use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FnCall, LogicOp, MatchOp};
 
+pub type Segments = HashMap<String, AstNode>;
+
 pub type Context<'a> = HashMap<&'a str, Atom>;
 
 fn get_variable_value_from_context<'a>(
@@ -20,7 +22,7 @@ fn get_variable_value_from_context<'a>(
         AstNode::Function(op, v) => {
             match op {
                 FnCall::Now => {
-                    return Some(Atom::Date(Local::now().date_naive()));
+                    return Some(Atom::DateTime(Local::now().naive_local()));
                 }
                 _ => {
                     let value = get_variable_value_from_context(v, context);
@@ -36,15 +38,49 @@ fn get_variable_value_from_context<'a>(
             }
             None
         }
+        AstNode::Coalesce(args) => {
+            for arg in args {
+                match arg {
+                    AstNode::Variable(Atom::Variable(v)) => {
+                        if let Some(val) = context.get(v.as_str()) {
+                            return Some(val.clone());
+                        }
+                    }
+                    AstNode::Constant(atom) => {
+                        return Some(atom.clone());
+                    }
+                    _ => {}
+                }
+            }
+            return None;
+        }
         _ => None,
     };
     res.cloned()
+}
+
+pub fn eval_with_segments<'a>(
+    expr: &AstNode,
+    context: &Context,
+    flag_name: Option<&str>,
+    segments: &Segments,
+) -> Result<bool, &'a str> {
+    eval_impl(expr, context, flag_name, Some(segments))
 }
 
 pub fn eval<'a>(
     expr: &AstNode,
     context: &Context,
     flag_name: Option<&str>,
+) -> Result<bool, &'a str> {
+    eval_impl(expr, context, flag_name, None)
+}
+
+fn eval_impl<'a>(
+    expr: &AstNode,
+    context: &Context,
+    flag_name: Option<&str>,
+    segments: Option<&Segments>,
 ) -> Result<bool, &'a str> {
     let result = match expr {
         // true || false
@@ -84,36 +120,46 @@ pub fn eval<'a>(
                 false
             }
         }
-        // x in (1, 2, 3)
-        AstNode::Array(var_expr, op, list) => {
-            let mut result = false;
-            if let AstNode::List(vec_list) = list.as_ref() {
-                let var_value = get_variable_value_from_context(var_expr, context);
+        // x in (1, 2, 3) OR "value" in variable
+        AstNode::Array(left_expr, op, right_expr) => {
+            // Case 1: variable in (literal_list)
+            if let AstNode::List(vec_list) = right_expr.as_ref() {
+                let var_value = get_variable_value_from_context(left_expr, context);
                 if let Some(search_value) = &var_value {
                     match op {
                         ArrayOp::In => {
-                            // check if this value is in the list
                             for i in vec_list.iter() {
                                 if search_value == i {
-                                    result = true;
-                                    break;
+                                    return Ok(true);
                                 }
                             }
                         }
                         ArrayOp::NotIn => {
-                            // a not in (c,d)
-                            let mut found = false;
-                            for i in vec_list.iter() {
-                                if search_value == i {
-                                    found = true;
-                                }
-                            }
-                            result = !found;
+                            let found = vec_list.iter().any(|i| search_value == i);
+                            return Ok(!found);
                         }
                     }
                 }
+                false
             }
-            result
+            // Case 2: "literal" in variable (variable resolves to List in context)
+            else {
+                let search_value = match left_expr.as_ref() {
+                    AstNode::Constant(atom) if !matches!(atom, Atom::Variable(_)) => {
+                        Some(atom.clone())
+                    }
+                    _ => get_variable_value_from_context(left_expr, context),
+                };
+                let list_value = get_variable_value_from_context(right_expr, context);
+                if let (Some(needle), Some(Atom::List(items))) = (&search_value, &list_value) {
+                    match op {
+                        ArrayOp::In => items.iter().any(|item| needle == item),
+                        ArrayOp::NotIn => !items.iter().any(|item| needle == item),
+                    }
+                } else {
+                    false
+                }
+            }
         }
         AstNode::Match(var, op, rhs) => {
             let context_val = get_variable_value_from_context(var, context);
@@ -150,18 +196,29 @@ pub fn eval<'a>(
             }
         }
         AstNode::Logic(expr1, op, expr2) => {
-            let expr1_eval = eval(expr1, context, flag_name).unwrap();
-            let expr2_eval = eval(expr2, context, flag_name).unwrap();
+            let expr1_eval = eval_impl(expr1, context, flag_name, segments).unwrap();
+            let expr2_eval = eval_impl(expr2, context, flag_name, segments).unwrap();
             match op {
                 LogicOp::And => expr1_eval && expr2_eval,
                 LogicOp::Or => expr1_eval || expr2_eval,
             }
         }
         AstNode::Scope { expr, negate } => {
-            let res = eval(expr, context, flag_name).unwrap();
+            let res = eval_impl(expr, context, flag_name, segments).unwrap();
             match negate {
                 true => !res,
                 false => res,
+            }
+        }
+        AstNode::Segment(name) => {
+            if let Some(segs) = segments {
+                if let Some(seg_expr) = segs.get(name.as_str()) {
+                    eval_impl(seg_expr, context, flag_name, segments).unwrap_or(false)
+                } else {
+                    false
+                }
+            } else {
+                false
             }
         }
         AstNode::Percentage { rate, field, salt } => {
@@ -567,6 +624,114 @@ mod tests {
     }
 
     #[test]
+    fn testing_datetime_comparison_evaluation() {
+        use chrono::NaiveDateTime;
+
+        let dt = NaiveDateTime::parse_from_str("2025-06-15T12:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+
+        // DateTime > DateTime
+        let (_i, expr) = parse("ts > 2025-06-15T09:00:00Z").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(dt))]),
+                None
+            )
+            .unwrap()
+        );
+
+        // DateTime < DateTime
+        let (_i, expr) = parse("ts < 2025-06-15T18:00:00Z").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(dt))]),
+                None
+            )
+            .unwrap()
+        );
+
+        // DateTime == DateTime
+        let (_i, expr) = parse("ts == 2025-06-15T12:00:00Z").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(dt))]),
+                None
+            )
+            .unwrap()
+        );
+
+        // DateTime range: now() > start and now() < end
+        let (_i, expr) = parse("ts > 2025-06-15T09:00:00Z and ts < 2025-06-15T18:00:00Z").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(dt))]),
+                None
+            )
+            .unwrap()
+        );
+
+        // DateTime outside range
+        let late_dt = NaiveDateTime::parse_from_str("2025-06-15T20:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+        assert_eq!(
+            false,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(late_dt))]),
+                None
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn testing_now_returns_datetime() {
+        // now() should return a DateTime, which is comparable to DateTime literals
+        let (_i, expr) = parse("now() > 2020-01-01T00:00:00Z").unwrap();
+        assert_eq!(
+            true,
+            eval(&expr, &HashMap::from([]), None).unwrap()
+        );
+    }
+
+    #[test]
+    fn testing_datetime_vs_date_comparison() {
+        use chrono::NaiveDateTime;
+
+        // DateTime compared with Date (Date treated as midnight)
+        let dt = NaiveDateTime::parse_from_str("2025-06-15T12:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+        let (_i, expr) = parse("ts > 2025-06-15").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(dt))]),
+                None
+            )
+            .unwrap()
+        );
+
+        // DateTime at midnight == Date
+        let midnight = NaiveDateTime::parse_from_str("2025-06-15T00:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+        let (_i, expr) = parse("ts == 2025-06-15").unwrap();
+        assert_eq!(
+            true,
+            eval(
+                &expr,
+                &HashMap::from([("ts", Atom::DateTime(midnight))]),
+                None
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
     fn test_match_contains() {
         assert_eq!(
             true,
@@ -939,6 +1104,68 @@ mod tests {
     }
 
     #[test]
+    fn test_coalesce_first_present() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("coalesce(countryCode, region, \"unknown\") == \"NL\"").unwrap().1,
+                &HashMap::from([
+                    ("countryCode", Atom::String("NL".into())),
+                    ("region", Atom::String("EU".into()))
+                ]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_coalesce_first_missing_second_present() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("coalesce(countryCode, region, \"unknown\") == \"EU\"").unwrap().1,
+                &HashMap::from([("region", Atom::String("EU".into()))]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_coalesce_all_missing_falls_to_default() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("coalesce(countryCode, region, \"unknown\") == \"unknown\"").unwrap().1,
+                &HashMap::from([]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_coalesce_in_comparison() {
+        // coalesce with number comparison
+        assert_eq!(
+            true,
+            eval(
+                &parse("coalesce(priority, \"low\") == \"high\"").unwrap().1,
+                &HashMap::from([("priority", Atom::String("high".into()))]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_coalesce_parse() {
+        let (i, _) = parse("coalesce(a, b, \"default\") == \"test\"").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
     fn test_percentage_parse() {
         let (i, _) = parse("percentage(50%, userId)").unwrap();
         assert_eq!(i, "");
@@ -1027,6 +1254,239 @@ mod tests {
             )
             .unwrap(),
             false
+        );
+    }
+
+    #[test]
+    fn test_coalesce_two_args() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("coalesce(x, \"fallback\") == \"fallback\"")
+                    .unwrap()
+                    .1,
+                &HashMap::from([]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_coalesce_in_logic_expr() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("coalesce(countryCode, \"unknown\") == \"NL\" and plan == \"premium\"")
+                    .unwrap()
+                    .1,
+                &HashMap::from([
+                    ("countryCode", Atom::String("NL".into())),
+                    ("plan", Atom::String("premium".into()))
+                ]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    // ── Reverse 'in' operator tests ─────────────────────────────────
+
+    #[test]
+    fn test_reverse_in_found() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("\"admin\" in roles").unwrap().1,
+                &HashMap::from([(
+                    "roles",
+                    Atom::List(vec![
+                        Atom::String("viewer".into()),
+                        Atom::String("editor".into()),
+                        Atom::String("admin".into()),
+                    ])
+                )]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_reverse_in_not_found() {
+        assert_eq!(
+            false,
+            eval(
+                &parse("\"superadmin\" in roles").unwrap().1,
+                &HashMap::from([(
+                    "roles",
+                    Atom::List(vec![
+                        Atom::String("viewer".into()),
+                        Atom::String("editor".into()),
+                        Atom::String("admin".into()),
+                    ])
+                )]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_reverse_not_in() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("\"superadmin\" not in roles").unwrap().1,
+                &HashMap::from([(
+                    "roles",
+                    Atom::List(vec![
+                        Atom::String("viewer".into()),
+                        Atom::String("editor".into()),
+                    ])
+                )]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_reverse_not_in_found() {
+        assert_eq!(
+            false,
+            eval(
+                &parse("\"admin\" not in roles").unwrap().1,
+                &HashMap::from([(
+                    "roles",
+                    Atom::List(vec![
+                        Atom::String("admin".into()),
+                        Atom::String("editor".into()),
+                    ])
+                )]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_reverse_in_combined_with_logic() {
+        assert_eq!(
+            true,
+            eval(
+                &parse("\"export-csv\" in entitlements or \"export-all\" in entitlements")
+                    .unwrap()
+                    .1,
+                &HashMap::from([(
+                    "entitlements",
+                    Atom::List(vec![
+                        Atom::String("export-csv".into()),
+                        Atom::String("view".into()),
+                    ])
+                )]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_reverse_in_missing_variable() {
+        assert_eq!(
+            false,
+            eval(
+                &parse("\"admin\" in roles").unwrap().1,
+                &HashMap::from([]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    // ── Segment tests ─────────────────────────────────────────────
+
+    #[test]
+    fn test_segment_eval_true() {
+        let seg_expr = parse("plan == premium").unwrap().1;
+        let segments = HashMap::from([("premium_users".to_string(), seg_expr)]);
+        let ctx = HashMap::from([("plan", Atom::String("premium".into()))]);
+        assert_eq!(
+            true,
+            eval_with_segments(
+                &parse("segment(premium_users)").unwrap().1,
+                &ctx,
+                None,
+                &segments,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_segment_eval_false() {
+        let seg_expr = parse("plan == premium").unwrap().1;
+        let segments = HashMap::from([("premium_users".to_string(), seg_expr)]);
+        let ctx = HashMap::from([("plan", Atom::String("free".into()))]);
+        assert_eq!(
+            false,
+            eval_with_segments(
+                &parse("segment(premium_users)").unwrap().1,
+                &ctx,
+                None,
+                &segments,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_segment_missing_returns_false() {
+        let segments = Segments::new();
+        let ctx = HashMap::from([]);
+        assert_eq!(
+            false,
+            eval_with_segments(
+                &parse("segment(nonexistent)").unwrap().1,
+                &ctx,
+                None,
+                &segments,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_segment_in_logic_expr() {
+        let seg_expr = parse("country == US").unwrap().1;
+        let segments = HashMap::from([("us_users".to_string(), seg_expr)]);
+        let ctx = HashMap::from([
+            ("country", Atom::String("US".into())),
+            ("plan", Atom::String("premium".into())),
+        ]);
+        assert_eq!(
+            true,
+            eval_with_segments(
+                &parse("segment(us_users) and plan == premium").unwrap().1,
+                &ctx,
+                None,
+                &segments,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_segment_without_segments_returns_false() {
+        // eval (without segments) should return false for segment() calls
+        assert_eq!(
+            false,
+            eval(
+                &parse("segment(anything)").unwrap().1,
+                &HashMap::from([]),
+                None,
+            )
+            .unwrap()
         );
     }
 }

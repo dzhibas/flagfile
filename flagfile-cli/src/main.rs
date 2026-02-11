@@ -7,8 +7,8 @@ use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::Atom;
-use flagfile_lib::eval::{eval, Context};
-use flagfile_lib::parse_flagfile::{extract_test_annotations, parse_flagfile, FlagReturn, Rule};
+use flagfile_lib::eval::{eval_with_segments, Context, Segments};
+use flagfile_lib::parse_flagfile::{extract_test_annotations, parse_flagfile_with_segments, FlagReturn, Rule, TestAnnotation};
 use ignore::WalkBuilder;
 use regex::Regex;
 
@@ -42,11 +42,19 @@ enum Command {
         /// Path to the test file to check
         #[arg(short = 't', long = "testfile", default_value = "Flagfile.tests")]
         testfile: String,
+
+        /// Environment to evaluate @env rules against
+        #[arg(short = 'e', long = "env")]
+        env: Option<String>,
     },
     Eval {
         /// Path to the Flagfile
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
         flagfile: String,
+
+        /// Environment to evaluate @env rules against
+        #[arg(short = 'e', long = "env")]
+        env: Option<String>,
 
         /// Flag name to evaluate (e.g. FF-my-feature)
         flag_name: String,
@@ -123,16 +131,36 @@ pub(crate) fn evaluate_flag(
     rules: &[Rule],
     context: &Context,
     flag_name: Option<&str>,
+    segments: &Segments,
+) -> Option<FlagReturn> {
+    evaluate_flag_with_env(rules, context, flag_name, segments, None)
+}
+
+/// Evaluate a flag with an optional environment for @env rules
+pub(crate) fn evaluate_flag_with_env(
+    rules: &[Rule],
+    context: &Context,
+    flag_name: Option<&str>,
+    segments: &Segments,
+    env: Option<&str>,
 ) -> Option<FlagReturn> {
     for rule in rules {
         match rule {
             Rule::BoolExpressionValue(expr, return_val) => {
-                if let Ok(true) = eval(expr, context, flag_name) {
+                if let Ok(true) = eval_with_segments(expr, context, flag_name, segments) {
                     return Some(return_val.clone());
                 }
             }
             Rule::Value(return_val) => {
                 return Some(return_val.clone());
+            }
+            Rule::EnvRule { env: rule_env, rules: sub_rules } => {
+                if env == Some(rule_env.as_str()) {
+                    let result = evaluate_flag_with_env(sub_rules, context, flag_name, segments, env);
+                    if result.is_some() {
+                        return result;
+                    }
+                }
             }
         }
     }
@@ -234,7 +262,7 @@ fn run_list(flagfile_path: &str) {
         }
     };
 
-    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+    let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Parsing failed: {}", e);
@@ -250,7 +278,7 @@ fn run_list(flagfile_path: &str) {
         process::exit(1);
     }
 
-    for fv in &flag_values {
+    for fv in &parsed.flags {
         for (name, _) in fv.iter() {
             println!("{}", name);
         }
@@ -266,7 +294,7 @@ fn run_validate(flagfile_path: &str) {
         }
     };
 
-    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+    let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Parsing failed: {}", e);
@@ -284,22 +312,36 @@ fn run_validate(flagfile_path: &str) {
 
     let mut total_flags = 0;
     let mut total_rules = 0;
-    for fv in &flag_values {
-        for (name, rules) in fv.iter() {
+
+    println!("Flags:");
+    for fv in &parsed.flags {
+        for (name, def) in fv.iter() {
             total_flags += 1;
-            total_rules += rules.len();
-            println!("  {} ({} rules)", name, rules.len());
+            total_rules += def.rules.len();
+            println!("  {} ({} rules)", name, def.rules.len());
+        }
+    }
+
+    if !parsed.segments.is_empty() {
+        println!();
+        println!("Segments:");
+        for name in parsed.segments.keys() {
+            println!("  {}", name);
         }
     }
 
     println!();
     println!(
-        "{} valid, {} flags, {} rules",
-        flagfile_path, total_flags, total_rules
+        "{} valid, {} flags, {} rules, {} segments",
+        flagfile_path, total_flags, total_rules, parsed.segments.len()
     );
 }
 
-fn run_tests(flagfile_path: &str, testfile_path: &str) {
+fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
+    let use_color = io::stdout().is_terminal();
+    let pass_label = if use_color { "\x1b[32mPASS\x1b[0m" } else { "PASS" };
+    let fail_label = if use_color { "\x1b[31mFAIL\x1b[0m" } else { "FAIL" };
+
     // 1. Read Flagfile
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
@@ -310,7 +352,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
     };
 
     // 2. Parse Flagfile
-    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+    let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
         Err(_) => {
             eprintln!("Flagfile parsing failed");
@@ -323,22 +365,30 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
         process::exit(1);
     }
 
-    // Merge all FlagValue entries into a single map
+    // Merge all FlagValue entries into a single map and collect @test annotations from metadata
     let mut flags: HashMap<&str, Vec<Rule>> = HashMap::new();
-    for fv in &flag_values {
-        for (name, rules) in fv.iter() {
-            flags.insert(name, rules.clone());
+    let mut annotation_tests: Vec<TestAnnotation> = Vec::new();
+    for fv in &parsed.flags {
+        for (name, def) in fv.iter() {
+            for test_assertion in &def.metadata.tests {
+                annotation_tests.push(TestAnnotation {
+                    assertion: test_assertion.clone(),
+                    line_number: 0,
+                });
+            }
+            flags.insert(name, def.rules.clone());
         }
     }
+    let segments = &parsed.segments;
 
-    // Extract inline @test annotations
+    // Extract inline @test annotations from comments
     let inline_tests = extract_test_annotations(&flagfile_content);
 
-    // 3. Read test file (optional if inline tests exist)
+    // 3. Read test file (optional if inline or annotation tests exist)
     let tests_content = match std::fs::read_to_string(testfile_path) {
         Ok(content) => Some(content),
         Err(_) => {
-            if inline_tests.is_empty() {
+            if inline_tests.is_empty() && annotation_tests.is_empty() {
                 eprintln!("{} does not exist", testfile_path);
                 process::exit(1);
             }
@@ -369,31 +419,31 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
             let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
 
             let Some(rules) = flags.get(flag_name) else {
-                println!("FAIL  {} - flag not found", line);
+                println!("{}  {} - flag not found", fail_label, line);
                 failed += 1;
                 continue;
             };
 
-            let result = evaluate_flag(rules, &context, Some(flag_name));
+            let result = evaluate_flag_with_env(rules, &context, Some(flag_name), segments, env);
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
-                    println!("PASS  {}", line);
+                    println!("{}  {}", pass_label, line);
                     passed += 1;
                 }
                 Some(_) => {
-                    println!("FAIL  {}", line);
+                    println!("{}  {}", fail_label, line);
                     failed += 1;
                 }
                 None => {
-                    println!("FAIL  {} - no rule matched", line);
+                    println!("{}  {} - no rule matched", fail_label, line);
                     failed += 1;
                 }
             }
         }
     }
 
-    // 5. Run inline @test annotations
+    // 5. Run inline @test annotations (from comments)
     if !inline_tests.is_empty() {
         if tests_content.is_some() {
             println!();
@@ -417,28 +467,28 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
 
             let Some(rules) = flags.get(flag_name) else {
                 println!(
-                    "FAIL  {} - flag not found (line {})",
-                    line, annotation.line_number
+                    "{}  {} - flag not found (line {})",
+                    fail_label, line, annotation.line_number
                 );
                 failed += 1;
                 continue;
             };
 
-            let result = evaluate_flag(rules, &context, Some(flag_name));
+            let result = evaluate_flag_with_env(rules, &context, Some(flag_name), segments, env);
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
-                    println!("PASS  {} (line {})", line, annotation.line_number);
+                    println!("{}  {} (line {})", pass_label, line, annotation.line_number);
                     passed += 1;
                 }
                 Some(_) => {
-                    println!("FAIL  {} (line {})", line, annotation.line_number);
+                    println!("{}  {} (line {})", fail_label, line, annotation.line_number);
                     failed += 1;
                 }
                 None => {
                     println!(
-                        "FAIL  {} - no rule matched (line {})",
-                        line, annotation.line_number
+                        "{}  {} - no rule matched (line {})",
+                        fail_label, line, annotation.line_number
                     );
                     failed += 1;
                 }
@@ -446,7 +496,51 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
         }
     }
 
-    // 6. Summary
+    // 6. Run @test annotations from flag metadata
+    if !annotation_tests.is_empty() {
+        if tests_content.is_some() || !inline_tests.is_empty() {
+            println!();
+        }
+        println!("--- @test annotations ({}) ---", flagfile_path);
+
+        for annotation in &annotation_tests {
+            let line = annotation.assertion.as_str();
+
+            let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
+                eprintln!("SKIP  Invalid @test annotation: {}", line);
+                continue;
+            };
+
+            total += 1;
+
+            let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
+
+            let Some(rules) = flags.get(flag_name) else {
+                println!("{}  {} - flag not found", fail_label, line);
+                failed += 1;
+                continue;
+            };
+
+            let result = evaluate_flag_with_env(rules, &context, Some(flag_name), segments, env);
+
+            match result {
+                Some(ref ret) if result_matches(ret, expected) => {
+                    println!("{}  {}", pass_label, line);
+                    passed += 1;
+                }
+                Some(_) => {
+                    println!("{}  {}", fail_label, line);
+                    failed += 1;
+                }
+                None => {
+                    println!("{}  {} - no rule matched", fail_label, line);
+                    failed += 1;
+                }
+            }
+        }
+    }
+
+    // 7. Summary
     println!();
     println!(
         "{} passed, {} failed out of {} tests",
@@ -458,7 +552,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str) {
     }
 }
 
-fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
+fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: Option<&str>) {
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
         Err(_) => {
@@ -467,7 +561,7 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
         }
     };
 
-    let (remainder, flag_values) = match parse_flagfile(&flagfile_content) {
+    let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Parsing failed: {}", e);
@@ -484,9 +578,9 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
     }
 
     let mut flags: HashMap<&str, Vec<Rule>> = HashMap::new();
-    for fv in &flag_values {
-        for (name, rules) in fv.iter() {
-            flags.insert(name, rules.clone());
+    for fv in &parsed.flags {
+        for (name, def) in fv.iter() {
+            flags.insert(name, def.rules.clone());
         }
     }
 
@@ -503,7 +597,7 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String]) {
         })
         .collect();
 
-    match evaluate_flag(rules, &context, Some(flag_name)) {
+    match evaluate_flag_with_env(rules, &context, Some(flag_name), &parsed.segments, env) {
         Some(FlagReturn::OnOff(val)) => println!("{}", val),
         Some(FlagReturn::Json(val)) => println!("{}", val),
         Some(FlagReturn::Integer(val)) => println!("{}", val),
@@ -592,12 +686,13 @@ async fn main() {
         Command::Init => run_init(),
         Command::List { flagfile } => run_list(&flagfile),
         Command::Validate { flagfile } => run_validate(&flagfile),
-        Command::Test { flagfile, testfile } => run_tests(&flagfile, &testfile),
+        Command::Test { flagfile, testfile, env } => run_tests(&flagfile, &testfile, env.as_deref()),
         Command::Eval {
             flagfile,
+            env,
             flag_name,
             context,
-        } => run_eval(&flagfile, &flag_name, &context),
+        } => run_eval(&flagfile, &flag_name, &context, env.as_deref()),
         Command::Find { path, search } => run_find(&path, search.as_deref()),
         Command::Serve {
             flagfile,

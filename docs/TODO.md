@@ -267,6 +267,7 @@ Beyond freeform `//` comments, structured rule descriptions help with audit logs
 CLI
 
 - [ ] migration tool, to migrate from one product to Flagfile syntax. Lets say LD flag json dump to Flagfile syntax
+- [ ] fix ff find if i provide full flagname ff find FF-old-checkout then it searches by it instead of prefixing with FF_
 
 Flagfile-Relay
 

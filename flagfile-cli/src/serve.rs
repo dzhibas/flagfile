@@ -9,8 +9,8 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
 use flagfile_lib::ast::Atom;
-use flagfile_lib::eval::Context;
-use flagfile_lib::parse_flagfile::{parse_flagfile, FlagReturn, Rule};
+use flagfile_lib::eval::{eval_with_segments, Context, Segments};
+use flagfile_lib::parse_flagfile::{parse_flagfile_with_segments, FlagReturn, Rule};
 use notify::{EventKind, RecursiveMode, Watcher};
 use tokio::sync::RwLock;
 
@@ -55,6 +55,7 @@ struct ServeConfig {
 pub struct FlagStore {
     pub flagfile_content: String,
     pub flags: HashMap<String, Vec<Rule>>,
+    pub segments: Segments,
 }
 
 pub struct AppState {
@@ -99,7 +100,7 @@ async fn handle_eval(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag(rules, &context, Some(flag_name.as_str())) {
+    match evaluate_flag(rules, &context, Some(flag_name.as_str()), &store.segments) {
         Some(FlagReturn::OnOff(val)) => {
             if plain {
                 return (StatusCode::OK, val.to_string()).into_response();
@@ -174,16 +175,21 @@ fn evaluate_flag_with_reason(
     rules: &[Rule],
     context: &Context,
     flag_name: Option<&str>,
+    segments: &Segments,
 ) -> Option<(FlagReturn, &'static str)> {
     for rule in rules {
         match rule {
             Rule::BoolExpressionValue(expr, return_val) => {
-                if let Ok(true) = flagfile_lib::eval::eval(expr, context, flag_name) {
+                if let Ok(true) = eval_with_segments(expr, context, flag_name, segments) {
                     return Some((return_val.clone(), "TARGETING_MATCH"));
                 }
             }
             Rule::Value(return_val) => {
                 return Some((return_val.clone(), "DEFAULT"));
+            }
+            Rule::EnvRule { .. } => {
+                // @env rules are skipped in the HTTP server context;
+                // use the library API with init_with_env for env support.
             }
         }
     }
@@ -253,7 +259,7 @@ async fn handle_ofrep_single(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag_with_reason(rules, &context, Some(key.as_str())) {
+    match evaluate_flag_with_reason(rules, &context, Some(key.as_str()), &store.segments) {
         Some((ret, reason)) => {
             let success = flag_return_to_ofrep(&key, &ret, reason);
             (StatusCode::OK, Json(success)).into_response()
@@ -290,7 +296,7 @@ async fn handle_ofrep_bulk(
 
     let mut flags = Vec::new();
     for (key, rules) in store.flags.iter() {
-        let result = match evaluate_flag_with_reason(rules, &context, Some(key.as_str())) {
+        let result = match evaluate_flag_with_reason(rules, &context, Some(key.as_str()), &store.segments) {
             Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
             None => OFREPEvalSuccess {
                 key: key.clone(),
@@ -306,8 +312,8 @@ async fn handle_ofrep_bulk(
     (StatusCode::OK, Json(OFREPBulkResponse { flags })).into_response()
 }
 
-fn parse_flags(content: &str) -> Option<HashMap<String, Vec<Rule>>> {
-    let (remainder, flag_values) = match parse_flagfile(content) {
+fn parse_flags(content: &str) -> Option<(HashMap<String, Vec<Rule>>, Segments)> {
+    let (remainder, parsed) = match parse_flagfile_with_segments(content) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Warning: reload parse error: {}", e);
@@ -324,12 +330,12 @@ fn parse_flags(content: &str) -> Option<HashMap<String, Vec<Rule>>> {
     }
 
     let mut flags: HashMap<String, Vec<Rule>> = HashMap::new();
-    for fv in &flag_values {
-        for (name, rules) in fv.iter() {
-            flags.insert(name.to_string(), rules.clone());
+    for fv in &parsed.flags {
+        for (name, def) in fv.iter() {
+            flags.insert(name.to_string(), def.rules.clone());
         }
     }
-    Some(flags)
+    Some((flags, parsed.segments))
 }
 
 async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
@@ -384,10 +390,11 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
         };
 
         match parse_flags(&content) {
-            Some(flags) => {
+            Some((flags, segments)) => {
                 let mut store = state.store.write().await;
                 store.flagfile_content = content;
                 store.flags = flags;
+                store.segments = segments;
                 println!("Flagfile reloaded successfully");
             }
             None => {
@@ -419,8 +426,8 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
         }
     };
 
-    let flags = match parse_flags(&flagfile_content) {
-        Some(flags) => flags,
+    let (flags, segments) = match parse_flags(&flagfile_content) {
+        Some(result) => result,
         None => {
             eprintln!("Initial parsing of {} failed", flagfile_path);
             process::exit(1);
@@ -431,6 +438,7 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
         store: RwLock::new(FlagStore {
             flagfile_content,
             flags,
+            segments,
         }),
     });
 

@@ -52,10 +52,15 @@ FF-testing {
     json({"success": true})
 }
 
+@segment complex_segment_test {
+    a = b and c=d and (dd not in (1,2,3) or z == "demo car")
+}
+
 // and have more complex feature with multiple rules in it, which at the end defaults to false
+// @test FF-feature-complex-ticket-234234(a=b, c=d, dd=4, z="demo car") == true
 FF-feature-complex-ticket-234234 {
     // complex bool expression
-    a = b and c=d and (dd not in (1,2,3) or z == "demo car") -> TRUE
+    segment(complex_segment_test) -> TRUE
 
     // another one
     z == "demo car" -> FALSE
@@ -71,7 +76,17 @@ FF-feature-complex-ticket-234234 {
 }
 
 // Semver version checks
+@expires 2027-01-01
+@owner "Nikolajus"
+@test FF-sdk-upgrade(appVersion=5.4) == true
 FF-sdk-upgrade {
+    @env stage {
+        appVersion >= 5.3.42 -> false
+        appVersion < 4.32.0 -> false
+        false
+    }
+    @env dev -> true
+
     // enable new SDK for apps on version 5.3.42 or higher
     appVersion >= 5.3.42 -> true
     // disable for apps below 4.32.0
@@ -115,6 +130,7 @@ FF-timer-feature {
 
 // check if name contains Nik
 // @test FF-contains-feature-check(name="Nikolajus") == true
+@test FF-contains-feature-check(name="Nikola") == true
 FF-contains-feature-check {
     lower(name) ~ nik -> true // contains
     name !~ Nik -> false // does not contain
@@ -158,3 +174,57 @@ FF-regexp-feature-check {
     name !~ /.*ola.*/ -> false // does not match regexp
     false
 }
+
+@test FF-launch-event == true
+FF-launch-event {
+    now() > 2025-06-15T09:00:00Z and now() < 2027-01-15T18:00:00Z -> true
+    false
+}
+
+@test FF-debug-env-logging == false
+FF-debug-env-logging {
+    @env dev -> true
+    @env stage -> true
+    @env prod -> false
+    false
+}
+
+/**
+  flag dependency feature check
+  */
+
+FF-dep-root-new-checkout -> true
+
+// This flag only evaluates if FF-dep-root-new-checkout is true
+// TODO: fix this
+@requires FF-dep-root-new-checkout
+@test FF-checkout-upsell(userId=20) == true
+FF-checkout-upsell {
+    userId in (20, 21, 22) -> true
+    false
+}
+
+// checking coalesce fn
+@ticket "JIRA-1234"
+@description "GEO feature based on country or region"
+@test FF-geo-features(region=NL) == true
+@test FF-geo-features(countryCode=NL) == true
+@test FF-geo-features() == false
+FF-geo-features {
+    // Use countryCode if present, fall back to region, then "unknown"
+    coalesce(countryCode, region, "unknown") == "NL" -> true
+    false
+}
+
+// reverse array
+// TODO: fix so tests args can have arrays
+@test FF-admin-panel(roles=["viewer", "editor", "admin"]) == true
+FF-admin-panel {
+    // roles is an array: ["viewer", "editor", "admin"]
+    "admin" in roles -> true
+    false
+}
+
+@deprecated "Use FF-new-checkout instead"
+@expires 2026-01-01
+FF-old-checkout -> true

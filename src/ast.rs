@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use core::fmt;
 
 use crate::parse::parse_atom;
@@ -11,9 +11,10 @@ pub enum Atom {
     Boolean(bool),
     Variable(String),
     Date(NaiveDate),
-    DateTime(String),
+    DateTime(NaiveDateTime),
     Semver(u32, u32, u32),
     Regex(String),
+    List(Vec<Atom>),
     // Timestamp(i64)
 }
 
@@ -42,6 +43,9 @@ impl PartialEq<Atom> for Atom {
             (Atom::Boolean(b1), Atom::Boolean(b2)) => b1 == b2,
             (Atom::Date(d1), Atom::Date(d2)) => d1 == d2,
             (Atom::DateTime(t1), Atom::DateTime(t2)) => t1 == t2,
+            (Atom::DateTime(dt), Atom::Date(d)) | (Atom::Date(d), Atom::DateTime(dt)) => {
+                d.and_hms_opt(0, 0, 0).map_or(false, |d_dt| d_dt == *dt)
+            }
             (Atom::Semver(a1, b1, c1), Atom::Semver(a2, b2, c2)) => {
                 a1 == a2 && b1 == b2 && c1 == c2
             }
@@ -60,6 +64,9 @@ impl PartialEq<Atom> for Atom {
                 }
             }
             (Atom::Regex(r1), Atom::Regex(r2)) => r1 == r2,
+            (Atom::List(l1), Atom::List(l2)) => {
+                l1.len() == l2.len() && l1.iter().zip(l2.iter()).all(|(a, b)| a == b)
+            }
             _ => false,
         }
     }
@@ -91,7 +98,18 @@ impl PartialOrd for Atom {
             },
             Atom::Date(v) => match other {
                 Atom::Date(v2) => v.partial_cmp(v2),
-                // TODO: if compare to number it might be unix-timestamp
+                Atom::DateTime(dt) => {
+                    let self_dt = v.and_hms_opt(0, 0, 0)?;
+                    self_dt.partial_cmp(dt)
+                }
+                _ => None,
+            },
+            Atom::DateTime(v) => match other {
+                Atom::DateTime(v2) => v.partial_cmp(v2),
+                Atom::Date(d) => {
+                    let d_dt = d.and_hms_opt(0, 0, 0)?;
+                    v.partial_cmp(&d_dt)
+                }
                 _ => None,
             },
             Atom::Semver(a1, b1, c1) => match other {
@@ -126,6 +144,10 @@ impl fmt::Display for Atom {
             Atom::DateTime(var) => write!(f, "{var}"),
             Atom::Semver(major, minor, patch) => write!(f, "{major}.{minor}.{patch}"),
             Atom::Regex(p) => write!(f, "/{p}/"),
+            Atom::List(items) => {
+                let strings: Vec<std::string::String> = items.iter().map(|a| a.to_string()).collect();
+                write!(f, "[{}]", strings.join(", "))
+            }
         }
     }
 }
@@ -248,6 +270,8 @@ pub enum AstNode {
         field: Box<AstNode>,
         salt: Option<String>,
     },
+    Coalesce(Vec<AstNode>),
+    Segment(String),
 }
 
 impl AstNode {
@@ -259,4 +283,16 @@ impl AstNode {
             _ => None,
         }
     }
+}
+
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct FlagMetadata {
+    pub owner: Option<String>,
+    pub expires: Option<NaiveDate>,
+    pub ticket: Option<String>,
+    pub description: Option<String>,
+    pub flag_type: Option<String>,
+    pub deprecated: Option<String>,
+    pub requires: Vec<String>,
+    pub tests: Vec<String>,
 }

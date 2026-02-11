@@ -1,4 +1,4 @@
-use chrono::NaiveDate;
+use chrono::{NaiveDate, NaiveDateTime};
 use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_until},
@@ -62,6 +62,30 @@ fn parse_date(i: &str) -> IResult<&str, Atom> {
     })(i)
 }
 
+fn parse_datetime(i: &str) -> IResult<&str, Atom> {
+    let parser = recognize(tuple((
+        digit1,
+        char('-'),
+        digit1,
+        char('-'),
+        digit1,
+        char('T'),
+        digit1,
+        char(':'),
+        digit1,
+        char(':'),
+        digit1,
+        opt(char('Z')),
+    )));
+
+    map(parser, |dt_str: &str| {
+        let clean = dt_str.strip_suffix('Z').unwrap_or(dt_str);
+        let dt = NaiveDateTime::parse_from_str(clean, "%Y-%m-%dT%H:%M:%S")
+            .expect("Invalid datetime format");
+        Atom::DateTime(dt)
+    })(i)
+}
+
 fn parse_semver(i: &str) -> IResult<&str, Atom> {
     let parser = tuple((digit1, char('.'), digit1, char('.'), digit1));
     map(
@@ -93,6 +117,7 @@ fn parse_variable(i: &str) -> IResult<&str, Atom> {
 
 pub fn parse_atom(i: &str) -> IResult<&str, Atom> {
     alt((
+        parse_datetime,
         parse_date,
         parse_string,
         parse_boolean,
@@ -145,6 +170,7 @@ fn parse_variable_node_modifier(i: &str) -> IResult<&str, AstNode> {
 
 fn parse_variable_node_or_modified(i: &str) -> IResult<&str, AstNode> {
     alt((
+        parse_coalesce,
         parse_nullary_function,
         parse_variable_node_modifier,
         parse_variable_node,
@@ -167,6 +193,44 @@ fn parse_function_names(i: &str) -> IResult<&str, FnCall> {
         map(tag_no_case("upper"), |_| FnCall::Upper),
         map(tag_no_case("lower"), |_| FnCall::Lower),
     ))(i)
+}
+
+fn parse_coalesce_arg(i: &str) -> IResult<&str, AstNode> {
+    alt((parse_variable_node, parse_constant))(i)
+}
+
+fn parse_coalesce(i: &str) -> IResult<&str, AstNode> {
+    let (i, _) = tag_no_case("coalesce")(i)?;
+    let (i, _) = ws(char('('))(i)?;
+
+    let (i, args) = separated_list0(ws(char(',')), ws(parse_coalesce_arg))(i)?;
+
+    if args.len() < 2 {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            i,
+            nom::error::ErrorKind::Many1,
+        )));
+    }
+
+    let (i, _) = ws(char(')'))(i)?;
+    Ok((i, AstNode::Coalesce(args)))
+}
+
+pub(crate) fn parse_segment_name(i: &str) -> IResult<&str, &str> {
+    recognize(pair(
+        alt((alpha1, tag("_"))),
+        many0_count(alt((alphanumeric1, tag("_"), tag("-")))),
+    ))(i)
+}
+
+fn parse_segment_call(i: &str) -> IResult<&str, AstNode> {
+    let (i, _) = tag_no_case("segment")(i)?;
+    let (i, _) = char('(')(i)?;
+    let (i, _) = multispace0(i)?;
+    let (i, name) = parse_segment_name(i)?;
+    let (i, _) = multispace0(i)?;
+    let (i, _) = char(')')(i)?;
+    Ok((i, AstNode::Segment(name.to_string())))
 }
 
 fn parse_nullary_function(i: &str) -> IResult<&str, AstNode> {
@@ -229,8 +293,24 @@ fn parse_match_expr(i: &str) -> IResult<&str, AstNode> {
     })(i)
 }
 
+fn parse_reverse_array_expr(i: &str) -> IResult<&str, AstNode> {
+    let parser = tuple((
+        parse_constant,
+        ws(parse_array_op),
+        parse_variable_node,
+    ));
+    map(parser, |(val, op, var)| {
+        AstNode::Array(Box::new(val), op, Box::new(var))
+    })(i)
+}
+
 fn parse_compare_or_array_expr(i: &str) -> IResult<&str, AstNode> {
-    alt((parse_array_expr, parse_match_expr, parse_compare_expr))(i)
+    alt((
+        parse_array_expr,
+        parse_reverse_array_expr,
+        parse_match_expr,
+        parse_compare_expr,
+    ))(i)
 }
 
 fn parse_logic_expr(i: &str) -> IResult<&str, AstNode> {
@@ -306,6 +386,7 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
     let (i, mut head) = alt((
         parse_parenthesized_expr,
         parse_percentage,
+        parse_segment_call,
         parse_logic_expr,
         parse_compare_or_array_expr,
         parse_constant,
@@ -315,6 +396,7 @@ fn parse_expr(input: &str) -> IResult<&str, AstNode> {
         ws(parse_logic_op),
         alt((
             parse_percentage,
+            parse_segment_call,
             parse_compare_or_array_expr,
             parse_parenthesized_expr,
         )),
@@ -489,6 +571,53 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_datetime() {
+        let a = "2025-06-15T09:00:00Z";
+        let res = parse_datetime(a);
+        assert!(res.is_ok());
+        if let Ok((i, v)) = res {
+            assert_eq!(i, "");
+            let expected = NaiveDateTime::parse_from_str("2025-06-15T09:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+            assert_eq!(v, Atom::DateTime(expected));
+        }
+    }
+
+    #[test]
+    fn test_parse_datetime_without_z() {
+        let a = "2025-06-15T09:00:00";
+        let res = parse_datetime(a);
+        assert!(res.is_ok());
+        if let Ok((i, _v)) = res {
+            assert_eq!(i, "");
+        }
+    }
+
+    #[test]
+    fn test_datetime_before_date_in_atom() {
+        // DateTime should be parsed as DateTime, not Date
+        let (i, v) = parse_atom("2025-06-15T09:00:00Z").unwrap();
+        assert_eq!(i, "");
+        assert!(matches!(v, Atom::DateTime(_)));
+
+        // Plain date should still be parsed as Date
+        let (i2, v2) = parse_atom("2025-06-15").unwrap();
+        assert_eq!(i2, "");
+        assert!(matches!(v2, Atom::Date(_)));
+    }
+
+    #[test]
+    fn test_datetime_comparison_expr() {
+        let (i, _v) = parse_compare_expr("now() > 2025-06-15T09:00:00Z").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_datetime_range_expr() {
+        let (i, _v) = parse("now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
     fn test_single_quote_string() {
         let a = "a='demo demo'";
         let res = parse_compare_expr(a);
@@ -653,8 +782,71 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_coalesce() {
+        let (i, v) = parse("coalesce(a, b, \"default\") == \"test\"").unwrap();
+        assert_eq!(i, "");
+        assert!(matches!(v, AstNode::Compare(_, _, _)));
+    }
+
+    #[test]
+    fn test_parse_coalesce_in_logic() {
+        let (i, _v) = parse("coalesce(x, y, \"none\") == \"val\" and z > 5").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
     fn test_parse_ends_with_with_function() {
         let (i, _v) = parse("lower(name) ^~ \"admin\"").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_reverse_in() {
+        let (i, _v) = parse("\"admin\" in roles").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_reverse_not_in() {
+        let (i, _v) = parse("\"admin\" not in roles").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_reverse_in_logic() {
+        let (i, _v) = parse("\"admin\" in roles or \"editor\" in roles").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_reverse_in_combined_with_comparison() {
+        let (i, _v) = parse("\"admin\" in roles and plan == \"premium\"").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_segment_call() {
+        let (i, v) = parse("segment(beta_users)").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(v, AstNode::Segment("beta_users".to_string()));
+    }
+
+    #[test]
+    fn test_parse_segment_call_with_hyphens() {
+        let (i, v) = parse("segment(premium-users)").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(v, AstNode::Segment("premium-users".to_string()));
+    }
+
+    #[test]
+    fn test_parse_segment_call_in_logic() {
+        let (i, _v) = parse("segment(beta_users) and plan == premium").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_segment_call_combined() {
+        let (i, _v) = parse("country == US or segment(enterprise)").unwrap();
         assert_eq!(i, "");
     }
 }

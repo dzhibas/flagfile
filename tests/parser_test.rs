@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::Context;
-use flagfile_lib::parse_flagfile::parse_flagfile;
+use flagfile_lib::parse_flagfile::parse_flagfile_with_segments;
 use flagfile_lib::{self, eval::eval, parse::parse};
 
 #[test]
@@ -361,7 +361,7 @@ fn starts_with_and_ends_with_test() {
 #[test]
 fn flagfile_with_semver_parses() {
     let data = include_str!("../Flagfile.example");
-    let (i, v) = parse_flagfile(data).unwrap();
-    assert!(v.len() > 0);
+    let (i, v) = parse_flagfile_with_segments(data).unwrap();
+    assert!(v.flags.len() > 0);
     assert_eq!(i.to_string().trim(), "");
 }
