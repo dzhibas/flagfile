@@ -29,7 +29,6 @@ FF-admin-panel {
 FF-dep-root-new-checkout -> true
 
 // This flag only evaluates if FF-dep-root-new-checkout is true
-// TODO: fix this dependency check
 @requires FF-dep-root-new-checkout
 FF-checkout-upsell {
     userId in (20, 21, 22) -> true

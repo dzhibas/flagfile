@@ -14,7 +14,7 @@ use flagfile_lib::parse_flagfile::{parse_flagfile_with_segments, FlagReturn, Rul
 use notify::{EventKind, RecursiveMode, Watcher};
 use tokio::sync::RwLock;
 
-use crate::evaluate_flag;
+use crate::evaluate_rules_with_env;
 
 // --- OFREP request/response types ---
 
@@ -100,7 +100,7 @@ async fn handle_eval(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag(rules, &context, Some(flag_name.as_str()), &store.segments) {
+    match evaluate_rules_with_env(rules, &context, Some(flag_name.as_str()), &store.segments, None) {
         Some(FlagReturn::OnOff(val)) => {
             if plain {
                 return (StatusCode::OK, val.to_string()).into_response();

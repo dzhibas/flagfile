@@ -196,7 +196,6 @@ FF-debug-env-logging {
 FF-dep-root-new-checkout -> true
 
 // This flag only evaluates if FF-dep-root-new-checkout is true
-// TODO: fix this dependency check while evaluating inline test
 @requires FF-dep-root-new-checkout
 @test FF-checkout-upsell(userId=20) == true
 FF-checkout-upsell {

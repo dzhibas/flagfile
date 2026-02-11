@@ -7,7 +7,7 @@ use std::process;
 use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
-use flagfile_lib::ast::Atom;
+use flagfile_lib::ast::{Atom, FlagMetadata};
 use flagfile_lib::eval::{eval_with_segments, Context, Segments};
 use flagfile_lib::parse_flagfile::{
     extract_test_annotations, parse_flagfile_with_segments, FlagReturn, Rule, TestAnnotation,
@@ -192,18 +192,8 @@ fn parse_kv_pair(s: &str) -> Option<(&str, &str)> {
     Some((&s[..eq_pos], &s[eq_pos + 1..]))
 }
 
-/// Evaluate a flag against context, returning the matched FlagReturn
-pub(crate) fn evaluate_flag(
-    rules: &[Rule],
-    context: &Context,
-    flag_name: Option<&str>,
-    segments: &Segments,
-) -> Option<FlagReturn> {
-    evaluate_flag_with_env(rules, context, flag_name, segments, None)
-}
-
-/// Evaluate a flag with an optional environment for @env rules
-pub(crate) fn evaluate_flag_with_env(
+/// Evaluate a flag's rules with an optional environment for @env rules
+pub(crate) fn evaluate_rules_with_env(
     rules: &[Rule],
     context: &Context,
     flag_name: Option<&str>,
@@ -226,7 +216,7 @@ pub(crate) fn evaluate_flag_with_env(
             } => {
                 if env == Some(rule_env.as_str()) {
                     let result =
-                        evaluate_flag_with_env(sub_rules, context, flag_name, segments, env);
+                        evaluate_rules_with_env(sub_rules, context, flag_name, segments, env);
                     if result.is_some() {
                         return result;
                     }
@@ -235,6 +225,35 @@ pub(crate) fn evaluate_flag_with_env(
         }
     }
     None
+}
+
+/// Evaluate a flag checking @requires dependencies first.
+/// If any required flag doesn't evaluate to true, returns None.
+pub(crate) fn evaluate_flag_with_env(
+    flag_name: &str,
+    context: &Context,
+    all_flags: &HashMap<&str, Vec<Rule>>,
+    metadata: &HashMap<&str, FlagMetadata>,
+    segments: &Segments,
+    env: Option<&str>,
+) -> Option<FlagReturn> {
+    // Check @requires prerequisites
+    if let Some(meta) = metadata.get(flag_name) {
+        for req in &meta.requires {
+            match all_flags.get(req.as_str()) {
+                None => return None, // required flag doesn't exist
+                Some(req_rules) => {
+                    match evaluate_rules_with_env(req_rules, context, Some(req), segments, env) {
+                        Some(FlagReturn::OnOff(true)) => {} // prerequisite satisfied
+                        _ => return None,                    // prerequisite not met
+                    }
+                }
+            }
+        }
+    }
+
+    let rules = all_flags.get(flag_name)?;
+    evaluate_rules_with_env(rules, context, Some(flag_name), segments, env)
 }
 
 /// Compare evaluation result with expected string
@@ -460,6 +479,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
 
     // Merge all FlagValue entries into a single map and collect @test annotations from metadata
     let mut flags: HashMap<&str, Vec<Rule>> = HashMap::new();
+    let mut metadata: HashMap<&str, FlagMetadata> = HashMap::new();
     let mut annotation_tests: Vec<TestAnnotation> = Vec::new();
     for fv in &parsed.flags {
         for (name, def) in fv.iter() {
@@ -470,6 +490,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
                 });
             }
             flags.insert(name, def.rules.clone());
+            metadata.insert(name, def.metadata.clone());
         }
     }
     let segments = &parsed.segments;
@@ -511,13 +532,14 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
 
             let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
 
-            let Some(rules) = flags.get(flag_name) else {
+            if !flags.contains_key(flag_name) {
                 println!("{}  {} - flag not found", fail_label, line);
                 failed += 1;
                 continue;
-            };
+            }
 
-            let result = evaluate_flag_with_env(rules, &context, Some(flag_name), segments, env);
+            let result =
+                evaluate_flag_with_env(flag_name, &context, &flags, &metadata, segments, env);
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
@@ -558,16 +580,17 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
 
             let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
 
-            let Some(rules) = flags.get(flag_name) else {
+            if !flags.contains_key(flag_name) {
                 println!(
                     "{}  {} - flag not found (line {})",
                     fail_label, line, annotation.line_number
                 );
                 failed += 1;
                 continue;
-            };
+            }
 
-            let result = evaluate_flag_with_env(rules, &context, Some(flag_name), segments, env);
+            let result =
+                evaluate_flag_with_env(flag_name, &context, &flags, &metadata, segments, env);
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
@@ -608,13 +631,14 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
 
             let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
 
-            let Some(rules) = flags.get(flag_name) else {
+            if !flags.contains_key(flag_name) {
                 println!("{}  {} - flag not found", fail_label, line);
                 failed += 1;
                 continue;
-            };
+            }
 
-            let result = evaluate_flag_with_env(rules, &context, Some(flag_name), segments, env);
+            let result =
+                evaluate_flag_with_env(flag_name, &context, &flags, &metadata, segments, env);
 
             match result {
                 Some(ref ret) if result_matches(ret, expected) => {
@@ -671,16 +695,18 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: 
     }
 
     let mut flags: HashMap<&str, Vec<Rule>> = HashMap::new();
+    let mut metadata: HashMap<&str, FlagMetadata> = HashMap::new();
     for fv in &parsed.flags {
         for (name, def) in fv.iter() {
             flags.insert(name, def.rules.clone());
+            metadata.insert(name, def.metadata.clone());
         }
     }
 
-    let Some(rules) = flags.get(flag_name) else {
+    if !flags.contains_key(flag_name) {
         eprintln!("Flag '{}' not found", flag_name);
         process::exit(1);
-    };
+    }
 
     let context: Context = context_args
         .iter()
@@ -690,7 +716,7 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: 
         })
         .collect();
 
-    match evaluate_flag_with_env(rules, &context, Some(flag_name), &parsed.segments, env) {
+    match evaluate_flag_with_env(flag_name, &context, &flags, &metadata, &parsed.segments, env) {
         Some(FlagReturn::OnOff(val)) => println!("{}", val),
         Some(FlagReturn::Json(val)) => println!("{}", val),
         Some(FlagReturn::Integer(val)) => println!("{}", val),
