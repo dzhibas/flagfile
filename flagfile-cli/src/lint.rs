@@ -31,8 +31,16 @@ pub fn run_lint(flagfile_path: &str) {
 
     let today = Local::now().date_naive();
     let use_color = io::stderr().is_terminal();
-    let warn_icon = if use_color { "\x1b[33m\u{26a0}\x1b[0m" } else { "\u{26a0}" };
-    let error_icon = if use_color { "\x1b[31m\u{26a0}\x1b[0m" } else { "\u{26a0}" };
+    let warn_icon = if use_color {
+        "\x1b[33m\u{26a0}\x1b[0m"
+    } else {
+        "\u{26a0}"
+    };
+    let error_icon = if use_color {
+        "\x1b[31m\u{26a0}\x1b[0m"
+    } else {
+        "\u{26a0}"
+    };
     let mut warnings = 0;
 
     for fv in &parsed.flags {

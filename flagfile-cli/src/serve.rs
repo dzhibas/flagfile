@@ -296,16 +296,17 @@ async fn handle_ofrep_bulk(
 
     let mut flags = Vec::new();
     for (key, rules) in store.flags.iter() {
-        let result = match evaluate_flag_with_reason(rules, &context, Some(key.as_str()), &store.segments) {
-            Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
-            None => OFREPEvalSuccess {
-                key: key.clone(),
-                reason: "DEFAULT".to_string(),
-                variant: "false".to_string(),
-                value: serde_json::Value::Bool(false),
-                metadata: serde_json::json!({}),
-            },
-        };
+        let result =
+            match evaluate_flag_with_reason(rules, &context, Some(key.as_str()), &store.segments) {
+                Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
+                None => OFREPEvalSuccess {
+                    key: key.clone(),
+                    reason: "DEFAULT".to_string(),
+                    variant: "false".to_string(),
+                    value: serde_json::Value::Bool(false),
+                    metadata: serde_json::json!({}),
+                },
+            };
         flags.push(serde_json::to_value(result).unwrap());
     }
 

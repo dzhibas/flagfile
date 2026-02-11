@@ -145,7 +145,8 @@ impl fmt::Display for Atom {
             Atom::Semver(major, minor, patch) => write!(f, "{major}.{minor}.{patch}"),
             Atom::Regex(p) => write!(f, "/{p}/"),
             Atom::List(items) => {
-                let strings: Vec<std::string::String> = items.iter().map(|a| a.to_string()).collect();
+                let strings: Vec<std::string::String> =
+                    items.iter().map(|a| a.to_string()).collect();
                 write!(f, "[{}]", strings.join(", "))
             }
         }
@@ -154,11 +155,53 @@ impl fmt::Display for Atom {
 
 impl<'a> From<&'a str> for Atom {
     fn from(val: &'a str) -> Self {
+        let trimmed = val.trim();
+        // Handle array literals like ["a", "b", "c"]
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            let inner = &trimmed[1..trimmed.len() - 1];
+            let mut items = Vec::new();
+            let mut in_quote = false;
+            let mut start = 0;
+            for (i, ch) in inner.char_indices() {
+                match ch {
+                    '"' => in_quote = !in_quote,
+                    ',' if !in_quote => {
+                        let item = inner[start..i].trim();
+                        items.push(Atom::from_single(item));
+                        start = i + 1;
+                    }
+                    _ => {}
+                }
+            }
+            if start < inner.len() {
+                let item = inner[start..].trim();
+                if !item.is_empty() {
+                    items.push(Atom::from_single(item));
+                }
+            }
+            return Atom::List(items);
+        }
         let res = parse_atom(val);
         if let Ok((_i, out)) = res {
             return out;
         }
         Atom::String(val.into())
+    }
+}
+
+impl Atom {
+    /// Parse a single value (not an array). Strips surrounding quotes.
+    fn from_single(val: &str) -> Self {
+        let val = val.trim();
+        let unquoted = val
+            .strip_prefix('"')
+            .and_then(|s| s.strip_suffix('"'))
+            .unwrap_or(val);
+        let res = parse_atom(unquoted);
+        if let Ok((_i, out)) = res {
+            return out;
+        }
+        Atom::String(unquoted.into())
     }
 }
 

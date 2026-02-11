@@ -10,7 +10,9 @@ pub mod parse_flagfile;
 
 pub use ast::FlagMetadata;
 pub use eval::{Context, Segments};
-pub use parse_flagfile::{extract_test_annotations, FlagDefinition, FlagReturn, ParsedFlagfile, Rule, TestAnnotation};
+pub use parse_flagfile::{
+    extract_test_annotations, FlagDefinition, FlagReturn, ParsedFlagfile, Rule, TestAnnotation,
+};
 
 static FLAGS: OnceLock<HashMap<String, Vec<Rule>>> = OnceLock::new();
 static METADATA: OnceLock<HashMap<String, FlagMetadata>> = OnceLock::new();
@@ -111,7 +113,7 @@ pub fn ff(flag_name: &str, context: &Context) -> Option<FlagReturn> {
                 Some(req_rules) => {
                     match evaluate_rules(req_rules, context, Some(req), segments, current_env) {
                         Some(FlagReturn::OnOff(true)) => {} // prerequisite satisfied
-                        _ => return None, // prerequisite not met
+                        _ => return None,                   // prerequisite not met
                     }
                 }
             }
@@ -151,7 +153,10 @@ fn evaluate_rules(
             Rule::Value(return_val) => {
                 return Some(return_val.clone());
             }
-            Rule::EnvRule { env: rule_env, rules: sub_rules } => {
+            Rule::EnvRule {
+                env: rule_env,
+                rules: sub_rules,
+            } => {
                 if env == Some(rule_env.as_str()) {
                     let result = evaluate_rules(sub_rules, context, flag_name, segments, env);
                     if result.is_some() {

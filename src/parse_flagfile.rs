@@ -341,10 +341,13 @@ fn parse_return_val(i: &str) -> IResult<&str, FlagReturn> {
 fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue<'_>> {
     let parser = tuple((ws(parse_flag_name), ws(tag("->")), parse_return_val));
     map(parser, |(n, _, v)| {
-        HashMap::from([(n, FlagDefinition {
-            rules: vec![Rule::Value(v)],
-            metadata: FlagMetadata::default(),
-        })])
+        HashMap::from([(
+            n,
+            FlagDefinition {
+                rules: vec![Rule::Value(v)],
+                metadata: FlagMetadata::default(),
+            },
+        )])
     })(i)
 }
 
@@ -367,10 +370,13 @@ fn parse_env_rule_simple(i: &str) -> IResult<&str, Rule> {
     let (rest, env_name) = parse_env_name(rest)?;
     let (rest, _) = ws(tag("->"))(rest)?;
     let (rest, val) = parse_return_val(rest)?;
-    Ok((rest, Rule::EnvRule {
-        env: env_name.to_string(),
-        rules: vec![Rule::Value(val)],
-    }))
+    Ok((
+        rest,
+        Rule::EnvRule {
+            env: env_name.to_string(),
+            rules: vec![Rule::Value(val)],
+        },
+    ))
 }
 
 fn parse_env_rule_block(i: &str) -> IResult<&str, Rule> {
@@ -378,10 +384,13 @@ fn parse_env_rule_block(i: &str) -> IResult<&str, Rule> {
     let (rest, _) = multispace0(rest)?;
     let (rest, env_name) = parse_env_name(rest)?;
     let (rest, rules) = delimited(ws(tag("{")), parse_rules_list, ws(tag("}")))(rest)?;
-    Ok((rest, Rule::EnvRule {
-        env: env_name.to_string(),
-        rules,
-    }))
+    Ok((
+        rest,
+        Rule::EnvRule {
+            env: env_name.to_string(),
+            rules,
+        },
+    ))
 }
 
 fn parse_env_rule(i: &str) -> IResult<&str, Rule> {
@@ -409,10 +418,13 @@ fn parse_function(i: &str) -> IResult<&str, FlagValue<'_>> {
         delimited(ws(tag("{")), parse_rules_list, ws(tag("}"))),
     );
     map(parser, |(flag_name, rules)| {
-        HashMap::from([(flag_name, FlagDefinition {
-            rules,
-            metadata: FlagMetadata::default(),
-        })])
+        HashMap::from([(
+            flag_name,
+            FlagDefinition {
+                rules,
+                metadata: FlagMetadata::default(),
+            },
+        )])
     })(i)
 }
 
@@ -517,7 +529,10 @@ mod tests {
         assert_eq!(i, "");
         let def = v.get("FF-api-timeout").unwrap();
         assert_eq!(def.rules.len(), 1);
-        assert!(matches!(&def.rules[0], Rule::Value(FlagReturn::Integer(5000))));
+        assert!(matches!(
+            &def.rules[0],
+            Rule::Value(FlagReturn::Integer(5000))
+        ));
     }
 
     #[test]
@@ -540,7 +555,10 @@ mod tests {
         assert_eq!(i, "");
         let def = v.get("FF-timeout").unwrap();
         assert_eq!(def.rules.len(), 2);
-        assert!(matches!(&def.rules[1], Rule::Value(FlagReturn::Integer(5000))));
+        assert!(matches!(
+            &def.rules[1],
+            Rule::Value(FlagReturn::Integer(5000))
+        ));
     }
 
     #[test]
@@ -645,7 +663,10 @@ FF-3ds2-auth {
             Some(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap())
         );
         assert_eq!(def.metadata.ticket, Some("JIRA-1234".to_string()));
-        assert_eq!(def.metadata.description, Some("New 3DS2 auth flow".to_string()));
+        assert_eq!(
+            def.metadata.description,
+            Some("New 3DS2 auth flow".to_string())
+        );
         assert_eq!(def.metadata.flag_type, Some("release".to_string()));
         assert_eq!(def.rules.len(), 2);
     }
@@ -835,8 +856,12 @@ FF-another -> false"#;
         assert_eq!(i.trim(), "");
         let def = v[0].get("FF-debug").unwrap();
         assert_eq!(def.rules.len(), 2);
-        assert!(matches!(&def.rules[0], Rule::EnvRule { env, rules } if env == "dev" && rules.len() == 1));
-        assert!(matches!(&def.rules[1], Rule::EnvRule { env, rules } if env == "prod" && rules.len() == 1));
+        assert!(
+            matches!(&def.rules[0], Rule::EnvRule { env, rules } if env == "dev" && rules.len() == 1)
+        );
+        assert!(
+            matches!(&def.rules[1], Rule::EnvRule { env, rules } if env == "prod" && rules.len() == 1)
+        );
     }
 
     #[test]
@@ -852,8 +877,13 @@ FF-another -> false"#;
         assert_eq!(i.trim(), "");
         let def = v[0].get("FF-search").unwrap();
         assert_eq!(def.rules.len(), 2);
-        assert!(matches!(&def.rules[0], Rule::EnvRule { env, rules } if env == "prod" && rules.len() == 2));
-        assert!(matches!(&def.rules[1], Rule::Value(FlagReturn::OnOff(true))));
+        assert!(
+            matches!(&def.rules[0], Rule::EnvRule { env, rules } if env == "prod" && rules.len() == 2)
+        );
+        assert!(matches!(
+            &def.rules[1],
+            Rule::Value(FlagReturn::OnOff(true))
+        ));
     }
 
     #[test]
@@ -874,7 +904,10 @@ FF-another -> false"#;
         assert!(matches!(&def.rules[0], Rule::EnvRule { env, .. } if env == "dev"));
         assert!(matches!(&def.rules[1], Rule::EnvRule { env, .. } if env == "stage"));
         assert!(matches!(&def.rules[2], Rule::EnvRule { env, .. } if env == "prod"));
-        assert!(matches!(&def.rules[3], Rule::Value(FlagReturn::OnOff(false))));
+        assert!(matches!(
+            &def.rules[3],
+            Rule::Value(FlagReturn::OnOff(false))
+        ));
     }
 
     #[test]

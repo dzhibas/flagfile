@@ -633,52 +633,33 @@ mod tests {
         let (_i, expr) = parse("ts > 2025-06-15T09:00:00Z").unwrap();
         assert_eq!(
             true,
-            eval(
-                &expr,
-                &HashMap::from([("ts", Atom::DateTime(dt))]),
-                None
-            )
-            .unwrap()
+            eval(&expr, &HashMap::from([("ts", Atom::DateTime(dt))]), None).unwrap()
         );
 
         // DateTime < DateTime
         let (_i, expr) = parse("ts < 2025-06-15T18:00:00Z").unwrap();
         assert_eq!(
             true,
-            eval(
-                &expr,
-                &HashMap::from([("ts", Atom::DateTime(dt))]),
-                None
-            )
-            .unwrap()
+            eval(&expr, &HashMap::from([("ts", Atom::DateTime(dt))]), None).unwrap()
         );
 
         // DateTime == DateTime
         let (_i, expr) = parse("ts == 2025-06-15T12:00:00Z").unwrap();
         assert_eq!(
             true,
-            eval(
-                &expr,
-                &HashMap::from([("ts", Atom::DateTime(dt))]),
-                None
-            )
-            .unwrap()
+            eval(&expr, &HashMap::from([("ts", Atom::DateTime(dt))]), None).unwrap()
         );
 
         // DateTime range: now() > start and now() < end
         let (_i, expr) = parse("ts > 2025-06-15T09:00:00Z and ts < 2025-06-15T18:00:00Z").unwrap();
         assert_eq!(
             true,
-            eval(
-                &expr,
-                &HashMap::from([("ts", Atom::DateTime(dt))]),
-                None
-            )
-            .unwrap()
+            eval(&expr, &HashMap::from([("ts", Atom::DateTime(dt))]), None).unwrap()
         );
 
         // DateTime outside range
-        let late_dt = NaiveDateTime::parse_from_str("2025-06-15T20:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+        let late_dt =
+            NaiveDateTime::parse_from_str("2025-06-15T20:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
         assert_eq!(
             false,
             eval(
@@ -694,10 +675,7 @@ mod tests {
     fn testing_now_returns_datetime() {
         // now() should return a DateTime, which is comparable to DateTime literals
         let (_i, expr) = parse("now() > 2020-01-01T00:00:00Z").unwrap();
-        assert_eq!(
-            true,
-            eval(&expr, &HashMap::from([]), None).unwrap()
-        );
+        assert_eq!(true, eval(&expr, &HashMap::from([]), None).unwrap());
     }
 
     #[test]
@@ -709,16 +687,12 @@ mod tests {
         let (_i, expr) = parse("ts > 2025-06-15").unwrap();
         assert_eq!(
             true,
-            eval(
-                &expr,
-                &HashMap::from([("ts", Atom::DateTime(dt))]),
-                None
-            )
-            .unwrap()
+            eval(&expr, &HashMap::from([("ts", Atom::DateTime(dt))]), None).unwrap()
         );
 
         // DateTime at midnight == Date
-        let midnight = NaiveDateTime::parse_from_str("2025-06-15T00:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+        let midnight =
+            NaiveDateTime::parse_from_str("2025-06-15T00:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
         let (_i, expr) = parse("ts == 2025-06-15").unwrap();
         assert_eq!(
             true,
@@ -1108,7 +1082,9 @@ mod tests {
         assert_eq!(
             true,
             eval(
-                &parse("coalesce(countryCode, region, \"unknown\") == \"NL\"").unwrap().1,
+                &parse("coalesce(countryCode, region, \"unknown\") == \"NL\"")
+                    .unwrap()
+                    .1,
                 &HashMap::from([
                     ("countryCode", Atom::String("NL".into())),
                     ("region", Atom::String("EU".into()))
@@ -1124,7 +1100,9 @@ mod tests {
         assert_eq!(
             true,
             eval(
-                &parse("coalesce(countryCode, region, \"unknown\") == \"EU\"").unwrap().1,
+                &parse("coalesce(countryCode, region, \"unknown\") == \"EU\"")
+                    .unwrap()
+                    .1,
                 &HashMap::from([("region", Atom::String("EU".into()))]),
                 None,
             )
@@ -1137,7 +1115,9 @@ mod tests {
         assert_eq!(
             true,
             eval(
-                &parse("coalesce(countryCode, region, \"unknown\") == \"unknown\"").unwrap().1,
+                &parse("coalesce(countryCode, region, \"unknown\") == \"unknown\"")
+                    .unwrap()
+                    .1,
                 &HashMap::from([]),
                 None,
             )

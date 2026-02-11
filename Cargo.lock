@@ -328,7 +328,7 @@ dependencies = [
 
 [[package]]
 name = "flagfile-cli"
-version = "0.1.14"
+version = "0.1.15"
 dependencies = [
  "axum",
  "chrono",
@@ -345,7 +345,7 @@ dependencies = [
 
 [[package]]
 name = "flagfile-lib"
-version = "0.4.7"
+version = "0.4.8"
 dependencies = [
  "chrono",
  "js-sys",

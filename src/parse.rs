@@ -294,11 +294,7 @@ fn parse_match_expr(i: &str) -> IResult<&str, AstNode> {
 }
 
 fn parse_reverse_array_expr(i: &str) -> IResult<&str, AstNode> {
-    let parser = tuple((
-        parse_constant,
-        ws(parse_array_op),
-        parse_variable_node,
-    ));
+    let parser = tuple((parse_constant, ws(parse_array_op), parse_variable_node));
     map(parser, |(val, op, var)| {
         AstNode::Array(Box::new(val), op, Box::new(var))
     })(i)
@@ -577,7 +573,8 @@ mod tests {
         assert!(res.is_ok());
         if let Ok((i, v)) = res {
             assert_eq!(i, "");
-            let expected = NaiveDateTime::parse_from_str("2025-06-15T09:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
+            let expected =
+                NaiveDateTime::parse_from_str("2025-06-15T09:00:00", "%Y-%m-%dT%H:%M:%S").unwrap();
             assert_eq!(v, Atom::DateTime(expected));
         }
     }
@@ -613,7 +610,8 @@ mod tests {
 
     #[test]
     fn test_datetime_range_expr() {
-        let (i, _v) = parse("now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z").unwrap();
+        let (i, _v) =
+            parse("now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z").unwrap();
         assert_eq!(i, "");
     }
 

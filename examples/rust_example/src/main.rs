@@ -21,7 +21,13 @@ fn main() {
 
     // i dont like if dependency is is False then instead of returning false, ff return Option::None instead
     // TODO need to fix above behaviour
-    if ff("FF-checkout-upsell", &HashMap::from([("userId", Atom::Number(20))])).expect("No flag").into() {
+    if ff(
+        "FF-checkout-upsell",
+        &HashMap::from([("userId", Atom::Number(20))]),
+    )
+    .expect("No flag")
+    .into()
+    {
         println!("FF-checkout-upsell with dependency flag is ON");
     }
 }

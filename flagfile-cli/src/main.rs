@@ -9,7 +9,9 @@ use std::sync::Mutex;
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::{eval_with_segments, Context, Segments};
-use flagfile_lib::parse_flagfile::{extract_test_annotations, parse_flagfile_with_segments, FlagReturn, Rule, TestAnnotation};
+use flagfile_lib::parse_flagfile::{
+    extract_test_annotations, parse_flagfile_with_segments, FlagReturn, Rule, TestAnnotation,
+};
 use ignore::WalkBuilder;
 use regex::Regex;
 
@@ -107,19 +109,12 @@ fn parse_test_line(line: &str) -> Option<TestLine<'_>> {
     }
 
     if let Some(paren_open) = line.find('(') {
-        // Form with context: FF-name(key=val,...) == EXPECTED
-        let paren_close = line.find(')')?;
+        // Find the matching closing paren (skip parens inside brackets/quotes)
+        let paren_close = find_matching_paren(line, paren_open)?;
         let flag_name = &line[..paren_open];
         let params_str = &line[paren_open + 1..paren_close];
 
-        let pairs: Vec<(&str, &str)> = params_str
-            .split(',')
-            .filter_map(|pair| {
-                let pair = pair.trim();
-                let eq_pos = pair.find('=')?;
-                Some((&pair[..eq_pos], &pair[eq_pos + 1..]))
-            })
-            .collect();
+        let pairs = split_context_params(params_str);
 
         let rest = &line[paren_close + 1..];
         let eq_pos = rest.find("==")?;
@@ -134,6 +129,67 @@ fn parse_test_line(line: &str) -> Option<TestLine<'_>> {
 
         Some((flag_name, vec![], expected))
     }
+}
+
+/// Find the closing ')' that matches the '(' at `open_pos`, skipping brackets and quotes.
+fn find_matching_paren(s: &str, open_pos: usize) -> Option<usize> {
+    let mut depth = 0;
+    let mut in_quote = false;
+    let mut bracket_depth = 0;
+    for (i, ch) in s[open_pos..].char_indices() {
+        match ch {
+            '"' if !in_quote => in_quote = true,
+            '"' if in_quote => in_quote = false,
+            '[' if !in_quote => bracket_depth += 1,
+            ']' if !in_quote => bracket_depth -= 1,
+            '(' if !in_quote && bracket_depth == 0 => depth += 1,
+            ')' if !in_quote && bracket_depth == 0 => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(open_pos + i);
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
+/// Split context params on commas, but skip commas inside brackets or quotes.
+/// Returns Vec of (key, value) pairs.
+fn split_context_params(s: &str) -> Vec<(&str, &str)> {
+    let mut pairs = Vec::new();
+    let mut bracket_depth = 0;
+    let mut in_quote = false;
+    let mut start = 0;
+
+    for (i, ch) in s.char_indices() {
+        match ch {
+            '"' => in_quote = !in_quote,
+            '[' if !in_quote => bracket_depth += 1,
+            ']' if !in_quote => bracket_depth -= 1,
+            ',' if !in_quote && bracket_depth == 0 => {
+                if let Some(pair) = parse_kv_pair(&s[start..i]) {
+                    pairs.push(pair);
+                }
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    // Last segment
+    if start < s.len() {
+        if let Some(pair) = parse_kv_pair(&s[start..]) {
+            pairs.push(pair);
+        }
+    }
+    pairs
+}
+
+fn parse_kv_pair(s: &str) -> Option<(&str, &str)> {
+    let s = s.trim();
+    let eq_pos = s.find('=')?;
+    Some((&s[..eq_pos], &s[eq_pos + 1..]))
 }
 
 /// Evaluate a flag against context, returning the matched FlagReturn
@@ -164,9 +220,13 @@ pub(crate) fn evaluate_flag_with_env(
             Rule::Value(return_val) => {
                 return Some(return_val.clone());
             }
-            Rule::EnvRule { env: rule_env, rules: sub_rules } => {
+            Rule::EnvRule {
+                env: rule_env,
+                rules: sub_rules,
+            } => {
                 if env == Some(rule_env.as_str()) {
-                    let result = evaluate_flag_with_env(sub_rules, context, flag_name, segments, env);
+                    let result =
+                        evaluate_flag_with_env(sub_rules, context, flag_name, segments, env);
                     if result.is_some() {
                         return result;
                     }
@@ -355,14 +415,25 @@ fn run_validate(flagfile_path: &str) {
     println!();
     println!(
         "{} valid, {} flags, {} rules, {} segments",
-        flagfile_path, total_flags, total_rules, parsed.segments.len()
+        flagfile_path,
+        total_flags,
+        total_rules,
+        parsed.segments.len()
     );
 }
 
 fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
     let use_color = io::stdout().is_terminal();
-    let pass_label = if use_color { "\x1b[32mPASS\x1b[0m" } else { "PASS" };
-    let fail_label = if use_color { "\x1b[31mFAIL\x1b[0m" } else { "FAIL" };
+    let pass_label = if use_color {
+        "\x1b[32mPASS\x1b[0m"
+    } else {
+        "PASS"
+    };
+    let fail_label = if use_color {
+        "\x1b[31mFAIL\x1b[0m"
+    } else {
+        "FAIL"
+    };
 
     // 1. Read Flagfile
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
@@ -709,10 +780,17 @@ async fn main() {
     let cli = Args::parse();
     match cli.cmd {
         Command::Init => run_init(),
-        Command::List { flagfile, description } => run_list(&flagfile, description),
+        Command::List {
+            flagfile,
+            description,
+        } => run_list(&flagfile, description),
         Command::Validate { flagfile } => run_validate(&flagfile),
         Command::Lint { flagfile } => lint::run_lint(&flagfile),
-        Command::Test { flagfile, testfile, env } => run_tests(&flagfile, &testfile, env.as_deref()),
+        Command::Test {
+            flagfile,
+            testfile,
+            env,
+        } => run_tests(&flagfile, &testfile, env.as_deref()),
         Command::Eval {
             flagfile,
             env,
