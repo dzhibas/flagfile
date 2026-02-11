@@ -1,3 +1,4 @@
+mod lint;
 mod serve;
 
 use std::collections::HashMap;
@@ -5,7 +6,6 @@ use std::io::{self, BufRead, IsTerminal, Write};
 use std::process;
 use std::sync::Mutex;
 
-use chrono::Local;
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::{eval_with_segments, Context, Segments};
@@ -357,81 +357,6 @@ fn run_validate(flagfile_path: &str) {
         "{} valid, {} flags, {} rules, {} segments",
         flagfile_path, total_flags, total_rules, parsed.segments.len()
     );
-}
-
-fn run_lint(flagfile_path: &str) {
-    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
-        Ok(content) => content,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
-        }
-    };
-
-    let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
-        Ok(result) => result,
-        Err(e) => {
-            eprintln!("Parsing failed: {}", e);
-            process::exit(1);
-        }
-    };
-
-    if !remainder.trim().is_empty() {
-        eprintln!(
-            "Parsing failed: unexpected content near: {}",
-            remainder.trim().lines().next().unwrap_or("")
-        );
-        process::exit(1);
-    }
-
-    let today = Local::now().date_naive();
-    let use_color = io::stderr().is_terminal();
-    let warn_icon = if use_color { "\x1b[33m\u{26a0}\x1b[0m" } else { "\u{26a0}" };
-    let error_icon = if use_color { "\x1b[31m\u{26a0}\x1b[0m" } else { "\u{26a0}" };
-    let mut warnings = 0;
-
-    for fv in &parsed.flags {
-        for (name, def) in fv.iter() {
-            if let Some(ref msg) = def.metadata.deprecated {
-                eprintln!("{} {} is deprecated: \"{}\"", warn_icon, name, msg);
-                warnings += 1;
-            }
-            if let Some(expires) = def.metadata.expires {
-                if expires < today {
-                    let days_ago = (today - expires).num_days();
-                    eprintln!(
-                        "{} {} expired {} ({} days ago). Run: ff find -s {}",
-                        error_icon, name, expires, days_ago, name
-                    );
-                    warnings += 1;
-                }
-            }
-            let has_lifecycle_metadata = def.metadata.deprecated.is_some()
-                || def.metadata.expires.is_some()
-                || def.metadata.flag_type.is_some();
-            if has_lifecycle_metadata && def.metadata.owner.is_none() {
-                eprintln!("{} {}: missing @owner", warn_icon, name);
-                warnings += 1;
-            }
-            if def.metadata.flag_type.as_deref() == Some("experiment")
-                && def.metadata.expires.is_none()
-            {
-                eprintln!(
-                    "{} {}: type=experiment but no @expires set",
-                    warn_icon, name
-                );
-                warnings += 1;
-            }
-        }
-    }
-
-    if warnings == 0 {
-        println!("{} ok, no warnings", flagfile_path);
-    } else {
-        eprintln!();
-        eprintln!("{} warnings found", warnings);
-        process::exit(1);
-    }
 }
 
 fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
@@ -786,7 +711,7 @@ async fn main() {
         Command::Init => run_init(),
         Command::List { flagfile, description } => run_list(&flagfile, description),
         Command::Validate { flagfile } => run_validate(&flagfile),
-        Command::Lint { flagfile } => run_lint(&flagfile),
+        Command::Lint { flagfile } => lint::run_lint(&flagfile),
         Command::Test { flagfile, testfile, env } => run_tests(&flagfile, &testfile, env.as_deref()),
         Command::Eval {
             flagfile,
