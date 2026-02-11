@@ -39,7 +39,7 @@ export function activate(context: vscode.ExtensionContext) {
   // Run on save
   context.subscriptions.push(
     vscode.workspace.onDidSaveTextDocument((doc) => {
-      if (!isFlagfile(doc)) {
+      if (!isRunnableFlagfile(doc)) {
         return;
       }
 
@@ -74,13 +74,22 @@ function isFlagfile(doc: vscode.TextDocument): boolean {
   return name === "Flagfile" || name.startsWith("Flagfile.");
 }
 
+function isRunnableFlagfile(doc: vscode.TextDocument): boolean {
+  const name = path.basename(doc.uri.fsPath);
+  // .tests files get syntax highlighting but not lint/validate/test
+  if (name.endsWith(".tests")) {
+    return false;
+  }
+  return isFlagfile(doc);
+}
+
 function getActiveFlagfile(): vscode.Uri | undefined {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     vscode.window.showWarningMessage("No active editor");
     return undefined;
   }
-  if (!isFlagfile(editor.document)) {
+  if (!isRunnableFlagfile(editor.document)) {
     vscode.window.showWarningMessage("Active file is not a Flagfile");
     return undefined;
   }

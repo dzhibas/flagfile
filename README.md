@@ -98,7 +98,7 @@ it's choosen specifically so that it prefixed with FF, cause cli provides a way 
 
 it's a flagfile in your application root folder to control behaviour and feature flagging in your app
 
-VSCode extension for syntax highlighting, linting, validating and running tests: `code --install-extension flagfile-vscode-plugin/flagfile-0.1.0.vsix` needs flagfile-cli installed through `brew install dzhibas/tap/flagfile-cli`
+VSCode extension for syntax highlighting, linting, validating and running tests: `code --install-extension flagfile-vscode-plugin/flagfile-0.1.1.vsix` needs flagfile-cli installed through `brew install dzhibas/tap/flagfile-cli`
 
 Example DSL syntax
 
