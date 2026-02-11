@@ -26,3 +26,26 @@ FF-email-domain-check {
     lower(email) ^~ "nikolajus" -> true
     false
 }
+
+// NL segment
+@segment country_nl {
+    lower(country) == nl
+}
+
+// feature check with env and segment
+FF-feature-y-2 {
+    @env prod {
+        segment(country_nl) -> false
+    }
+    segment(country_nl) -> true
+
+    // else default to false
+    false
+}
+
+// reverse array
+FF-admin-panel {
+    // roles is an array: ["viewer", "editor", "admin"]
+    "admin" in roles -> true
+    false
+}

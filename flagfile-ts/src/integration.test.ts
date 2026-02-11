@@ -20,6 +20,7 @@ function evaluateFlag(
     rules: Rule[],
     context: Context,
     flagName?: string,
+    env?: string,
 ): FlagReturn | null {
     for (const rule of rules) {
         if (rule.type === 'Value') {
@@ -28,6 +29,14 @@ function evaluateFlag(
         if (rule.type === 'BoolExpressionValue') {
             if (evaluate(rule.expr, context, flagName)) {
                 return rule.value;
+            }
+        }
+        if (rule.type === 'EnvRule') {
+            if (env != null && env === rule.env) {
+                const result = evaluateFlag(rule.rules, context, flagName, env);
+                if (result !== null) {
+                    return result;
+                }
             }
         }
     }
@@ -78,7 +87,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-feature-complex-ticket-234234(model=my,created=2024-03-03,demo=false) == true
     it('FF-feature-complex-ticket-234234 with model=my,created=2024-03-03,demo=false → true', () => {
-        const rules = flags.get('FF-feature-complex-ticket-234234')!;
+        const rules = flags.get('FF-feature-complex-ticket-234234')!.rules;
         const ctx: Context = {
             model: atomString('my'),
             created: atomDate('2024-03-03'),
@@ -90,7 +99,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-feature-complex-ticket-234234(model=my,created=2023-06-15,demo=false) == false
     it('FF-feature-complex-ticket-234234 with model=my,created=2023-06-15,demo=false → false', () => {
-        const rules = flags.get('FF-feature-complex-ticket-234234')!;
+        const rules = flags.get('FF-feature-complex-ticket-234234')!.rules;
         const ctx: Context = {
             model: atomString('my'),
             created: atomDate('2023-06-15'),
@@ -102,7 +111,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-sdk-upgrade(appVersion=6.0.0) == TRUE
     it('FF-sdk-upgrade with appVersion=6.0.0 → true', () => {
-        const rules = flags.get('FF-sdk-upgrade')!;
+        const rules = flags.get('FF-sdk-upgrade')!.rules;
         const ctx: Context = { appVersion: atomSemver(6, 0, 0) };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -110,7 +119,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-sdk-upgrade(appVersion=4.31.9) == FALSE
     it('FF-sdk-upgrade with appVersion=4.31.9 → false', () => {
-        const rules = flags.get('FF-sdk-upgrade')!;
+        const rules = flags.get('FF-sdk-upgrade')!.rules;
         const ctx: Context = { appVersion: atomSemver(4, 31, 9) };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: false });
@@ -118,7 +127,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-sdk-upgrade(appVersion=5.3.44) == TRUE
     it('FF-sdk-upgrade with appVersion=5.3.44 → true', () => {
-        const rules = flags.get('FF-sdk-upgrade')!;
+        const rules = flags.get('FF-sdk-upgrade')!.rules;
         const ctx: Context = { appVersion: atomSemver(5, 3, 44) };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -126,7 +135,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-sdk-upgrade(appVersion=5.2.1) == false
     it('FF-sdk-upgrade with appVersion=5.2.1 → false', () => {
-        const rules = flags.get('FF-sdk-upgrade')!;
+        const rules = flags.get('FF-sdk-upgrade')!.rules;
         const ctx: Context = { appVersion: atomSemver(5, 2, 1) };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: false });
@@ -134,7 +143,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-feature-y(countryCode=nl) == true
     it('FF-feature-y with countryCode=nl → true', () => {
-        const rules = flags.get('FF-feature-y')!;
+        const rules = flags.get('FF-feature-y')!.rules;
         const ctx: Context = { countryCode: atomString('nl') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -142,7 +151,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-feature-y(countryCode=NL) == true
     it('FF-feature-y with countryCode=NL → true', () => {
-        const rules = flags.get('FF-feature-y')!;
+        const rules = flags.get('FF-feature-y')!.rules;
         const ctx: Context = { countryCode: atomString('NL') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -150,7 +159,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-feature-y(countryCode=DE) == false
     it('FF-feature-y with countryCode=DE → false', () => {
-        const rules = flags.get('FF-feature-y')!;
+        const rules = flags.get('FF-feature-y')!.rules;
         const ctx: Context = { countryCode: atomString('DE') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: false });
@@ -158,28 +167,28 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-api-timeout == 5000
     it('FF-api-timeout → 5000', () => {
-        const rules = flags.get('FF-api-timeout')!;
+        const rules = flags.get('FF-api-timeout')!.rules;
         const val = evaluateFlag(rules, {});
         expect(val).toEqual({ type: 'Integer', value: 5000 });
     });
 
     // FF-max-retries == 3
     it('FF-max-retries → 3', () => {
-        const rules = flags.get('FF-max-retries')!;
+        const rules = flags.get('FF-max-retries')!.rules;
         const val = evaluateFlag(rules, {});
         expect(val).toEqual({ type: 'Integer', value: 3 });
     });
 
     // FF-log-level == "debug"
     it('FF-log-level → "debug"', () => {
-        const rules = flags.get('FF-log-level')!;
+        const rules = flags.get('FF-log-level')!.rules;
         const val = evaluateFlag(rules, {});
         expect(val).toEqual({ type: 'Str', value: 'debug' });
     });
 
     // FF-contains-feature-check(name="Nikolajus") == true
     it('FF-contains-feature-check with name="Nikolajus" → true', () => {
-        const rules = flags.get('FF-contains-feature-check')!;
+        const rules = flags.get('FF-contains-feature-check')!.rules;
         const ctx: Context = { name: atomString('Nikolajus') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -187,7 +196,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-regexp-feature-check(name="Check Nikolajus match") == true
     it('FF-regexp-feature-check with name="Check Nikolajus match" → true', () => {
-        const rules = flags.get('FF-regexp-feature-check')!;
+        const rules = flags.get('FF-regexp-feature-check')!.rules;
         const ctx: Context = { name: atomString('Check Nikolajus match') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -195,7 +204,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-email-domain-check(email="user@company.com") == true
     it('FF-email-domain-check with email="user@company.com" → true', () => {
-        const rules = flags.get('FF-email-domain-check')!;
+        const rules = flags.get('FF-email-domain-check')!.rules;
         const ctx: Context = { email: atomString('user@company.com') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -203,7 +212,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-email-domain-check(email="user@other.com") == false
     it('FF-email-domain-check with email="user@other.com" → false', () => {
-        const rules = flags.get('FF-email-domain-check')!;
+        const rules = flags.get('FF-email-domain-check')!.rules;
         const ctx: Context = { email: atomString('user@other.com') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: false });
@@ -211,7 +220,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-admin-path-check(path="/admin/settings") == true
     it('FF-admin-path-check with path="/admin/settings" → true', () => {
-        const rules = flags.get('FF-admin-path-check')!;
+        const rules = flags.get('FF-admin-path-check')!.rules;
         const ctx: Context = { path: atomString('/admin/settings') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: true });
@@ -219,7 +228,7 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-admin-path-check(path="/user/profile") == false
     it('FF-admin-path-check with path="/user/profile" → false', () => {
-        const rules = flags.get('FF-admin-path-check')!;
+        const rules = flags.get('FF-admin-path-check')!.rules;
         const ctx: Context = { path: atomString('/user/profile') };
         const val = evaluateFlag(rules, ctx);
         expect(val).toEqual({ type: 'OnOff', value: false });
@@ -227,14 +236,14 @@ describe('integration: Flagfile.tests validation', () => {
 
     // FF-button-color == "blue"
     it('FF-button-color → "blue"', () => {
-        const rules = flags.get('FF-button-color')!;
+        const rules = flags.get('FF-button-color')!.rules;
         const val = evaluateFlag(rules, {});
         expect(val).toEqual({ type: 'Str', value: 'blue' });
     });
 
     // FF-theme-config() == json
     it('FF-theme-config → json with correct structure', () => {
-        const rules = flags.get('FF-theme-config')!;
+        const rules = flags.get('FF-theme-config')!.rules;
         const val = evaluateFlag(rules, {});
         expect(val).not.toBeNull();
         expect(val!.type).toBe('Json');

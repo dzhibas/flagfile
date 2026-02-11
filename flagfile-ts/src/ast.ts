@@ -9,7 +9,8 @@ export type Atom =
     | { type: 'Date'; value: string }         // YYYY-MM-DD
     | { type: 'DateTime'; value: string }
     | { type: 'Semver'; major: number; minor: number; patch: number }
-    | { type: 'Regex'; value: string };
+    | { type: 'Regex'; value: string }
+    | { type: 'List'; items: Atom[] };
 
 // ── Operators ──────────────────────────────────────────────────────
 
@@ -60,7 +61,9 @@ export type AstNode =
     | { type: 'Array'; left: AstNode; op: ArrayOp; right: AstNode }
     | { type: 'Logic'; left: AstNode; op: LogicOp; right: AstNode }
     | { type: 'Scope'; expr: AstNode; negate: boolean }
-    | { type: 'Percentage'; rate: number; field: AstNode; salt: string | null };
+    | { type: 'Percentage'; rate: number; field: AstNode; salt: string | null }
+    | { type: 'Coalesce'; args: AstNode[] }
+    | { type: 'Segment'; name: string };
 
 // ── Flag return values ─────────────────────────────────────────────
 
@@ -74,11 +77,35 @@ export type FlagReturn =
 
 export type Rule =
     | { type: 'Value'; value: FlagReturn }
-    | { type: 'BoolExpressionValue'; expr: AstNode; value: FlagReturn };
+    | { type: 'BoolExpressionValue'; expr: AstNode; value: FlagReturn }
+    | { type: 'EnvRule'; env: string; rules: Rule[] };
+
+// ── Flag metadata ─────────────────────────────────────────────────
+
+export interface FlagMetadata {
+    owner?: string;
+    expires?: string;      // YYYY-MM-DD date string
+    ticket?: string;
+    description?: string;
+    flagType?: string;
+    deprecated?: string;
+    requires?: string[];
+}
+
+// ── Flag definition (rules + metadata) ────────────────────────────
+
+export interface FlagDefinition {
+    rules: Rule[];
+    metadata: FlagMetadata;
+}
 
 // ── Parsed flag map ────────────────────────────────────────────────
 
-export type FlagValue = Map<string, Rule[]>;
+export type FlagValue = Map<string, FlagDefinition>;
+
+// ── Segments ──────────────────────────────────────────────────────
+
+export type Segments = Map<string, AstNode>;
 
 // ── Helper constructors ────────────────────────────────────────────
 
@@ -108,6 +135,9 @@ export function atomSemver(major: number, minor: number, patch: number): Atom {
 }
 export function atomRegex(v: string): Atom {
     return { type: 'Regex', value: v };
+}
+export function atomList(items: Atom[]): Atom {
+    return { type: 'List', items };
 }
 
 // ── Atom comparison helpers (mirrors Rust PartialEq / PartialOrd) ──
@@ -145,7 +175,15 @@ export function atomEquals(a: Atom, b: Atom): boolean {
     if (a.type === 'Boolean' && b.type === 'Boolean') return a.value === b.value;
     if (a.type === 'Date' && b.type === 'Date') return a.value === b.value;
     if (a.type === 'DateTime' && b.type === 'DateTime') return a.value === b.value;
+    if (a.type === 'DateTime' && b.type === 'Date') return a.value === b.value + 'T00:00:00';
+    if (a.type === 'Date' && b.type === 'DateTime') return a.value + 'T00:00:00' === b.value;
     if (a.type === 'Regex' && b.type === 'Regex') return a.value === b.value;
+
+    // List comparisons
+    if (a.type === 'List' && b.type === 'List') {
+        if (a.items.length !== b.items.length) return false;
+        return a.items.every((item, i) => atomEquals(item, b.items[i]));
+    }
 
     // Semver comparisons
     if (a.type === 'Semver' && b.type === 'Semver') {
@@ -193,6 +231,27 @@ export function atomCompare(a: Atom, b: Atom): number | null {
         return 0;
     }
 
+    // DateTime ↔ DateTime (lexicographic works for normalized ISO)
+    if (a.type === 'DateTime' && b.type === 'DateTime') {
+        if (a.value < b.value) return -1;
+        if (a.value > b.value) return 1;
+        return 0;
+    }
+
+    // DateTime ↔ Date (treat Date as midnight)
+    if (a.type === 'DateTime' && b.type === 'Date') {
+        const bdt = b.value + 'T00:00:00';
+        if (a.value < bdt) return -1;
+        if (a.value > bdt) return 1;
+        return 0;
+    }
+    if (a.type === 'Date' && b.type === 'DateTime') {
+        const adt = a.value + 'T00:00:00';
+        if (adt < b.value) return -1;
+        if (adt > b.value) return 1;
+        return 0;
+    }
+
     // Semver ↔ Semver
     if (a.type === 'Semver' && b.type === 'Semver') {
         const cmp = (a.major - b.major) || (a.minor - b.minor) || (a.patch - b.patch);
@@ -235,5 +294,6 @@ export function atomToString(a: Atom): string {
         case 'DateTime': return a.value;
         case 'Semver': return `${a.major}.${a.minor}.${a.patch}`;
         case 'Regex': return `/${a.value}/`;
+        case 'List': return `[${a.items.map(atomToString).join(', ')}]`;
     }
 }

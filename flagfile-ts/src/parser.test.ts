@@ -62,6 +62,36 @@ describe('parseAtom', () => {
         if (r.ok) expect(r.value).toEqual({ type: 'Date', value: '2004-12-23' });
     });
 
+    it('parses datetime with Z', () => {
+        const r = parseAtom('2025-06-15T09:00:00Z');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value).toEqual({ type: 'DateTime', value: '2025-06-15T09:00:00' });
+            expect(r.rest).toBe('');
+        }
+    });
+
+    it('parses datetime without Z', () => {
+        const r = parseAtom('2025-06-15T09:00:00');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value).toEqual({ type: 'DateTime', value: '2025-06-15T09:00:00' });
+            expect(r.rest).toBe('');
+        }
+    });
+
+    it('datetime takes priority over date', () => {
+        // DateTime should be parsed as DateTime, not Date
+        const r = parseAtom('2025-06-15T09:00:00Z');
+        expect(r.ok).toBe(true);
+        if (r.ok) expect(r.value.type).toBe('DateTime');
+
+        // Plain date should still be parsed as Date
+        const r2 = parseAtom('2025-06-15');
+        expect(r2.ok).toBe(true);
+        if (r2.ok) expect(r2.value.type).toBe('Date');
+    });
+
     it('parses semver', () => {
         const r = parseAtom('5.3.42');
         expect(r.ok).toBe(true);
@@ -169,6 +199,24 @@ describe('parse expressions', () => {
         if (r.ok) {
             expect(r.rest).toBe('');
             expect(r.value.type).toBe('Compare');
+        }
+    });
+
+    it('parses datetime comparison: now() > 2025-06-15T09:00:00Z', () => {
+        const r = parse('now() > 2025-06-15T09:00:00Z');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Compare');
+        }
+    });
+
+    it('parses datetime range expression', () => {
+        const r = parse('now() > 2025-06-15T09:00:00Z and now() < 2025-06-15T18:00:00Z');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Logic');
         }
     });
 
@@ -367,6 +415,92 @@ describe('parse expressions', () => {
             if (r.value.type === 'Percentage') {
                 expect(r.value.rate).toBe(100);
             }
+        }
+    });
+});
+
+describe('reverse in', () => {
+    it('parses "value" in variable', () => {
+        const r = parse('"admin" in roles');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Array');
+            if (r.value.type === 'Array') {
+                expect(r.value.op).toBe(ArrayOp.In);
+                expect(r.value.left.type).toBe('Constant');
+                expect(r.value.right.type).toBe('Variable');
+            }
+        }
+    });
+
+    it('parses "value" not in variable', () => {
+        const r = parse('"admin" not in roles');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Array');
+            if (r.value.type === 'Array') {
+                expect(r.value.op).toBe(ArrayOp.NotIn);
+            }
+        }
+    });
+
+    it('parses reverse in combined with logic', () => {
+        const r = parse('"admin" in roles and active == true');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Logic');
+        }
+    });
+
+    it('parses number in variable', () => {
+        const r = parse('42 in numbers');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.rest).toBe('');
+            expect(r.value.type).toBe('Array');
+        }
+    });
+});
+
+describe('coalesce', () => {
+    it('parses coalesce with two variables', () => {
+        const r = parse('coalesce(a, b) == "x"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.type).toBe('Compare');
+            if (r.value.type === 'Compare') {
+                expect(r.value.left.type).toBe('Coalesce');
+                if (r.value.left.type === 'Coalesce') {
+                    expect(r.value.left.args).toHaveLength(2);
+                }
+            }
+        }
+    });
+
+    it('parses coalesce with variable and constant fallback', () => {
+        const r = parse('coalesce(region, "unknown") == "NL"');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.type).toBe('Compare');
+            if (r.value.type === 'Compare') {
+                expect(r.value.left.type).toBe('Coalesce');
+                if (r.value.left.type === 'Coalesce') {
+                    expect(r.value.left.args).toHaveLength(2);
+                    expect(r.value.left.args[0].type).toBe('Variable');
+                    expect(r.value.left.args[1].type).toBe('Constant');
+                }
+            }
+        }
+    });
+
+    it('parses coalesce with three arguments', () => {
+        const r = parse('coalesce(countryCode, region, "unknown") == "NL"');
+        expect(r.ok).toBe(true);
+        if (r.ok && r.value.type === 'Compare' && r.value.left.type === 'Coalesce') {
+            expect(r.value.left.args).toHaveLength(3);
         }
     });
 });

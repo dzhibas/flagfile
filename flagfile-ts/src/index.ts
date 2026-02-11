@@ -1,15 +1,18 @@
 import { readFileSync } from 'fs';
 import {
     Atom,
+    FlagDefinition,
+    FlagMetadata,
     FlagReturn,
     Rule,
+    Segments,
     atomString,
     atomNumber,
     atomFloat,
     atomBoolean,
 } from './ast.js';
 import { evaluate, Context } from './eval.js';
-import { parseFlagfile } from './flagfile.js';
+import { parseFlagfile, parseFlagfileWithSegments } from './flagfile.js';
 
 export {
     Atom,
@@ -20,8 +23,11 @@ export {
     MatchOp,
     FnCall,
     FlagReturn,
+    FlagMetadata,
+    FlagDefinition,
     Rule,
     FlagValue,
+    Segments,
     atomString,
     atomNumber,
     atomFloat,
@@ -40,7 +46,7 @@ export { parse, parseAtom, ParseResult } from './parser.js';
 
 export { evaluate, Context } from './eval.js';
 
-export { parseFlagfile } from './flagfile.js';
+export { parseFlagfile, parseFlagfileWithSegments, ParsedFlagfile } from './flagfile.js';
 
 // ── Plain-JS context type ───────────────────────────────────────────
 
@@ -70,20 +76,32 @@ function unwrap(val: FlagReturn): boolean | number | string | unknown {
 
 // ── Global flag state ───────────────────────────────────────────────
 
-let FLAGS: Map<string, Rule[]> | null = null;
+let FLAGS: Map<string, FlagDefinition> | null = null;
+let SEGMENTS: Segments = new Map();
+let ENV: string | null = null;
 
 function evaluateRules(
     rules: Rule[],
     context: Context,
     flagName?: string,
+    segments?: Segments,
 ): FlagReturn | null {
+    const segs = segments ?? SEGMENTS;
     for (const rule of rules) {
         if (rule.type === 'Value') {
             return rule.value;
         }
         if (rule.type === 'BoolExpressionValue') {
-            if (evaluate(rule.expr, context, flagName)) {
+            if (evaluate(rule.expr, context, flagName, segs)) {
                 return rule.value;
+            }
+        }
+        if (rule.type === 'EnvRule') {
+            if (ENV !== null && ENV === rule.env) {
+                const result = evaluateRules(rule.rules, context, flagName, segs);
+                if (result !== null) {
+                    return result;
+                }
             }
         }
     }
@@ -102,6 +120,23 @@ export function init(): void {
 }
 
 /**
+ * Like {@link init}, but also sets the current environment for `@env` rules.
+ */
+export function initWithEnv(env: string): void {
+    ENV = env;
+    init();
+}
+
+/**
+ * Like {@link initFromString}, but also sets the current environment
+ * for `@env` rules.
+ */
+export function initFromStringWithEnv(content: string, env: string): void {
+    ENV = env;
+    initFromString(content);
+}
+
+/**
  * Parses flagfile content from a string and stores the result in
  * global state. Useful when the content is already in memory.
  *
@@ -111,7 +146,7 @@ export function initFromString(content: string): void {
     if (FLAGS !== null) {
         throw new Error('init() or initFromString() was called more than once');
     }
-    const result = parseFlagfile(content);
+    const result = parseFlagfileWithSegments(content);
     if (!result.ok) {
         throw new Error('Failed to parse Flagfile');
     }
@@ -121,7 +156,8 @@ export function initFromString(content: string): void {
             `Flagfile parsing failed: unexpected content near: ${near}`,
         );
     }
-    FLAGS = result.value;
+    FLAGS = result.value.flags;
+    SEGMENTS = result.value.segments;
 }
 
 /**
@@ -144,9 +180,23 @@ export function ff(
     if (FLAGS === null) {
         throw new Error('init() or initFromString() must be called before ff()');
     }
-    const rules = FLAGS.get(flagName);
-    if (!rules) return null;
-    const result = evaluateRules(rules, ctx ? toContext(ctx) : {}, flagName);
+    const def = FLAGS.get(flagName);
+    if (!def) return null;
+    const context = ctx ? toContext(ctx) : {};
+
+    // Check @requires prerequisites
+    if (def.metadata.requires && def.metadata.requires.length > 0) {
+        for (const req of def.metadata.requires) {
+            const reqDef = FLAGS.get(req);
+            if (!reqDef) return null; // required flag doesn't exist
+            const reqResult = evaluateRules(reqDef.rules, context, req);
+            if (!reqResult || reqResult.type !== 'OnOff' || !reqResult.value) {
+                return null; // prerequisite not met
+            }
+        }
+    }
+
+    const result = evaluateRules(def.rules, context, flagName);
     return result ? unwrap(result) : null;
 }
 
@@ -165,9 +215,39 @@ export function ffRaw(
     if (FLAGS === null) {
         throw new Error('init() or initFromString() must be called before ffRaw()');
     }
-    const rules = FLAGS.get(flagName);
-    if (!rules) return null;
-    return evaluateRules(rules, ctx ? toContext(ctx) : {}, flagName);
+    const def = FLAGS.get(flagName);
+    if (!def) return null;
+    const context = ctx ? toContext(ctx) : {};
+
+    // Check @requires prerequisites
+    if (def.metadata.requires && def.metadata.requires.length > 0) {
+        for (const req of def.metadata.requires) {
+            const reqDef = FLAGS.get(req);
+            if (!reqDef) return null;
+            const reqResult = evaluateRules(reqDef.rules, context, req);
+            if (!reqResult || reqResult.type !== 'OnOff' || !reqResult.value) {
+                return null;
+            }
+        }
+    }
+
+    return evaluateRules(def.rules, context, flagName);
+}
+
+/**
+ * Returns the metadata annotations for a flag.
+ *
+ * Returns `null` if the flag was not found.
+ *
+ * Throws if {@link init} or {@link initFromString} has not been called.
+ */
+export function ffMetadata(flagName: string): FlagMetadata | null {
+    if (FLAGS === null) {
+        throw new Error('init() or initFromString() must be called before ffMetadata()');
+    }
+    const def = FLAGS.get(flagName);
+    if (!def) return null;
+    return def.metadata;
 }
 
 /**
@@ -176,4 +256,6 @@ export function ffRaw(
  */
 export function _reset(): void {
     FLAGS = null;
+    SEGMENTS = new Map();
+    ENV = null;
 }

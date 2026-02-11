@@ -1,4 +1,4 @@
-import { init, ff } from "flagfile-ts";
+import { init, ff, initWithEnv } from "flagfile-ts";
 
 init();
 
@@ -26,3 +26,10 @@ console.log('FF-regexp-feature-check (name="some other check ola demo"):', ff("F
 console.log("\n--- startsWith / endsWith ---");
 console.log('FF-email-domain-check (email="nikolajus@tesla.com"):', ff("FF-email-domain-check", {email: "nikolajus@tesla.com"}));
 console.log('FF-email-domain-check (email="NIKOLAJUS@other.com"):', ff("FF-email-domain-check", {email: "NIKOLAJUS@other.com"}));
+
+console.log("\n--- segments and envs ---");
+console.log("FF-feature-y-2(country=nl):", ff("FF-feature-y-2", { country: "nl" }));
+
+console.log("\n--- array ---");
+// TODO: fix this as its not working properly
+console.log("FF-admin-panel(roles=[viewer, editor, admin]):", ff("FF-admin-panel", { roles: ["viewer", "editor", "admin"] }));

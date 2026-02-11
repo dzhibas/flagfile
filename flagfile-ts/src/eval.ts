@@ -7,10 +7,11 @@ import {
     LogicOp,
     MatchOp,
     FnCall,
+    Segments,
     atomEquals,
     atomCompare,
     atomToString,
-    atomDate,
+    atomDateTime,
     atomString,
 } from './ast.js';
 
@@ -39,11 +40,14 @@ function getVariableValueFromContext(
         }
         case 'Function': {
             if (variable.fn === FnCall.Now) {
-                const today = new Date();
-                const yyyy = today.getFullYear();
-                const mm = String(today.getMonth() + 1).padStart(2, '0');
-                const dd = String(today.getDate()).padStart(2, '0');
-                return atomDate(`${yyyy}-${mm}-${dd}`);
+                const now = new Date();
+                const yyyy = now.getFullYear();
+                const mm = String(now.getMonth() + 1).padStart(2, '0');
+                const dd = String(now.getDate()).padStart(2, '0');
+                const hh = String(now.getHours()).padStart(2, '0');
+                const min = String(now.getMinutes()).padStart(2, '0');
+                const ss = String(now.getSeconds()).padStart(2, '0');
+                return atomDateTime(`${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}`);
             }
             const inner = getVariableValueFromContext(variable.arg, context);
             if (inner === null) return null;
@@ -56,6 +60,17 @@ function getVariableValueFromContext(
                 default:
                     return null;
             }
+        }
+        case 'Coalesce': {
+            for (const arg of variable.args) {
+                if (arg.type === 'Variable' && arg.atom.type === 'Variable') {
+                    const val = context[arg.atom.value];
+                    if (val !== undefined) return val;
+                } else if (arg.type === 'Constant') {
+                    return arg.atom;
+                }
+            }
+            return null;
         }
         default:
             return null;
@@ -88,7 +103,7 @@ function evalComparison(contextVal: Atom, op: ComparisonOp, rhs: Atom): boolean 
 
 // ── Main evaluator ────────────────────────────────────────────────
 
-export function evaluate(expr: AstNode, context: Context, flagName?: string): boolean {
+export function evaluate(expr: AstNode, context: Context, flagName?: string, segments?: Segments): boolean {
     switch (expr.type) {
         case 'Constant': {
             if (expr.atom.type === 'Boolean') {
@@ -153,31 +168,52 @@ export function evaluate(expr: AstNode, context: Context, flagName?: string): bo
         }
 
         case 'Array': {
-            if (expr.right.type !== 'List') return false;
-            const varValue = getVariableValueFromContext(expr.left, context);
-            if (varValue === null) return false;
-            const list = expr.right.items;
+            // Case 1: variable in (literal_list)
+            if (expr.right.type === 'List') {
+                const varValue = getVariableValueFromContext(expr.left, context);
+                if (varValue === null) return false;
+                const list = expr.right.items;
 
-            switch (expr.op) {
-                case ArrayOp.In: {
-                    for (const item of list) {
-                        if (atomEquals(varValue, item)) return true;
+                switch (expr.op) {
+                    case ArrayOp.In: {
+                        for (const item of list) {
+                            if (atomEquals(varValue, item)) return true;
+                        }
+                        return false;
                     }
+                    case ArrayOp.NotIn: {
+                        for (const item of list) {
+                            if (atomEquals(varValue, item)) return false;
+                        }
+                        return true;
+                    }
+                }
+                return false;
+            }
+            // Case 2: "literal" in variable (variable resolves to List in context)
+            else {
+                let searchValue: Atom | null;
+                if (expr.left.type === 'Constant' && expr.left.atom.type !== 'Variable') {
+                    searchValue = expr.left.atom;
+                } else {
+                    searchValue = getVariableValueFromContext(expr.left, context);
+                }
+                const listValue = getVariableValueFromContext(expr.right, context);
+                if (searchValue === null || listValue === null || listValue.type !== 'List') {
                     return false;
                 }
-                case ArrayOp.NotIn: {
-                    for (const item of list) {
-                        if (atomEquals(varValue, item)) return false;
-                    }
-                    return true;
+                const found = listValue.items.some(item => atomEquals(searchValue!, item));
+                switch (expr.op) {
+                    case ArrayOp.In: return found;
+                    case ArrayOp.NotIn: return !found;
                 }
+                return false;
             }
-            return false;
         }
 
         case 'Logic': {
-            const left = evaluate(expr.left, context, flagName);
-            const right = evaluate(expr.right, context, flagName);
+            const left = evaluate(expr.left, context, flagName, segments);
+            const right = evaluate(expr.right, context, flagName, segments);
             switch (expr.op) {
                 case LogicOp.And: return left && right;
                 case LogicOp.Or:  return left || right;
@@ -186,8 +222,15 @@ export function evaluate(expr: AstNode, context: Context, flagName?: string): bo
         }
 
         case 'Scope': {
-            const result = evaluate(expr.expr, context, flagName);
+            const result = evaluate(expr.expr, context, flagName, segments);
             return expr.negate ? !result : result;
+        }
+
+        case 'Segment': {
+            if (!segments) return false;
+            const segExpr = segments.get(expr.name);
+            if (!segExpr) return false;
+            return evaluate(segExpr, context, flagName, segments);
         }
 
         case 'Percentage': {

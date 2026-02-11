@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { init, initFromString, ff, ffRaw, _reset } from './index.js';
+import { init, initFromString, initFromStringWithEnv, ff, ffRaw, ffMetadata, _reset } from './index.js';
 
 beforeEach(() => {
     _reset();
@@ -101,6 +101,180 @@ describe('ffRaw() — FlagReturn objects', () => {
     it('returns null for unknown flag', () => {
         initFromString('FF-x -> true');
         expect(ffRaw('FF-nope')).toBeNull();
+    });
+});
+
+describe('ffMetadata() — flag metadata', () => {
+    it('returns metadata for annotated flag', () => {
+        initFromString(`@owner "payments-team"
+@expires 2026-06-01
+@ticket "JIRA-1234"
+@description "New 3DS2 auth flow"
+@type release
+FF-3ds2-auth -> true`);
+        const meta = ffMetadata('FF-3ds2-auth');
+        expect(meta).not.toBeNull();
+        expect(meta!.owner).toBe('payments-team');
+        expect(meta!.expires).toBe('2026-06-01');
+        expect(meta!.ticket).toBe('JIRA-1234');
+        expect(meta!.description).toBe('New 3DS2 auth flow');
+        expect(meta!.flagType).toBe('release');
+    });
+
+    it('returns empty metadata for unannotated flag', () => {
+        initFromString('FF-simple -> true');
+        const meta = ffMetadata('FF-simple');
+        expect(meta).toEqual({});
+    });
+
+    it('returns null for unknown flag', () => {
+        initFromString('FF-x -> true');
+        expect(ffMetadata('FF-nonexistent')).toBeNull();
+    });
+
+    it('deprecated flag still evaluates normally', () => {
+        initFromString(`@deprecated "Use FF-new instead"
+FF-old -> true`);
+        expect(ff('FF-old')).toBe(true);
+        expect(ffMetadata('FF-old')!.deprecated).toBe('Use FF-new instead');
+    });
+});
+
+describe('@requires — flag prerequisites', () => {
+    it('evaluates flag when prerequisite is true', () => {
+        initFromString(`FF-new-checkout -> true
+
+@requires FF-new-checkout
+FF-checkout-upsell -> true`);
+        expect(ff('FF-checkout-upsell')).toBe(true);
+    });
+
+    it('returns null when prerequisite is false', () => {
+        initFromString(`FF-new-checkout -> false
+
+@requires FF-new-checkout
+FF-checkout-upsell -> true`);
+        expect(ff('FF-checkout-upsell')).toBeNull();
+    });
+
+    it('returns null when prerequisite flag is missing', () => {
+        initFromString(`@requires FF-nonexistent
+FF-dependent -> true`);
+        expect(ff('FF-dependent')).toBeNull();
+    });
+
+    it('evaluates when all prerequisites are true', () => {
+        initFromString(`FF-base -> true
+FF-premium -> true
+
+@requires FF-base
+@requires FF-premium
+FF-advanced -> true`);
+        expect(ff('FF-advanced')).toBe(true);
+    });
+
+    it('returns null when any prerequisite is false', () => {
+        initFromString(`FF-base -> true
+FF-premium -> false
+
+@requires FF-base
+@requires FF-premium
+FF-advanced -> true`);
+        expect(ff('FF-advanced')).toBeNull();
+    });
+
+    it('prerequisite evaluated with same context', () => {
+        initFromString(`FF-gate {
+    plan == premium -> true
+    false
+}
+
+@requires FF-gate
+FF-premium-feature -> true`);
+        expect(ff('FF-premium-feature', { plan: 'premium' })).toBe(true);
+        expect(ff('FF-premium-feature', { plan: 'free' })).toBeNull();
+    });
+
+    it('ffRaw also checks prerequisites', () => {
+        initFromString(`FF-gate -> false
+
+@requires FF-gate
+FF-gated -> true`);
+        expect(ffRaw('FF-gated')).toBeNull();
+    });
+});
+
+describe('@env — environment-based rules', () => {
+    it('matches simple env rule', () => {
+        initFromStringWithEnv(`FF-debug {
+    @env dev -> true
+    @env prod -> false
+}`, 'dev');
+        expect(ff('FF-debug')).toBe(true);
+    });
+
+    it('matches different env', () => {
+        initFromStringWithEnv(`FF-debug {
+    @env dev -> true
+    @env prod -> false
+}`, 'prod');
+        expect(ff('FF-debug')).toBe(false);
+    });
+
+    it('skips env rules when no env is set', () => {
+        initFromString(`FF-debug {
+    @env dev -> true
+    false
+}`);
+        expect(ff('FF-debug')).toBe(false);
+    });
+
+    it('falls through to default when env does not match', () => {
+        initFromStringWithEnv(`FF-debug {
+    @env dev -> true
+    false
+}`, 'staging');
+        expect(ff('FF-debug')).toBe(false);
+    });
+
+    it('handles env block form with sub-rules', () => {
+        initFromStringWithEnv(`FF-feature {
+    @env prod {
+        plan == premium -> true
+        false
+    }
+    true
+}`, 'prod');
+        expect(ff('FF-feature', { plan: 'premium' })).toBe(true);
+        expect(ff('FF-feature', { plan: 'free' })).toBe(false);
+    });
+
+    it('skips env block when env does not match', () => {
+        initFromStringWithEnv(`FF-feature {
+    @env prod {
+        plan == premium -> true
+        false
+    }
+    true
+}`, 'dev');
+        expect(ff('FF-feature')).toBe(true);
+    });
+
+    it('multiple env rules with fallback', () => {
+        initFromStringWithEnv(`FF-logging {
+    @env dev -> true
+    @env stage -> true
+    @env prod -> false
+}`, 'stage');
+        expect(ff('FF-logging')).toBe(true);
+    });
+
+    it('env rules work with ffRaw', () => {
+        initFromStringWithEnv(`FF-level {
+    @env dev -> "debug"
+    "info"
+}`, 'dev');
+        expect(ffRaw('FF-level')).toEqual({ type: 'Str', value: 'debug' });
     });
 });
 

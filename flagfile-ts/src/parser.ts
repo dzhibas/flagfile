@@ -12,6 +12,7 @@ import {
     atomBoolean,
     atomVariable,
     atomDate,
+    atomDateTime,
     atomSemver,
     atomRegex,
 } from './ast.js';
@@ -48,6 +49,14 @@ function skipWs(i: string): string {
 }
 
 // ── Atom parsers ───────────────────────────────────────────────────
+
+function parseDateTime(i: string): ParseResult<Atom> {
+    const m = i.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})Z?/);
+    if (!m) return fail();
+    // Normalize to consistent format without Z for comparison
+    const normalized = `${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:${m[6]}`;
+    return ok(i.slice(m[0].length), atomDateTime(normalized));
+}
 
 function parseDate(i: string): ParseResult<Atom> {
     const m = i.match(/^(\d{4})-(\d{2})-(\d{2})/);
@@ -121,6 +130,7 @@ function parseVariable(i: string): ParseResult<Atom> {
 
 export function parseAtom(i: string): ParseResult<Atom> {
     return alt(
+        () => parseDateTime(i),
         () => parseDate(i),
         () => parseString(i),
         () => parseBoolean(i),
@@ -260,9 +270,42 @@ function parseVariableNodeModifier(i: string): ParseResult<AstNode> {
     });
 }
 
+function parseCoalesceArg(i: string): ParseResult<AstNode> {
+    return alt(
+        () => parseVariableNode(i),
+        () => parseConstant(i),
+    );
+}
+
+function parseCoalesce(i: string): ParseResult<AstNode> {
+    const lower = i.toLowerCase();
+    if (!lower.startsWith('coalesce(')) return fail();
+    let rest = i.slice('coalesce('.length);
+    rest = skipWs(rest);
+
+    const args: AstNode[] = [];
+    const firstR = parseCoalesceArg(rest);
+    if (!firstR.ok) return fail();
+    args.push(firstR.value);
+    rest = skipWs(firstR.rest);
+
+    while (rest[0] === ',') {
+        rest = skipWs(rest.slice(1));
+        const nextR = parseCoalesceArg(rest);
+        if (!nextR.ok) return fail();
+        args.push(nextR.value);
+        rest = skipWs(nextR.rest);
+    }
+
+    if (args.length < 2) return fail();
+    if (rest[0] !== ')') return fail();
+    return ok(rest.slice(1), { type: 'Coalesce', args });
+}
+
 function parseVariableNodeOrModified(i: string): ParseResult<AstNode> {
     return alt(
         () => parseNullaryFunction(i),
+        () => parseCoalesce(i),
         () => parseVariableNodeModifier(i),
         () => parseVariableNode(i),
     );
@@ -307,6 +350,23 @@ function parseArrayExpr(i: string): ParseResult<AstNode> {
         left: varR.value,
         op: opR.value,
         right: listR.value,
+    });
+}
+
+// ── Reverse array expression: constant in/not in variable ──────────
+
+function parseReverseArrayExpr(i: string): ParseResult<AstNode> {
+    const valR = parseConstant(i);
+    if (!valR.ok) return fail();
+    const opR = parseArrayOp(skipWs(valR.rest));
+    if (!opR.ok) return fail();
+    const varR = parseVariableNode(skipWs(opR.rest));
+    if (!varR.ok) return fail();
+    return ok(varR.rest, {
+        type: 'Array',
+        left: valR.value,
+        op: opR.value,
+        right: varR.value,
     });
 }
 
@@ -363,6 +423,7 @@ function parseMatchExpr(i: string): ParseResult<AstNode> {
 function parseCompareOrArrayExpr(i: string): ParseResult<AstNode> {
     return alt(
         () => parseArrayExpr(i),
+        () => parseReverseArrayExpr(i),
         () => parseMatchExpr(i),
         () => parseCompareExpr(i),
     );
@@ -441,12 +502,28 @@ function parsePercentage(i: string): ParseResult<AstNode> {
     return ok(rest, { type: 'Percentage', rate, field: fieldR.value, salt });
 }
 
+// ── Segment call parser: segment(name) ─────────────────────────────
+
+function parseSegmentCall(i: string): ParseResult<AstNode> {
+    const lower = i.toLowerCase();
+    if (!lower.startsWith('segment(')) return fail();
+    let rest = i.slice('segment('.length);
+    rest = skipWs(rest);
+    const m = rest.match(/^([a-zA-Z_][a-zA-Z0-9_-]*)/);
+    if (!m) return fail();
+    const name = m[1];
+    rest = skipWs(rest.slice(m[0].length));
+    if (rest[0] !== ')') return fail();
+    return ok(rest.slice(1), { type: 'Segment', name });
+}
+
 // ── Main expression parser ─────────────────────────────────────────
 
 function parseExpr(input: string): ParseResult<AstNode> {
     let headR = alt<AstNode>(
         () => parseParenthesizedExpr(input),
         () => parsePercentage(input),
+        () => parseSegmentCall(input),
         () => parseLogicExprOnce(input),
         () => parseCompareOrArrayExpr(input),
         () => parseConstant(input),
@@ -461,6 +538,7 @@ function parseExpr(input: string): ParseResult<AstNode> {
         if (!opR.ok) break;
         const rhsR = alt<AstNode>(
             () => parsePercentage(skipWs(opR.rest)),
+            () => parseSegmentCall(skipWs(opR.rest)),
             () => parseCompareOrArrayExpr(skipWs(opR.rest)),
             () => parseParenthesizedExpr(skipWs(opR.rest)),
         );

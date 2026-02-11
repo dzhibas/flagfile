@@ -8,6 +8,7 @@ import {
     atomBoolean,
     atomSemver,
     atomDate,
+    atomDateTime,
     AstNode,
 } from './ast.js';
 
@@ -427,6 +428,63 @@ describe('variable resolution', () => {
     });
 });
 
+// ── DateTime comparisons ──────────────────────────────────────────
+
+describe('datetime comparisons', () => {
+    it('datetime > datetime', () => {
+        expect(eval_('ts > 2025-06-15T09:00:00Z', {
+            ts: atomDateTime('2025-06-15T12:00:00'),
+        })).toBe(true);
+        expect(eval_('ts > 2025-06-15T09:00:00Z', {
+            ts: atomDateTime('2025-06-15T06:00:00'),
+        })).toBe(false);
+    });
+
+    it('datetime < datetime', () => {
+        expect(eval_('ts < 2025-06-15T18:00:00Z', {
+            ts: atomDateTime('2025-06-15T12:00:00'),
+        })).toBe(true);
+        expect(eval_('ts < 2025-06-15T18:00:00Z', {
+            ts: atomDateTime('2025-06-15T20:00:00'),
+        })).toBe(false);
+    });
+
+    it('datetime == datetime', () => {
+        expect(eval_('ts == 2025-06-15T12:00:00Z', {
+            ts: atomDateTime('2025-06-15T12:00:00'),
+        })).toBe(true);
+        expect(eval_('ts == 2025-06-15T12:00:00Z', {
+            ts: atomDateTime('2025-06-15T13:00:00'),
+        })).toBe(false);
+    });
+
+    it('datetime range: between start and end', () => {
+        expect(eval_('ts > 2025-06-15T09:00:00Z and ts < 2025-06-15T18:00:00Z', {
+            ts: atomDateTime('2025-06-15T12:00:00'),
+        })).toBe(true);
+        expect(eval_('ts > 2025-06-15T09:00:00Z and ts < 2025-06-15T18:00:00Z', {
+            ts: atomDateTime('2025-06-15T20:00:00'),
+        })).toBe(false);
+    });
+
+    it('now() returns datetime, comparable to past datetime', () => {
+        // now() should be after 2020
+        expect(eval_('now() > 2020-01-01T00:00:00Z', {})).toBe(true);
+    });
+
+    it('datetime vs date cross-comparison (date treated as midnight)', () => {
+        // DateTime at noon > Date (treated as midnight)
+        expect(eval_('ts > 2025-06-15', {
+            ts: atomDateTime('2025-06-15T12:00:00'),
+        })).toBe(true);
+
+        // DateTime at midnight == Date
+        expect(eval_('ts == 2025-06-15', {
+            ts: atomDateTime('2025-06-15T00:00:00'),
+        })).toBe(true);
+    });
+});
+
 // ── Percentage rollout ────────────────────────────────────────────
 
 describe('percentage rollout', () => {
@@ -541,5 +599,77 @@ describe('percentage rollout', () => {
         // Should be roughly 50% (within 5% tolerance)
         expect(trueCount / total).toBeGreaterThan(0.45);
         expect(trueCount / total).toBeLessThan(0.55);
+    });
+});
+
+describe('reverse in (context arrays)', () => {
+    it('in: found in context list', () => {
+        expect(eval_('"admin" in roles', {
+            roles: { type: 'List', items: [atomString('user'), atomString('admin')] },
+        })).toBe(true);
+    });
+
+    it('in: not found in context list', () => {
+        expect(eval_('"superadmin" in roles', {
+            roles: { type: 'List', items: [atomString('user'), atomString('admin')] },
+        })).toBe(false);
+    });
+
+    it('not in: value absent from list', () => {
+        expect(eval_('"guest" not in roles', {
+            roles: { type: 'List', items: [atomString('user'), atomString('admin')] },
+        })).toBe(true);
+    });
+
+    it('not in: value present in list', () => {
+        expect(eval_('"admin" not in roles', {
+            roles: { type: 'List', items: [atomString('user'), atomString('admin')] },
+        })).toBe(false);
+    });
+
+    it('reverse in combined with logic', () => {
+        expect(eval_('"admin" in roles and active == true', {
+            roles: { type: 'List', items: [atomString('admin')] },
+            active: atomBoolean(true),
+        })).toBe(true);
+        expect(eval_('"admin" in roles and active == true', {
+            roles: { type: 'List', items: [atomString('admin')] },
+            active: atomBoolean(false),
+        })).toBe(false);
+    });
+
+    it('missing variable returns false', () => {
+        expect(eval_('"admin" in roles', {})).toBe(false);
+    });
+
+    it('number in list', () => {
+        expect(eval_('42 in numbers', {
+            numbers: { type: 'List', items: [atomNumber(1), atomNumber(42), atomNumber(100)] },
+        })).toBe(true);
+        expect(eval_('99 in numbers', {
+            numbers: { type: 'List', items: [atomNumber(1), atomNumber(42), atomNumber(100)] },
+        })).toBe(false);
+    });
+});
+
+describe('coalesce', () => {
+    it('returns first present variable', () => {
+        expect(eval_('coalesce(a, b) == "hello"', { a: atomString('hello'), b: atomString('world') })).toBe(true);
+    });
+
+    it('falls through missing first variable to second', () => {
+        expect(eval_('coalesce(a, b) == "world"', { b: atomString('world') })).toBe(true);
+    });
+
+    it('falls through to constant default', () => {
+        expect(eval_('coalesce(a, b, "fallback") == "fallback"', {})).toBe(true);
+    });
+
+    it('returns null when all variables missing and no constant', () => {
+        expect(eval_('coalesce(a, b) == "x"', {})).toBe(false);
+    });
+
+    it('works with three variables, first two missing', () => {
+        expect(eval_('coalesce(x, y, z) == "found"', { z: atomString('found') })).toBe(true);
     });
 });
