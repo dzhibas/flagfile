@@ -373,7 +373,7 @@ FF-c -> true
     fn test_extract_test_flagfile_example() {
         let data = include_str!("../Flagfile.example");
         let annotations = extract_test_annotations(data);
-        assert_eq!(annotations.len(), 9);
+        assert_eq!(annotations.len(), 11);
         assert_eq!(
             annotations[0].assertion,
             "FF-feature-y(countryCode=nl) == true"
@@ -412,10 +412,10 @@ FF-c -> true
         );
         assert_eq!(annotations[7].line_number, 134);
         assert_eq!(
-            annotations[8].assertion,
+            annotations[10].assertion,
             "FF-regexp-feature-check(name=\"Check Nikolajus match\") == true"
         );
-        assert_eq!(annotations[8].line_number, 153);
+        assert_eq!(annotations[10].line_number, 155);
     }
 }
 
