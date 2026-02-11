@@ -708,6 +708,9 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: 
 
 fn run_find(path: &str, search: Option<&str>) {
     let regex_pattern = match search {
+        Some(term) if term.starts_with("FF-") || term.starts_with("FF_") => {
+            format!(r"\b{}", regex::escape(term))
+        }
         Some(term) => format!(
             r"\bFF[-_][a-zA-Z0-9_-]*{}[a-zA-Z0-9_-]*",
             regex::escape(term)
