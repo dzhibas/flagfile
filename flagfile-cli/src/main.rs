@@ -1,7 +1,7 @@
 mod lint;
 mod serve;
 
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{self, BufRead, IsTerminal, Write};
 use std::process;
 use std::sync::Mutex;
@@ -96,6 +96,22 @@ enum Command {
         /// Search term to filter flag names (case-insensitive substring match)
         #[arg(short = 's', long = "search")]
         search: Option<String>,
+
+        /// Print only the total number of matches
+        #[arg(short = 'c', long = "count", conflicts_with_all = ["files_only", "unused"])]
+        count: bool,
+
+        /// Print only file paths containing matches (like grep -l)
+        #[arg(short = 'l', long = "files-only", conflicts_with_all = ["count", "unused"])]
+        files_only: bool,
+
+        /// Report flags defined in Flagfile but not referenced in source code
+        #[arg(short = 'u', long = "unused", conflicts_with_all = ["count", "files_only"])]
+        unused: bool,
+
+        /// Path to the Flagfile (used with --unused)
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
     },
     Serve {
         /// Path to the Flagfile
@@ -797,7 +813,19 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: 
     }
 }
 
-fn run_find(path: &str, search: Option<&str>) {
+fn run_find(
+    path: &str,
+    search: Option<&str>,
+    count: bool,
+    files_only: bool,
+    unused: bool,
+    flagfile_path: &str,
+) {
+    if unused {
+        run_find_unused(path, flagfile_path);
+        return;
+    }
+
     let regex_pattern = match search {
         Some(term) if term.starts_with("FF-") || term.starts_with("FF_") => {
             format!(r"\b{}", regex::escape(term))
@@ -810,11 +838,222 @@ fn run_find(path: &str, search: Option<&str>) {
     };
     let pattern = Regex::new(&regex_pattern).unwrap();
     let use_color = io::stdout().is_terminal();
-    let stdout = Mutex::new(io::stdout());
+
+    if count {
+        // --count mode: count occurrences per flag name
+        let flag_counts: Mutex<HashMap<String, usize>> = Mutex::new(HashMap::new());
+
+        WalkBuilder::new(path).build_parallel().run(|| {
+            let pattern = pattern.clone();
+            let flag_counts = &flag_counts;
+            Box::new(move |entry| {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+                    return ignore::WalkState::Continue;
+                }
+
+                let file = match std::fs::File::open(entry.path()) {
+                    Ok(f) => f,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                let reader = io::BufReader::new(file);
+                let mut local_counts: HashMap<String, usize> = HashMap::new();
+                for line in reader.lines() {
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(_) => break,
+                    };
+                    for mat in pattern.find_iter(&line) {
+                        *local_counts.entry(mat.as_str().to_string()).or_insert(0) += 1;
+                    }
+                }
+                if !local_counts.is_empty() {
+                    let mut global = flag_counts.lock().unwrap();
+                    for (flag, cnt) in local_counts {
+                        *global.entry(flag).or_insert(0) += cnt;
+                    }
+                }
+
+                ignore::WalkState::Continue
+            })
+        });
+
+        let counts = flag_counts.into_inner().unwrap();
+        let mut sorted: Vec<_> = counts.into_iter().collect();
+        sorted.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+
+        let total: usize = sorted.iter().map(|(_, c)| c).sum();
+        for (flag, cnt) in &sorted {
+            println!("{:>6}  {}", cnt, flag);
+        }
+        println!();
+        println!("{} total occurrences across {} unique flags", total, sorted.len());
+    } else if files_only {
+        // --files-only mode: collect unique file paths with matches
+        let matched_files: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
+
+        WalkBuilder::new(path).build_parallel().run(|| {
+            let pattern = pattern.clone();
+            let matched_files = &matched_files;
+            Box::new(move |entry| {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+                    return ignore::WalkState::Continue;
+                }
+
+                let path = entry.path();
+                let file = match std::fs::File::open(path) {
+                    Ok(f) => f,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                let reader = io::BufReader::new(file);
+                for line in reader.lines() {
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(_) => break,
+                    };
+                    if pattern.is_match(&line) {
+                        matched_files
+                            .lock()
+                            .unwrap()
+                            .insert(path.display().to_string());
+                        break; // one match is enough for this file
+                    }
+                }
+
+                ignore::WalkState::Continue
+            })
+        });
+
+        let files = matched_files.into_inner().unwrap();
+        for f in &files {
+            println!("{}", f);
+        }
+    } else {
+        // Default mode: grep-like output
+        let stdout = Mutex::new(io::stdout());
+
+        WalkBuilder::new(path).build_parallel().run(|| {
+            let pattern = pattern.clone();
+            let stdout = &stdout;
+            Box::new(move |entry| {
+                let entry = match entry {
+                    Ok(e) => e,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                if !entry.file_type().is_some_and(|ft| ft.is_file()) {
+                    return ignore::WalkState::Continue;
+                }
+
+                let path = entry.path();
+
+                let file = match std::fs::File::open(path) {
+                    Ok(f) => f,
+                    Err(_) => return ignore::WalkState::Continue,
+                };
+
+                let reader = io::BufReader::new(file);
+                let display_path = path.display();
+
+                // Batch output per file to reduce lock contention
+                let mut matches = Vec::new();
+                for (line_idx, line) in reader.lines().enumerate() {
+                    let line = match line {
+                        Ok(l) => l,
+                        Err(_) => break, // binary file or encoding error
+                    };
+
+                    if pattern.is_match(&line) {
+                        let colored_line = if use_color {
+                            pattern.replace_all(&line, "\x1b[31m$0\x1b[0m").into_owned()
+                        } else {
+                            line
+                        };
+                        matches.push(format!(
+                            "{}:{}:{}",
+                            display_path,
+                            line_idx + 1,
+                            colored_line
+                        ));
+                    }
+                }
+
+                if !matches.is_empty() {
+                    let mut out = stdout.lock().unwrap();
+                    for m in &matches {
+                        let _ = writeln!(out, "{}", m);
+                    }
+                }
+
+                ignore::WalkState::Continue
+            })
+        });
+    }
+}
+
+fn run_find_unused(path: &str, flagfile_path: &str) {
+    // 1. Parse the Flagfile to get all defined flag names
+    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
+        Ok(content) => content,
+        Err(_) => {
+            eprintln!("{} does not exist", flagfile_path);
+            process::exit(1);
+        }
+    };
+
+    let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("Parsing failed: {}", e);
+            process::exit(1);
+        }
+    };
+
+    if !remainder.trim().is_empty() {
+        eprintln!(
+            "Parsing failed: unexpected content near: {}",
+            remainder.trim().lines().next().unwrap_or("")
+        );
+        process::exit(1);
+    }
+
+    let mut defined_flags: Vec<String> = Vec::new();
+    for fv in &parsed.flags {
+        for (name, _) in fv.iter() {
+            defined_flags.push(name.to_string());
+        }
+    }
+
+    if defined_flags.is_empty() {
+        println!("No flags defined in {}", flagfile_path);
+        return;
+    }
+
+    // 2. Resolve paths to exclude: the Flagfile itself and test files
+    let flagfile_canonical = std::fs::canonicalize(flagfile_path).ok();
+    let testfile_path = format!("{}.tests", flagfile_path);
+    let testfile_canonical = std::fs::canonicalize(&testfile_path).ok();
+
+    // 3. Walk the codebase and collect all FF- references found in source files
+    let pattern = Regex::new(r"\bFF[-_][a-zA-Z0-9_-]+").unwrap();
+    let seen_flags: Mutex<HashSet<String>> = Mutex::new(HashSet::new());
 
     WalkBuilder::new(path).build_parallel().run(|| {
         let pattern = pattern.clone();
-        let stdout = &stdout;
+        let seen_flags = &seen_flags;
+        let flagfile_canonical = &flagfile_canonical;
+        let testfile_canonical = &testfile_canonical;
         Box::new(move |entry| {
             let entry = match entry {
                 Ok(e) => e,
@@ -825,49 +1064,97 @@ fn run_find(path: &str, search: Option<&str>) {
                 return ignore::WalkState::Continue;
             }
 
-            let path = entry.path();
+            let entry_path = entry.path();
 
-            let file = match std::fs::File::open(path) {
+            // Skip the Flagfile itself
+            if let Some(ref fc) = flagfile_canonical {
+                if let Ok(ref ep) = std::fs::canonicalize(entry_path) {
+                    if ep == fc {
+                        return ignore::WalkState::Continue;
+                    }
+                }
+            }
+
+            // Skip the test file (e.g. Flagfile.tests)
+            if let Some(ref tc) = testfile_canonical {
+                if let Ok(ref ep) = std::fs::canonicalize(entry_path) {
+                    if ep == tc {
+                        return ignore::WalkState::Continue;
+                    }
+                }
+            }
+
+            // Skip test files by naming convention (*.test.*, *.tests)
+            if let Some(file_name) = entry_path.file_name().and_then(|n| n.to_str()) {
+                if file_name.ends_with(".tests")
+                    || file_name.contains(".test.")
+                    || file_name.contains(".spec.")
+                {
+                    return ignore::WalkState::Continue;
+                }
+            }
+
+            let file = match std::fs::File::open(entry_path) {
                 Ok(f) => f,
                 Err(_) => return ignore::WalkState::Continue,
             };
 
             let reader = io::BufReader::new(file);
-            let display_path = path.display();
+            let mut local_seen: HashSet<String> = HashSet::new();
 
-            // Batch output per file to reduce lock contention
-            let mut matches = Vec::new();
-            for (line_idx, line) in reader.lines().enumerate() {
+            for line in reader.lines() {
                 let line = match line {
                     Ok(l) => l,
-                    Err(_) => break, // binary file or encoding error
+                    Err(_) => break,
                 };
-
-                if pattern.is_match(&line) {
-                    let colored_line = if use_color {
-                        pattern.replace_all(&line, "\x1b[31m$0\x1b[0m").into_owned()
-                    } else {
-                        line
-                    };
-                    matches.push(format!(
-                        "{}:{}:{}",
-                        display_path,
-                        line_idx + 1,
-                        colored_line
-                    ));
+                for mat in pattern.find_iter(&line) {
+                    local_seen.insert(mat.as_str().to_string());
                 }
             }
 
-            if !matches.is_empty() {
-                let mut out = stdout.lock().unwrap();
-                for m in &matches {
-                    let _ = writeln!(out, "{}", m);
-                }
+            if !local_seen.is_empty() {
+                let mut global = seen_flags.lock().unwrap();
+                global.extend(local_seen);
             }
 
             ignore::WalkState::Continue
         })
     });
+
+    // 4. Compare defined flags against seen flags
+    let seen = seen_flags.into_inner().unwrap();
+    let use_color = io::stdout().is_terminal();
+    let mut unused: Vec<&str> = Vec::new();
+
+    for flag in &defined_flags {
+        if !seen.contains(flag.as_str()) {
+            unused.push(flag);
+        }
+    }
+
+    if unused.is_empty() {
+        println!(
+            "All {} flags from {} are referenced in source code",
+            defined_flags.len(),
+            flagfile_path
+        );
+    } else {
+        let warn_icon = if use_color {
+            "\x1b[33m\u{26a0}\x1b[0m"
+        } else {
+            "\u{26a0}"
+        };
+        for flag in &unused {
+            println!("{} {}  (unused - not found in source code)", warn_icon, flag);
+        }
+        println!();
+        println!(
+            "{} unused flags out of {} defined",
+            unused.len(),
+            defined_flags.len()
+        );
+        process::exit(1);
+    }
 }
 
 #[tokio::main]
@@ -897,7 +1184,14 @@ async fn main() {
             flag_name,
             context,
         } => run_eval(&flagfile, &flag_name, &context, env.as_deref()),
-        Command::Find { path, search } => run_find(&path, search.as_deref()),
+        Command::Find {
+            path,
+            search,
+            count,
+            files_only,
+            unused,
+            flagfile,
+        } => run_find(&path, search.as_deref(), count, files_only, unused, &flagfile),
         Command::Serve {
             flagfile,
             port,
