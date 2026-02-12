@@ -1,11 +1,23 @@
 mod circular_deps;
+mod circular_segments;
+mod coalesce_constant_first;
 mod deprecated;
 mod deprecated_no_expiry;
 mod duplicate_flags;
+mod duplicate_requires;
+mod empty_flag;
+mod env_missing_default;
 mod experiment_no_expiry;
 mod expired;
 mod missing_default;
 mod missing_owner;
+mod mixed_return_types;
+mod percentage_range;
+mod redundant_function;
+mod shadowed_env_rules;
+mod tautology;
+mod undefined_requires;
+mod undefined_segment;
 mod unreachable_rules;
 mod unused_segments;
 
@@ -88,7 +100,10 @@ pub fn run_lint_inner(flagfile_path: &str) -> Result<(), ()> {
     // Global lints
     warnings.extend(duplicate_flags::check(&parsed));
     warnings.extend(circular_deps::check(&parsed));
+    warnings.extend(circular_segments::check(&parsed));
     warnings.extend(unused_segments::check(&parsed));
+    warnings.extend(undefined_requires::check(&parsed));
+    warnings.extend(undefined_segment::check(&parsed));
 
     // Per-flag lints
     for fv in &parsed.flags {
@@ -100,6 +115,15 @@ pub fn run_lint_inner(flagfile_path: &str) -> Result<(), ()> {
             warnings.extend(deprecated_no_expiry::check(name, def));
             warnings.extend(unreachable_rules::check(name, def));
             warnings.extend(missing_default::check(name, def));
+            warnings.extend(mixed_return_types::check(name, def));
+            warnings.extend(empty_flag::check(name, def));
+            warnings.extend(duplicate_requires::check(name, def));
+            warnings.extend(percentage_range::check(name, def));
+            warnings.extend(tautology::check(name, def));
+            warnings.extend(coalesce_constant_first::check(name, def));
+            warnings.extend(redundant_function::check(name, def));
+            warnings.extend(env_missing_default::check(name, def));
+            warnings.extend(shadowed_env_rules::check(name, def));
         }
     }
 
