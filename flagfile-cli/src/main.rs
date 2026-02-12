@@ -320,45 +320,112 @@ fn result_matches(result: &FlagReturn, expected: &str) -> bool {
     }
 }
 
-const INIT_FLAGFILE: &str = r#"// Simple on/off flag
+const INIT_FLAGFILE: &str = r#"// ─── Segments ────────────────────────────────────────────────
+// Reusable audience segments that can be referenced in any flag
+
+@segment beta_users {
+    beta == true or role == developer
+}
+
+@segment eu_region {
+    country in (DE, FR, ES, IT, NL, PL, SE)
+}
+
+// ─── Simple flag ─────────────────────────────────────────────
+// A basic on/off toggle
+
 FF-welcome-banner -> true
 
-// Feature with rules based on context
-// @test FF-premium-feature(plan=premium) == true
+// ─── Flag with metadata ─────────────────────────────────────
+// Metadata annotations help document ownership and lifecycle
+
+@owner "payments-team"
+@ticket "PAY-1234"
+@description "Premium features for paying customers"
+@type release
+@test FF-premium-feature(plan=premium) == true
+@test FF-premium-feature(plan=free,beta=true) == true
+@test FF-premium-feature(plan=free) == false
 FF-premium-feature {
-    // enable for users in premium plan
     plan == premium -> true
-    // enable for beta testers
-    beta == true -> true
-    // disabled by default
+    segment(beta_users) -> true
     false
 }
 
-// Rollout by country
+// ─── Flag with @env rules ────────────────────────────────────
+// Use @env to vary behavior per environment (dev, staging, prod)
+// Set the active env via `ff serve --env prod` or in ff.toml
+
+@owner "platform-team"
+@description "New checkout flow rollout"
+@test FF-new-checkout(country=US,platform=web) == false
+@test FF-new-checkout(country=DE,platform=web) == false
 FF-new-checkout {
-    country in (US, CA, GB) and platform == web -> true
+    // always on in dev and staging
+    @env dev -> true
+    @env staging -> true
+
+    // gradual rollout in production
+    @env prod {
+        country in (US, CA, GB) and platform == web -> true
+        false
+    }
+
+    // default when no env is set
+    false
+}
+
+// ─── Percentage rollout ──────────────────────────────────────
+
+@description "Dark mode for 25% of users"
+FF-dark-mode {
+    segment(eu_region) -> true
+    percentage(25%, userId) -> true
     false
 }
 "#;
 
-const INIT_TESTS: &str = r#"FF-premium-feature(plan=premium) == TRUE
+const INIT_TESTS: &str = r#"// Tests for FF-premium-feature
+FF-premium-feature(plan=premium) == TRUE
 FF-premium-feature(plan=free) == FALSE
 FF-premium-feature(plan=free,beta=true) == TRUE
-FF-new-checkout(country=US,platform=web) == TRUE
-FF-new-checkout(country=US,platform=mobile) == FALSE
+FF-premium-feature(role=developer) == TRUE
+
+// Tests for FF-new-checkout (without env set, defaults to false)
+FF-new-checkout(country=US,platform=web) == FALSE
 FF-new-checkout(country=DE,platform=web) == FALSE
+
+// Tests for FF-dark-mode
+FF-dark-mode(country=DE) == TRUE
+FF-dark-mode(country=US,userId=user123) == FALSE
+"#;
+
+const INIT_CONFIG: &str = r#"# ff.toml — configuration for `ff serve`
+
+# Environment to evaluate @env rules against
+env = "dev"
+
+# Port for the HTTP server
+port = 8080
+
+# Path to the Flagfile
+flagfile = "Flagfile"
 "#;
 
 fn run_init() {
     let flagfile_exists = std::path::Path::new("Flagfile").exists();
     let tests_exists = std::path::Path::new("Flagfile.tests").exists();
+    let config_exists = std::path::Path::new("ff.toml").exists();
 
-    if flagfile_exists || tests_exists {
+    if flagfile_exists || tests_exists || config_exists {
         if flagfile_exists {
             eprintln!("Flagfile already exists in current folder");
         }
         if tests_exists {
             eprintln!("Flagfile.tests already exists in current folder");
+        }
+        if config_exists {
+            eprintln!("ff.toml already exists in current folder");
         }
         process::exit(1);
     }
@@ -373,7 +440,12 @@ fn run_init() {
         process::exit(1);
     });
 
-    println!("Created Flagfile and Flagfile.tests");
+    std::fs::write("ff.toml", INIT_CONFIG).unwrap_or_else(|e| {
+        eprintln!("Failed to create ff.toml: {}", e);
+        process::exit(1);
+    });
+
+    println!("Created Flagfile, Flagfile.tests, and ff.toml");
 }
 
 fn run_list(flagfile_path: &str, show_description: bool) {
