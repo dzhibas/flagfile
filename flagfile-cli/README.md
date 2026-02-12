@@ -130,16 +130,11 @@ Returns `404` if the flag is not found, `422` if no rule matched the given conte
 - [x] ff eval
 - [x] ff find
 - [x] ff serve
-- [ ] ff lint
-
-    // $ ff lint
-    // ⚠ FF-old-feature: expired 2025-12-01 (45 days ago)
-    // ⚠ FF-unnamed-flag: missing @owner
-    // ⚠ FF-experiment-x: type=experiment but no @expires set
-
+- [x] ff lint
 - [ ] ff merge -- if we want to merge per environment flagfile values? aka Flagfile.stage vs Flagfile.local vs Flagfile.prod into Flagfile
 - [ ] ff fmt — formats Flagfile
 - [ ] ff edit — opens browser UI with simple editor of Flagfile
+- [ ] ff diff - diff between @envs
 
 distributed functions
 
