@@ -250,6 +250,10 @@
         {
           "match": "\\b(not|NOT)\\b",
           "name": "keyword.operator.negation.flagfile"
+        },
+        {
+          "match": "\\b(?i)(is\\s+not\\s+null|is\\s+null)\\b",
+          "name": "keyword.operator.null.flagfile"
         }
       ]
     },

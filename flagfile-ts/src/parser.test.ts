@@ -504,3 +504,49 @@ describe('coalesce', () => {
         }
     });
 });
+
+// ── Null check parsing ────────────────────────────────────────────
+
+describe('null check parsing', () => {
+    it('parses "is null"', () => {
+        const r = parse('userId is null');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.type).toBe('NullCheck');
+            if (r.value.type === 'NullCheck') {
+                expect(r.value.isNull).toBe(true);
+                expect(r.value.variable.type).toBe('Variable');
+            }
+            expect(r.rest).toBe('');
+        }
+    });
+
+    it('parses "is not null"', () => {
+        const r = parse('userId is not null');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.type).toBe('NullCheck');
+            if (r.value.type === 'NullCheck') {
+                expect(r.value.isNull).toBe(false);
+            }
+            expect(r.rest).toBe('');
+        }
+    });
+
+    it('parses case-insensitive IS NULL / IS NOT NULL', () => {
+        const r1 = parse('userId IS NULL');
+        expect(r1.ok).toBe(true);
+        const r2 = parse('userId IS NOT NULL');
+        expect(r2.ok).toBe(true);
+    });
+
+    it('parses null check in logic expressions', () => {
+        const r1 = parse('userId is null or plan == premium');
+        expect(r1.ok).toBe(true);
+        if (r1.ok) expect(r1.rest).toBe('');
+
+        const r2 = parse('userId is not null and plan == premium');
+        expect(r2.ok).toBe(true);
+        if (r2.ok) expect(r2.rest).toBe('');
+    });
+});

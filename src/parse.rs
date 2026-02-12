@@ -300,8 +300,32 @@ fn parse_reverse_array_expr(i: &str) -> IResult<&str, AstNode> {
     })(i)
 }
 
+fn parse_null_check(i: &str) -> IResult<&str, AstNode> {
+    let (i, var) = parse_variable_node_or_modified(i)?;
+    let (i, _) = multispace0(i)?;
+    let (i, _) = tag_no_case("is")(i)?;
+    let (i, _) = multispace0(i)?;
+    let (i, negated) = opt(tuple((tag_no_case("not"), multispace0)))(i)?;
+    let (i, _) = tag_no_case("null")(i)?;
+    // Ensure 'null' is not followed by word characters
+    if i.starts_with(|c: char| c.is_alphanumeric() || c == '_') {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            i,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+    Ok((
+        i,
+        AstNode::NullCheck {
+            variable: Box::new(var),
+            is_null: negated.is_none(),
+        },
+    ))
+}
+
 fn parse_compare_or_array_expr(i: &str) -> IResult<&str, AstNode> {
     alt((
+        parse_null_check,
         parse_array_expr,
         parse_reverse_array_expr,
         parse_match_expr,
@@ -819,6 +843,48 @@ mod tests {
     #[test]
     fn test_parse_reverse_in_combined_with_comparison() {
         let (i, _v) = parse("\"admin\" in roles and plan == \"premium\"").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_null_check_is_null() {
+        let (i, v) = parse("userId is null").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            v,
+            AstNode::NullCheck {
+                variable: Box::new(AstNode::Variable(Atom::Variable("userId".into()))),
+                is_null: true,
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_null_check_is_not_null() {
+        let (i, v) = parse("userId is not null").unwrap();
+        assert_eq!(i, "");
+        assert_eq!(
+            v,
+            AstNode::NullCheck {
+                variable: Box::new(AstNode::Variable(Atom::Variable("userId".into()))),
+                is_null: false,
+            }
+        );
+    }
+
+    #[test]
+    fn test_parse_null_check_case_insensitive() {
+        let (i, _) = parse("userId IS NULL").unwrap();
+        assert_eq!(i, "");
+        let (i, _) = parse("userId IS NOT NULL").unwrap();
+        assert_eq!(i, "");
+    }
+
+    #[test]
+    fn test_parse_null_check_in_logic() {
+        let (i, _) = parse("userId is null or plan == premium").unwrap();
+        assert_eq!(i, "");
+        let (i, _) = parse("userId is not null and plan == premium").unwrap();
         assert_eq!(i, "");
     }
 

@@ -63,7 +63,8 @@ export type AstNode =
     | { type: 'Scope'; expr: AstNode; negate: boolean }
     | { type: 'Percentage'; rate: number; field: AstNode; salt: string | null }
     | { type: 'Coalesce'; args: AstNode[] }
-    | { type: 'Segment'; name: string };
+    | { type: 'Segment'; name: string }
+    | { type: 'NullCheck'; variable: AstNode; isNull: boolean };
 
 // ── Flag return values ─────────────────────────────────────────────
 

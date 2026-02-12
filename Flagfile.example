@@ -226,3 +226,12 @@ FF-admin-panel {
 @deprecated "Use FF-new-checkout instead"
 @expires 2027-01-01
 FF-old-checkout -> true
+
+// is null & is not null
+@test FF-null-check-flag-demo(plan=premium) == false
+@test FF-null-check-flag-demo(userId=20, plan=premium) == true
+FF-null-check-flag-demo {
+    userId is null -> false
+    userId is not null and plan == premium -> true
+    false
+}

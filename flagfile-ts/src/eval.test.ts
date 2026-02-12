@@ -673,3 +673,34 @@ describe('coalesce', () => {
         expect(eval_('coalesce(x, y, z) == "found"', { z: atomString('found') })).toBe(true);
     });
 });
+
+// ── Null check evaluation ─────────────────────────────────────────
+
+describe('null check evaluation', () => {
+    it('is null returns true when variable missing', () => {
+        expect(eval_('userId is null', {})).toBe(true);
+    });
+
+    it('is null returns false when variable present', () => {
+        expect(eval_('userId is null', { userId: atomString('alice') })).toBe(false);
+    });
+
+    it('is not null returns true when variable present', () => {
+        expect(eval_('userId is not null', { userId: atomString('alice') })).toBe(true);
+    });
+
+    it('is not null returns false when variable missing', () => {
+        expect(eval_('userId is not null', {})).toBe(false);
+    });
+
+    it('works combined with logic operators', () => {
+        expect(eval_('userId is not null and plan == premium', {
+            userId: atomString('alice'),
+            plan: atomString('premium'),
+        })).toBe(true);
+
+        expect(eval_('userId is null or plan == premium', {
+            plan: atomString('free'),
+        })).toBe(true);
+    });
+});

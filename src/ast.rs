@@ -315,6 +315,10 @@ pub enum AstNode {
     },
     Coalesce(Vec<AstNode>),
     Segment(String),
+    NullCheck {
+        variable: Box<AstNode>,
+        is_null: bool,
+    },
 }
 
 impl AstNode {

@@ -111,6 +111,9 @@ syntax match flagfileArrayOp "\<not\s\+in\>"
 syntax keyword flagfileArrayOp in
 " Negation
 syntax keyword flagfileNegation not NOT
+" Null checks (is null / is not null)
+syntax match flagfileNullCheck "\<is\s\+not\s\+null\>"
+syntax match flagfileNullCheck "\<is\s\+null\>"
 
 " ─── Variables ────────────────────────────────────────────────
 " Any identifier that doesn't start with FF- or FF_
@@ -189,6 +192,7 @@ highlight default link flagfileMatchOp      Operator
 highlight default link flagfileLogical  Keyword
 highlight default link flagfileArrayOp  Keyword
 highlight default link flagfileNegation Keyword
+highlight default link flagfileNullCheck Keyword
 
 " Variables
 highlight default link flagfileVariable Identifier

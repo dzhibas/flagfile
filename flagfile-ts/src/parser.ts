@@ -418,10 +418,45 @@ function parseMatchExpr(i: string): ParseResult<AstNode> {
     });
 }
 
+// ── Null check: variable is null / variable is not null ─────────────
+
+function parseNullCheck(i: string): ParseResult<AstNode> {
+    const varR = parseVariableNodeOrModified(i);
+    if (!varR.ok) return fail();
+    let rest = skipWs(varR.rest);
+
+    // Match "is" keyword (case-insensitive)
+    const lower = rest.toLowerCase();
+    if (!lower.startsWith('is')) return fail();
+    const afterIs = rest[2];
+    if (afterIs && /[a-zA-Z0-9_]/.test(afterIs)) return fail();
+    rest = skipWs(rest.slice(2));
+
+    // Check for optional "not"
+    let isNull = true;
+    const lower2 = rest.toLowerCase();
+    if (lower2.startsWith('not')) {
+        const afterNot = rest[3];
+        if (afterNot && /[a-zA-Z0-9_]/.test(afterNot)) return fail();
+        isNull = false;
+        rest = skipWs(rest.slice(3));
+    }
+
+    // Match "null" keyword (case-insensitive)
+    const lower3 = rest.toLowerCase();
+    if (!lower3.startsWith('null')) return fail();
+    const afterNull = rest[4];
+    if (afterNull && /[a-zA-Z0-9_]/.test(afterNull)) return fail();
+    rest = rest.slice(4);
+
+    return ok(rest, { type: 'NullCheck', variable: varR.value, isNull });
+}
+
 // ── Compare or Array expr ──────────────────────────────────────────
 
 function parseCompareOrArrayExpr(i: string): ParseResult<AstNode> {
     return alt(
+        () => parseNullCheck(i),
         () => parseArrayExpr(i),
         () => parseReverseArrayExpr(i),
         () => parseMatchExpr(i),

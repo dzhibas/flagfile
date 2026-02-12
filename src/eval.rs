@@ -221,6 +221,14 @@ fn eval_impl<'a>(
                 false
             }
         }
+        AstNode::NullCheck { variable, is_null } => {
+            let val = get_variable_value_from_context(variable, context);
+            if *is_null {
+                val.is_none()
+            } else {
+                val.is_some()
+            }
+        }
         AstNode::Percentage { rate, field, salt } => {
             let bucket_key = get_variable_value_from_context(field, context);
             let bucket_key_str = match bucket_key {
@@ -1378,6 +1386,92 @@ mod tests {
             eval(
                 &parse("\"admin\" in roles").unwrap().1,
                 &HashMap::from([]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    // ── Null check tests ─────────────────────────────────────────
+
+    #[test]
+    fn test_null_check_is_null_true() {
+        // userId is not in context → is null → true
+        assert_eq!(
+            true,
+            eval(
+                &parse("userId is null").unwrap().1,
+                &HashMap::from([]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_null_check_is_null_false() {
+        // userId is in context → is null → false
+        assert_eq!(
+            false,
+            eval(
+                &parse("userId is null").unwrap().1,
+                &HashMap::from([("userId", Atom::String("alice".into()))]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_null_check_is_not_null_true() {
+        // userId is in context → is not null → true
+        assert_eq!(
+            true,
+            eval(
+                &parse("userId is not null").unwrap().1,
+                &HashMap::from([("userId", Atom::String("alice".into()))]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_null_check_is_not_null_false() {
+        // userId is not in context → is not null → false
+        assert_eq!(
+            false,
+            eval(
+                &parse("userId is not null").unwrap().1,
+                &HashMap::from([]),
+                None,
+            )
+            .unwrap()
+        );
+    }
+
+    #[test]
+    fn test_null_check_combined_with_logic() {
+        // userId is not null and plan == premium
+        assert_eq!(
+            true,
+            eval(
+                &parse("userId is not null and plan == premium").unwrap().1,
+                &HashMap::from([
+                    ("userId", Atom::String("alice".into())),
+                    ("plan", Atom::String("premium".into())),
+                ]),
+                None,
+            )
+            .unwrap()
+        );
+
+        // userId is null → first clause true, second doesn't matter with or
+        assert_eq!(
+            true,
+            eval(
+                &parse("userId is null or plan == premium").unwrap().1,
+                &HashMap::from([("plan", Atom::String("free".into()))]),
                 None,
             )
             .unwrap()

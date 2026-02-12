@@ -50,6 +50,7 @@ fn collect_refs(node: &AstNode, out: &mut HashSet<String>) {
                 collect_refs(n, out);
             }
         }
+        AstNode::NullCheck { variable, .. } => collect_refs(variable, out),
         AstNode::Void | AstNode::Variable(_) | AstNode::Constant(_) | AstNode::List(_) => {}
     }
 }

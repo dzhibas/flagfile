@@ -233,6 +233,11 @@ export function evaluate(expr: AstNode, context: Context, flagName?: string, seg
             return evaluate(segExpr, context, flagName, segments);
         }
 
+        case 'NullCheck': {
+            const val = getVariableValueFromContext(expr.variable, context);
+            return expr.isNull ? val === null : val !== null;
+        }
+
         case 'Percentage': {
             const inner = getVariableValueFromContext(expr.field, context);
             if (inner === null) return false;

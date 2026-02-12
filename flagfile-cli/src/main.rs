@@ -17,7 +17,7 @@ use regex::Regex;
 
 #[derive(Parser, Debug)]
 #[command(name = "Flagfile")]
-#[command(version = "0.1.7")]
+#[command(version = env!("CARGO_PKG_VERSION"))]
 #[command(about = "Feature flagging for developers and devops", long_about = None)]
 struct Args {
     #[command(subcommand)]
