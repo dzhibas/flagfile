@@ -1,6 +1,6 @@
 [package]
 name = "flagfile-cli"
-version = "0.1.16"
+version = "0.1.17"
 edition = "2021"
 description = "CLI tool for managing and evaluating Flagfile feature flags"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]

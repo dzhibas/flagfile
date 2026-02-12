@@ -8,13 +8,11 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
-use flagfile_lib::ast::Atom;
+use flagfile_lib::ast::{Atom, FlagMetadata};
 use flagfile_lib::eval::{eval_with_segments, Context, Segments};
 use flagfile_lib::parse_flagfile::{parse_flagfile_with_segments, FlagReturn, Rule};
 use notify::{EventKind, RecursiveMode, Watcher};
 use tokio::sync::RwLock;
-
-use crate::evaluate_rules_with_env;
 
 // --- OFREP request/response types ---
 
@@ -46,16 +44,19 @@ struct OFREPBulkResponse {
     flags: Vec<serde_json::Value>,
 }
 
-#[derive(serde::Deserialize, Default)]
+#[derive(serde::Deserialize, Default, Debug)]
 struct ServeConfig {
     port: Option<u16>,
     flagfile: Option<String>,
+    env: Option<String>,
 }
 
 pub struct FlagStore {
     pub flagfile_content: String,
     pub flags: HashMap<String, Vec<Rule>>,
+    pub metadata: HashMap<String, FlagMetadata>,
     pub segments: Segments,
+    pub env: Option<String>,
 }
 
 pub struct AppState {
@@ -83,7 +84,7 @@ async fn handle_eval(
         .map(|v| v == "plain")
         .unwrap_or(false);
 
-    let Some(rules) = store.flags.get(&flag_name) else {
+    if !store.flags.contains_key(&flag_name) {
         if plain {
             return (StatusCode::NOT_FOUND, "flag not found").into_response();
         }
@@ -92,7 +93,7 @@ async fn handle_eval(
             axum::Json(serde_json::json!({"error": "flag not found", "flag": flag_name})),
         )
             .into_response();
-    };
+    }
 
     let context: Context = params
         .iter()
@@ -100,8 +101,15 @@ async fn handle_eval(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_rules_with_env(rules, &context, Some(flag_name.as_str()), &store.segments, None) {
-        Some(FlagReturn::OnOff(val)) => {
+    match evaluate_flag_with_reason(
+        &flag_name,
+        &context,
+        &store.flags,
+        &store.metadata,
+        &store.segments,
+        store.env.as_deref(),
+    ) {
+        Some((FlagReturn::OnOff(val), _)) => {
             if plain {
                 return (StatusCode::OK, val.to_string()).into_response();
             }
@@ -111,7 +119,7 @@ async fn handle_eval(
             )
                 .into_response()
         }
-        Some(FlagReturn::Json(val)) => {
+        Some((FlagReturn::Json(val), _)) => {
             if plain {
                 return (StatusCode::OK, val.to_string()).into_response();
             }
@@ -121,7 +129,7 @@ async fn handle_eval(
             )
                 .into_response()
         }
-        Some(FlagReturn::Integer(val)) => {
+        Some((FlagReturn::Integer(val), _)) => {
             if plain {
                 return (StatusCode::OK, val.to_string()).into_response();
             }
@@ -131,7 +139,7 @@ async fn handle_eval(
             )
                 .into_response()
         }
-        Some(FlagReturn::Str(val)) => {
+        Some((FlagReturn::Str(val), _)) => {
             if plain {
                 return (StatusCode::OK, val.clone()).into_response();
             }
@@ -169,13 +177,14 @@ fn build_context_from_ofrep(raw: &HashMap<String, serde_json::Value>) -> HashMap
         .collect()
 }
 
-/// Evaluate a flag and return the result along with a reason string.
-/// Returns (FlagReturn, reason) where reason is "TARGETING_MATCH" or "DEFAULT".
-fn evaluate_flag_with_reason(
+/// Evaluate rules and return the result along with a reason string.
+/// Handles all rule types including `EnvRule`.
+fn evaluate_rules_with_reason(
     rules: &[Rule],
     context: &Context,
     flag_name: Option<&str>,
     segments: &Segments,
+    env: Option<&str>,
 ) -> Option<(FlagReturn, &'static str)> {
     for rule in rules {
         match rule {
@@ -187,13 +196,55 @@ fn evaluate_flag_with_reason(
             Rule::Value(return_val) => {
                 return Some((return_val.clone(), "DEFAULT"));
             }
-            Rule::EnvRule { .. } => {
-                // @env rules are skipped in the HTTP server context;
-                // use the library API with init_with_env for env support.
+            Rule::EnvRule {
+                env: rule_env,
+                rules: sub_rules,
+            } => {
+                if env == Some(rule_env.as_str()) {
+                    let result =
+                        evaluate_rules_with_reason(sub_rules, context, flag_name, segments, env);
+                    if result.is_some() {
+                        return result;
+                    }
+                }
             }
         }
     }
     None
+}
+
+/// Evaluate a flag checking @requires dependencies first, then evaluate its rules.
+fn evaluate_flag_with_reason(
+    flag_name: &str,
+    context: &Context,
+    all_flags: &HashMap<String, Vec<Rule>>,
+    metadata: &HashMap<String, FlagMetadata>,
+    segments: &Segments,
+    env: Option<&str>,
+) -> Option<(FlagReturn, &'static str)> {
+    // Check @requires prerequisites
+    if let Some(meta) = metadata.get(flag_name) {
+        for req in &meta.requires {
+            match all_flags.get(req.as_str()) {
+                None => return None, // required flag doesn't exist
+                Some(req_rules) => {
+                    match evaluate_rules_with_reason(
+                        req_rules,
+                        context,
+                        Some(req.as_str()),
+                        segments,
+                        env,
+                    ) {
+                        Some((FlagReturn::OnOff(true), _)) => {} // prerequisite satisfied
+                        _ => return None,                        // prerequisite not met
+                    }
+                }
+            }
+        }
+    }
+
+    let rules = all_flags.get(flag_name)?;
+    evaluate_rules_with_reason(rules, context, Some(flag_name), segments, env)
 }
 
 fn flag_return_to_ofrep(key: &str, ret: &FlagReturn, reason: &str) -> OFREPEvalSuccess {
@@ -236,7 +287,7 @@ async fn handle_ofrep_single(
 ) -> Response {
     let store = state.store.read().await;
 
-    let Some(rules) = store.flags.get(&key) else {
+    if !store.flags.contains_key(&key) {
         return (
             StatusCode::NOT_FOUND,
             Json(OFREPEvalError {
@@ -246,7 +297,7 @@ async fn handle_ofrep_single(
             }),
         )
             .into_response();
-    };
+    }
 
     let string_ctx = body
         .context
@@ -259,7 +310,14 @@ async fn handle_ofrep_single(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag_with_reason(rules, &context, Some(key.as_str()), &store.segments) {
+    match evaluate_flag_with_reason(
+        &key,
+        &context,
+        &store.flags,
+        &store.metadata,
+        &store.segments,
+        store.env.as_deref(),
+    ) {
         Some((ret, reason)) => {
             let success = flag_return_to_ofrep(&key, &ret, reason);
             (StatusCode::OK, Json(success)).into_response()
@@ -295,25 +353,37 @@ async fn handle_ofrep_bulk(
         .collect();
 
     let mut flags = Vec::new();
-    for (key, rules) in store.flags.iter() {
-        let result =
-            match evaluate_flag_with_reason(rules, &context, Some(key.as_str()), &store.segments) {
-                Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
-                None => OFREPEvalSuccess {
-                    key: key.clone(),
-                    reason: "DEFAULT".to_string(),
-                    variant: "false".to_string(),
-                    value: serde_json::Value::Bool(false),
-                    metadata: serde_json::json!({}),
-                },
-            };
+    for key in store.flags.keys() {
+        let result = match evaluate_flag_with_reason(
+            key,
+            &context,
+            &store.flags,
+            &store.metadata,
+            &store.segments,
+            store.env.as_deref(),
+        ) {
+            Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
+            None => OFREPEvalSuccess {
+                key: key.clone(),
+                reason: "DEFAULT".to_string(),
+                variant: "false".to_string(),
+                value: serde_json::Value::Bool(false),
+                metadata: serde_json::json!({}),
+            },
+        };
         flags.push(serde_json::to_value(result).unwrap());
     }
 
     (StatusCode::OK, Json(OFREPBulkResponse { flags })).into_response()
 }
 
-fn parse_flags(content: &str) -> Option<(HashMap<String, Vec<Rule>>, Segments)> {
+fn parse_flags(
+    content: &str,
+) -> Option<(
+    HashMap<String, Vec<Rule>>,
+    HashMap<String, FlagMetadata>,
+    Segments,
+)> {
     let (remainder, parsed) = match parse_flagfile_with_segments(content) {
         Ok(result) => result,
         Err(e) => {
@@ -331,12 +401,14 @@ fn parse_flags(content: &str) -> Option<(HashMap<String, Vec<Rule>>, Segments)> 
     }
 
     let mut flags: HashMap<String, Vec<Rule>> = HashMap::new();
+    let mut metadata: HashMap<String, FlagMetadata> = HashMap::new();
     for fv in &parsed.flags {
         for (name, def) in fv.iter() {
             flags.insert(name.to_string(), def.rules.clone());
+            metadata.insert(name.to_string(), def.metadata.clone());
         }
     }
-    Some((flags, parsed.segments))
+    Some((flags, metadata, parsed.segments))
 }
 
 async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
@@ -391,10 +463,11 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
         };
 
         match parse_flags(&content) {
-            Some((flags, segments)) => {
+            Some((flags, metadata, segments)) => {
                 let mut store = state.store.write().await;
                 store.flagfile_content = content;
                 store.flags = flags;
+                store.metadata = metadata;
                 store.segments = segments;
                 println!("Flagfile reloaded successfully");
             }
@@ -405,7 +478,12 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
     }
 }
 
-pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, config_path: &str) {
+pub async fn run_serve(
+    flagfile_arg: Option<String>,
+    port_arg: Option<u16>,
+    config_path: &str,
+    env_arg: Option<String>,
+) {
     // Load config from file if it exists
     let config: ServeConfig = std::fs::read_to_string(config_path)
         .ok()
@@ -417,6 +495,7 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
         .or(config.flagfile)
         .unwrap_or_else(|| "Flagfile".to_string());
     let port = port_arg.or(config.port).unwrap_or(8080);
+    let env = env_arg.or(config.env);
 
     // Read and parse flagfile
     let flagfile_content = match std::fs::read_to_string(&flagfile_path) {
@@ -427,7 +506,7 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
         }
     };
 
-    let (flags, segments) = match parse_flags(&flagfile_content) {
+    let (flags, metadata, segments) = match parse_flags(&flagfile_content) {
         Some(result) => result,
         None => {
             eprintln!("Initial parsing of {} failed", flagfile_path);
@@ -439,7 +518,9 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
         store: RwLock::new(FlagStore {
             flagfile_content,
             flags,
+            metadata,
             segments,
+            env: env.clone(),
         }),
     });
 
@@ -458,7 +539,14 @@ pub async fn run_serve(flagfile_arg: Option<String>, port_arg: Option<u16>, conf
         .with_state(state);
 
     let addr = format!("0.0.0.0:{}", port);
-    println!("Serving {} on http://{}", flagfile_path, addr);
+    if let Some(ref env) = env {
+        println!(
+            "Serving {} on http://{} (env: {})",
+            flagfile_path, addr, env
+        );
+    } else {
+        println!("Serving {} on http://{}", flagfile_path, addr);
+    }
 
     let listener = tokio::net::TcpListener::bind(&addr)
         .await

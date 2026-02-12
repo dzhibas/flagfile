@@ -95,6 +95,10 @@ enum Command {
         /// Path to config file
         #[arg(short = 'c', long = "config", default_value = "ff.toml")]
         config: String,
+
+        /// Environment to evaluate @env rules against
+        #[arg(short = 'e', long = "env")]
+        env: Option<String>,
     },
 }
 
@@ -245,7 +249,7 @@ pub(crate) fn evaluate_flag_with_env(
                 Some(req_rules) => {
                     match evaluate_rules_with_env(req_rules, context, Some(req), segments, env) {
                         Some(FlagReturn::OnOff(true)) => {} // prerequisite satisfied
-                        _ => return None,                    // prerequisite not met
+                        _ => return None,                   // prerequisite not met
                     }
                 }
             }
@@ -716,7 +720,14 @@ fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: 
         })
         .collect();
 
-    match evaluate_flag_with_env(flag_name, &context, &flags, &metadata, &parsed.segments, env) {
+    match evaluate_flag_with_env(
+        flag_name,
+        &context,
+        &flags,
+        &metadata,
+        &parsed.segments,
+        env,
+    ) {
         Some(FlagReturn::OnOff(val)) => println!("{}", val),
         Some(FlagReturn::Json(val)) => println!("{}", val),
         Some(FlagReturn::Integer(val)) => println!("{}", val),
@@ -828,6 +839,7 @@ async fn main() {
             flagfile,
             port,
             config,
-        } => serve::run_serve(flagfile, port, &config).await,
+            env,
+        } => serve::run_serve(flagfile, port, &config, env).await,
     }
 }
