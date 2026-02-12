@@ -1,9 +1,47 @@
-use std::collections::HashSet;
+mod circular_deps;
+mod deprecated;
+mod deprecated_no_expiry;
+mod duplicate_flags;
+mod experiment_no_expiry;
+mod expired;
+mod missing_default;
+mod missing_owner;
+mod unreachable_rules;
+mod unused_segments;
+
 use std::io::{self, IsTerminal};
 use std::process;
 
 use chrono::Local;
 use flagfile_lib::parse_flagfile::parse_flagfile_with_segments;
+
+#[derive(Debug)]
+pub enum LintLevel {
+    Warning,
+    Error,
+}
+
+#[derive(Debug)]
+pub struct LintWarning {
+    pub level: LintLevel,
+    pub message: String,
+}
+
+impl LintWarning {
+    pub fn warn(message: impl Into<String>) -> Self {
+        Self {
+            level: LintLevel::Warning,
+            message: message.into(),
+        }
+    }
+
+    pub fn error(message: impl Into<String>) -> Self {
+        Self {
+            level: LintLevel::Error,
+            message: message.into(),
+        }
+    }
+}
 
 /// Inner lint logic that returns Ok(()) on success or Err(()) on failure.
 /// Used by both the standalone `lint` command and the combined `check` command.
@@ -44,60 +82,40 @@ pub fn run_lint_inner(flagfile_path: &str) -> Result<(), ()> {
     } else {
         "\u{26a0}"
     };
-    let mut warnings = 0;
 
-    // Check for duplicate flag names
-    let mut seen_flags = HashSet::new();
-    for fv in &parsed.flags {
-        for (name, _) in fv.iter() {
-            if !seen_flags.insert(name) {
-                eprintln!("{} {} is defined more than once", warn_icon, name);
-                warnings += 1;
-            }
-        }
-    }
+    let mut warnings: Vec<LintWarning> = Vec::new();
 
+    // Global lints
+    warnings.extend(duplicate_flags::check(&parsed));
+    warnings.extend(circular_deps::check(&parsed));
+    warnings.extend(unused_segments::check(&parsed));
+
+    // Per-flag lints
     for fv in &parsed.flags {
         for (name, def) in fv.iter() {
-            if let Some(ref msg) = def.metadata.deprecated {
-                eprintln!("{} {} is deprecated: \"{}\"", warn_icon, name, msg);
-                warnings += 1;
-            }
-            if let Some(expires) = def.metadata.expires {
-                if expires < today {
-                    let days_ago = (today - expires).num_days();
-                    eprintln!(
-                        "{} {} expired {} ({} days ago). Run: ff find -s {}",
-                        error_icon, name, expires, days_ago, name
-                    );
-                    warnings += 1;
-                }
-            }
-            let has_lifecycle_metadata = def.metadata.deprecated.is_some()
-                || def.metadata.expires.is_some()
-                || def.metadata.flag_type.is_some();
-            if has_lifecycle_metadata && def.metadata.owner.is_none() {
-                eprintln!("{} {}: missing @owner", warn_icon, name);
-                warnings += 1;
-            }
-            if def.metadata.flag_type.as_deref() == Some("experiment")
-                && def.metadata.expires.is_none()
-            {
-                eprintln!(
-                    "{} {}: type=experiment but no @expires set",
-                    warn_icon, name
-                );
-                warnings += 1;
-            }
+            warnings.extend(deprecated::check(name, def));
+            warnings.extend(expired::check(name, def, today));
+            warnings.extend(missing_owner::check(name, def));
+            warnings.extend(experiment_no_expiry::check(name, def));
+            warnings.extend(deprecated_no_expiry::check(name, def));
+            warnings.extend(unreachable_rules::check(name, def));
+            warnings.extend(missing_default::check(name, def));
         }
     }
 
-    if warnings == 0 {
+    if warnings.is_empty() {
         println!("{} ok, no warnings", flagfile_path);
         Ok(())
     } else {
+        for w in &warnings {
+            let icon = match w.level {
+                LintLevel::Warning => warn_icon,
+                LintLevel::Error => error_icon,
+            };
+            eprintln!("{} {}", icon, w.message);
+        }
         eprintln!();
-        eprintln!("{} warnings found", warnings);
+        eprintln!("{} warnings found", warnings.len());
         Err(())
     }
 }
