@@ -63,6 +63,14 @@ pub struct AppState {
     pub store: RwLock<FlagStore>,
 }
 
+async fn handle_health(State(state): State<Arc<AppState>>) -> Json<serde_json::Value> {
+    let store = state.store.read().await;
+    Json(serde_json::json!({
+        "status": "ok",
+        "flags_loaded": store.flags.len()
+    }))
+}
+
 async fn handle_flagfile(State(state): State<Arc<AppState>>) -> Response {
     let store = state.store.read().await;
     (
@@ -532,6 +540,7 @@ pub async fn run_serve(
     tokio::spawn(watch_flagfile(watcher_state, watcher_path));
 
     let app = Router::new()
+        .route("/health", get(handle_health))
         .route("/flagfile", get(handle_flagfile))
         .route("/v1/eval/{flag_name}", get(handle_eval))
         .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
