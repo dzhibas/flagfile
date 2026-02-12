@@ -41,6 +41,20 @@ enum Command {
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
         flagfile: String,
     },
+    /// Run validate, lint, and test together
+    Check {
+        /// Path to the Flagfile
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+
+        /// Path to the test file
+        #[arg(short = 't', long = "testfile", default_value = "Flagfile.tests")]
+        testfile: String,
+
+        /// Environment to evaluate @env rules against
+        #[arg(short = 'e', long = "env")]
+        env: Option<String>,
+    },
     Lint {
         /// Path to the Flagfile to lint
         #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
@@ -386,12 +400,39 @@ fn run_list(flagfile_path: &str, show_description: bool) {
     }
 }
 
-fn run_validate(flagfile_path: &str) {
+fn run_check(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
+    let mut failed = false;
+
+    println!("=== validate ===");
+    if run_validate_inner(flagfile_path).is_err() {
+        failed = true;
+    }
+
+    println!();
+    println!("=== lint ===");
+    if lint::run_lint_inner(flagfile_path).is_err() {
+        failed = true;
+    }
+
+    println!();
+    println!("=== test ===");
+    if run_tests_inner(flagfile_path, testfile_path, env).is_err() {
+        failed = true;
+    }
+
+    if failed {
+        process::exit(1);
+    }
+}
+
+/// Inner validate logic that returns Ok(()) on success or Err(()) on failure.
+/// Used by both the standalone `validate` command and the combined `check` command.
+fn run_validate_inner(flagfile_path: &str) -> Result<(), ()> {
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
         Err(_) => {
             eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
+            return Err(());
         }
     };
 
@@ -399,7 +440,7 @@ fn run_validate(flagfile_path: &str) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Parsing failed: {}", e);
-            process::exit(1);
+            return Err(());
         }
     };
 
@@ -408,7 +449,7 @@ fn run_validate(flagfile_path: &str) {
             "Parsing failed: unexpected content near: {}",
             remainder.trim().lines().next().unwrap_or("")
         );
-        process::exit(1);
+        return Err(());
     }
 
     let mut total_flags = 0;
@@ -443,9 +484,18 @@ fn run_validate(flagfile_path: &str) {
         total_rules,
         parsed.segments.len()
     );
+    Ok(())
 }
 
-fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
+fn run_validate(flagfile_path: &str) {
+    if run_validate_inner(flagfile_path).is_err() {
+        process::exit(1);
+    }
+}
+
+/// Inner test logic that returns Ok(()) on success or Err(()) on failure.
+/// Used by both the standalone `test` command and the combined `check` command.
+fn run_tests_inner(flagfile_path: &str, testfile_path: &str, env: Option<&str>) -> Result<(), ()> {
     let use_color = io::stdout().is_terminal();
     let pass_label = if use_color {
         "\x1b[32mPASS\x1b[0m"
@@ -463,7 +513,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
         Ok(content) => content,
         Err(_) => {
             eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
+            return Err(());
         }
     };
 
@@ -472,13 +522,13 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
         Ok(result) => result,
         Err(_) => {
             eprintln!("Flagfile parsing failed");
-            process::exit(1);
+            return Err(());
         }
     };
 
     if !remainder.trim().is_empty() {
         eprintln!("Flagfile parsing failed");
-        process::exit(1);
+        return Err(());
     }
 
     // Merge all FlagValue entries into a single map and collect @test annotations from metadata
@@ -508,7 +558,7 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
         Err(_) => {
             if inline_tests.is_empty() && annotation_tests.is_empty() {
                 eprintln!("{} does not exist", testfile_path);
-                process::exit(1);
+                return Err(());
             }
             None
         }
@@ -669,6 +719,14 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
     );
 
     if failed > 0 {
+        Err(())
+    } else {
+        Ok(())
+    }
+}
+
+fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
+    if run_tests_inner(flagfile_path, testfile_path, env).is_err() {
         process::exit(1);
     }
 }
@@ -822,6 +880,11 @@ async fn main() {
             description,
         } => run_list(&flagfile, description),
         Command::Validate { flagfile } => run_validate(&flagfile),
+        Command::Check {
+            flagfile,
+            testfile,
+            env,
+        } => run_check(&flagfile, &testfile, env.as_deref()),
         Command::Lint { flagfile } => lint::run_lint(&flagfile),
         Command::Test {
             flagfile,

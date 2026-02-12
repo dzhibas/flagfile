@@ -5,12 +5,14 @@ use std::process;
 use chrono::Local;
 use flagfile_lib::parse_flagfile::parse_flagfile_with_segments;
 
-pub fn run_lint(flagfile_path: &str) {
+/// Inner lint logic that returns Ok(()) on success or Err(()) on failure.
+/// Used by both the standalone `lint` command and the combined `check` command.
+pub fn run_lint_inner(flagfile_path: &str) -> Result<(), ()> {
     let flagfile_content = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
         Err(_) => {
             eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
+            return Err(());
         }
     };
 
@@ -18,7 +20,7 @@ pub fn run_lint(flagfile_path: &str) {
         Ok(result) => result,
         Err(e) => {
             eprintln!("Parsing failed: {}", e);
-            process::exit(1);
+            return Err(());
         }
     };
 
@@ -27,7 +29,7 @@ pub fn run_lint(flagfile_path: &str) {
             "Parsing failed: unexpected content near: {}",
             remainder.trim().lines().next().unwrap_or("")
         );
-        process::exit(1);
+        return Err(());
     }
 
     let today = Local::now().date_naive();
@@ -92,9 +94,17 @@ pub fn run_lint(flagfile_path: &str) {
 
     if warnings == 0 {
         println!("{} ok, no warnings", flagfile_path);
+        Ok(())
     } else {
         eprintln!();
         eprintln!("{} warnings found", warnings);
+        Err(())
+    }
+}
+
+/// Standalone lint command entry point. Calls `run_lint_inner` and exits on failure.
+pub fn run_lint(flagfile_path: &str) {
+    if run_lint_inner(flagfile_path).is_err() {
         process::exit(1);
     }
 }
