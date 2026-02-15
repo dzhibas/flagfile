@@ -127,6 +127,10 @@ enum Command {
         #[arg(long = "hostname")]
         hostname: Option<String>,
 
+        /// Watch Flagfile for changes and reload automatically
+        #[arg(short = 'w', long = "watch")]
+        watch: bool,
+
         /// Path to config file
         #[arg(short = 'c', long = "config", default_value = "ff.toml")]
         config: String,
@@ -1301,9 +1305,10 @@ async fn main() {
             flagfile,
             port,
             hostname,
+            watch,
             config,
             env,
-        } => serve::run_serve(flagfile, port, hostname, &config, env).await,
+        } => serve::run_serve(flagfile, port, hostname, watch, &config, env).await,
         Command::Fmt {
             flagfile,
             check,

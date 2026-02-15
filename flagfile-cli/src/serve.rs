@@ -420,12 +420,23 @@ fn parse_flags(content: &str) -> Option<ParsedFlags> {
     Some((flags, metadata, parsed.segments))
 }
 
+/// Check whether a notify event touches a `Flagfile*` file.
+fn event_affects_flagfile(event: &notify::Event) -> bool {
+    event.paths.iter().any(|p| {
+        p.file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(|n| n.starts_with("Flagfile"))
+    })
+}
+
 async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<()>(1);
 
     let mut watcher = notify::recommended_watcher(move |res: Result<notify::Event, _>| {
         if let Ok(event) = res {
-            if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_)) {
+            if matches!(event.kind, EventKind::Modify(_) | EventKind::Create(_))
+                && event_affects_flagfile(&event)
+            {
                 let _ = tx.try_send(());
             }
         }
@@ -462,8 +473,8 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
         tokio::time::sleep(std::time::Duration::from_millis(500)).await;
         while rx.try_recv().is_ok() {}
 
-        // Re-read and re-parse
-        let content = match std::fs::read_to_string(&path) {
+        // Re-read and re-parse (non-blocking)
+        let content = match tokio::fs::read_to_string(&path).await {
             Ok(c) => c,
             Err(e) => {
                 eprintln!("Warning: failed to read {}: {}", path.display(), e);
@@ -491,6 +502,7 @@ pub async fn run_serve(
     flagfile_arg: Option<String>,
     port_arg: Option<u16>,
     hostname_arg: Option<String>,
+    watch: bool,
     config_path: &str,
     env_arg: Option<String>,
 ) {
@@ -537,12 +549,14 @@ pub async fn run_serve(
         }),
     });
 
-    // Spawn file watcher
-    let watcher_state = Arc::clone(&state);
-    let watcher_path = PathBuf::from(&flagfile_path)
-        .canonicalize()
-        .unwrap_or_else(|_| PathBuf::from(&flagfile_path));
-    tokio::spawn(watch_flagfile(watcher_state, watcher_path));
+    // Spawn file watcher if --watch is enabled
+    if watch {
+        let watcher_state = Arc::clone(&state);
+        let watcher_path = PathBuf::from(&flagfile_path)
+            .canonicalize()
+            .unwrap_or_else(|_| PathBuf::from(&flagfile_path));
+        tokio::spawn(watch_flagfile(watcher_state, watcher_path));
+    }
 
     let app = Router::new()
         .route("/health", get(handle_health))

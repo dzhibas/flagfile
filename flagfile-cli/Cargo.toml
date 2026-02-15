@@ -1,6 +1,6 @@
 [package]
 name = "flagfile-cli"
-version = "0.1.21"
+version = "0.1.22"
 edition = "2021"
 description = "CLI tool for managing and evaluating Flagfile feature flags"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
@@ -25,5 +25,5 @@ notify = "7"
 regex = "1"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.114"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal", "fs"] }
 toml = "0.8"
