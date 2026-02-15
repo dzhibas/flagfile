@@ -564,8 +564,32 @@ pub async fn run_serve(
             process::exit(1);
         });
 
-    axum::serve(listener, app).await.unwrap_or_else(|e| {
-        eprintln!("Server error: {}", e);
-        process::exit(1);
-    });
+    let shutdown = async {
+        let ctrl_c = tokio::signal::ctrl_c();
+        #[cfg(unix)]
+        let mut sigterm =
+            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install SIGTERM handler");
+
+        #[cfg(unix)]
+        tokio::select! {
+            _ = ctrl_c => {},
+            _ = sigterm.recv() => {},
+        }
+
+        #[cfg(not(unix))]
+        ctrl_c.await.ok();
+
+        println!("Shutdown signal received, finishing in-flight requests...");
+    };
+
+    axum::serve(listener, app)
+        .with_graceful_shutdown(shutdown)
+        .await
+        .unwrap_or_else(|e| {
+            eprintln!("Server error: {}", e);
+            process::exit(1);
+        });
+
+    println!("Server stopped");
 }
