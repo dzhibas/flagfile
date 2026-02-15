@@ -319,13 +319,27 @@ fn parse_metadata_block(i: &str) -> IResult<&str, FlagMetadata> {
     Ok((rest, metadata))
 }
 
+/// Match a single `-` that is NOT followed by `>` (i.e., not the start of `->`).
+/// This prevents the flag/env name parsers from greedily consuming the `-` in `->`.
+fn hyphen_not_arrow(i: &str) -> IResult<&str, &str> {
+    let bytes = i.as_bytes();
+    if bytes.first() == Some(&b'-') && bytes.get(1) != Some(&b'>') {
+        Ok((&i[1..], &i[..1]))
+    } else {
+        Err(nom::Err::Error(nom::error::Error::new(
+            i,
+            nom::error::ErrorKind::Tag,
+        )))
+    }
+}
+
 /// Opinionated feature flag name
 /// it should always start with "FF-" < as this allows later auditing of the code and find all
 /// flags
 fn parse_flag_name(i: &str) -> IResult<&str, &str> {
     recognize(pair(
         alt((tag("FF-"), tag("FF_"))),
-        many0_count(alt((alphanumeric1, tag("-"), tag("_")))),
+        many0_count(alt((alphanumeric1, hyphen_not_arrow, tag("_")))),
     ))(i)
 }
 
@@ -361,7 +375,7 @@ fn parse_rule_static(i: &str) -> IResult<&str, Rule> {
 }
 
 fn parse_env_name(i: &str) -> IResult<&str, &str> {
-    recognize(many1(alt((alphanumeric1, tag("-"), tag("_")))))(i)
+    recognize(many1(alt((alphanumeric1, hyphen_not_arrow, tag("_")))))(i)
 }
 
 fn parse_env_rule_simple(i: &str) -> IResult<&str, Rule> {
@@ -923,6 +937,70 @@ FF-logging {
         assert_eq!(def.metadata.owner, Some("platform-team".to_string()));
         assert_eq!(def.rules.len(), 2);
         assert!(matches!(&def.rules[0], Rule::EnvRule { env, .. } if env == "dev"));
+    }
+
+    // ── Arrow without spaces ─────────────────────────────────────
+
+    #[test]
+    fn test_parse_flag_no_spaces_around_arrow() {
+        let data = "FF-dep-root-new-checkout->true";
+        let (i, v) = parse_anonymous_func(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF-dep-root-new-checkout").unwrap();
+        assert!(matches!(
+            &def.rules[0],
+            Rule::Value(FlagReturn::OnOff(true))
+        ));
+    }
+
+    #[test]
+    fn test_parse_flag_with_spaces_around_arrow() {
+        let data = "FF-dep-root-new-checkout -> true";
+        let (i, v) = parse_anonymous_func(data).unwrap();
+        assert_eq!(i, "");
+        assert!(v.contains_key("FF-dep-root-new-checkout"));
+    }
+
+    #[test]
+    fn test_parse_env_no_spaces_around_arrow() {
+        let data = r#"FF-logging {
+    @env dev->true
+    @env stage->true
+    @env prod->false
+    false
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF-logging").unwrap();
+        assert_eq!(def.rules.len(), 4);
+        assert!(matches!(&def.rules[0], Rule::EnvRule { env, .. } if env == "dev"));
+        assert!(matches!(&def.rules[1], Rule::EnvRule { env, .. } if env == "stage"));
+        assert!(matches!(&def.rules[2], Rule::EnvRule { env, .. } if env == "prod"));
+    }
+
+    #[test]
+    fn test_parse_flag_underscore_no_spaces_around_arrow() {
+        let data = "FF_feature_flag->false";
+        let (i, v) = parse_anonymous_func(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF_feature_flag").unwrap();
+        assert!(matches!(
+            &def.rules[0],
+            Rule::Value(FlagReturn::OnOff(false))
+        ));
+    }
+
+    #[test]
+    fn test_parse_rule_expr_no_spaces_around_arrow() {
+        let data = "countryCode == NL->true";
+        let res = parse_rule_expr(data);
+        assert!(res.is_ok());
+        let (i, rule) = res.unwrap();
+        assert_eq!(i, "");
+        assert!(matches!(
+            rule,
+            Rule::BoolExpressionValue(_, FlagReturn::OnOff(true))
+        ));
     }
 }
 

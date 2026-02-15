@@ -383,4 +383,78 @@ FF-logging {
             expect(def.rules[0].type).toBe('EnvRule');
         }
     });
+
+    // ── Arrow without spaces tests ────────────────────────────────
+
+    it('parses short-form flag without spaces around arrow', () => {
+        const r = parseFlagfile('FF-dep-root-new-checkout->true');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.size).toBe(1);
+            const def = r.value.get('FF-dep-root-new-checkout');
+            expect(def).toBeDefined();
+            expect(def!.rules.length).toBe(1);
+            expect(def!.rules[0]).toEqual({
+                type: 'Value',
+                value: { type: 'OnOff', value: true },
+            });
+        }
+    });
+
+    it('parses underscore flag name without spaces around arrow', () => {
+        const r = parseFlagfile('FF_feature_flag->false');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.size).toBe(1);
+            const def = r.value.get('FF_feature_flag');
+            expect(def).toBeDefined();
+            expect(def!.rules[0]).toEqual({
+                type: 'Value',
+                value: { type: 'OnOff', value: false },
+            });
+        }
+    });
+
+    it('parses @env rule without spaces around arrow', () => {
+        const data = `FF-debug {
+    @env dev->true
+    @env prod->false
+}`;
+        const r = parseFlagfile(data);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const def = r.value.get('FF-debug')!;
+            expect(def.rules.length).toBe(2);
+            expect(def.rules[0].type).toBe('EnvRule');
+            if (def.rules[0].type === 'EnvRule') {
+                expect(def.rules[0].env).toBe('dev');
+                expect(def.rules[0].rules[0]).toEqual({
+                    type: 'Value',
+                    value: { type: 'OnOff', value: true },
+                });
+            }
+            expect(def.rules[1].type).toBe('EnvRule');
+            if (def.rules[1].type === 'EnvRule') {
+                expect(def.rules[1].env).toBe('prod');
+                expect(def.rules[1].rules[0]).toEqual({
+                    type: 'Value',
+                    value: { type: 'OnOff', value: false },
+                });
+            }
+        }
+    });
+
+    it('still parses arrow with spaces (regression)', () => {
+        const r = parseFlagfile('FF-feature -> true');
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.size).toBe(1);
+            const def = r.value.get('FF-feature');
+            expect(def).toBeDefined();
+            expect(def!.rules[0]).toEqual({
+                type: 'Value',
+                value: { type: 'OnOff', value: true },
+            });
+        }
+    });
 });

@@ -63,7 +63,7 @@ function skipComments(i: string): string {
 // ── Flag name parser ───────────────────────────────────────────────
 
 function parseFlagName(i: string): ParseResult<string> {
-    const m = i.match(/^(FF[-_][a-zA-Z0-9_-]*)/);
+    const m = i.match(/^(FF[-_](?:[a-zA-Z0-9_]|-(?!>))*)/);
     if (!m) return fail();
     return ok(i.slice(m[0].length), m[1]);
 }
@@ -202,8 +202,9 @@ function parseEnvRule(i: string): ParseResult<Rule> {
     if (!trimmed.startsWith('@env')) return fail();
     let rest = skipWs(trimmed.slice(4));
 
-    // Parse environment name (alphanumeric, hyphens, underscores)
-    const nameM = rest.match(/^([a-zA-Z0-9][a-zA-Z0-9_-]*)/);
+    // Parse environment name (alphanumeric, hyphens, underscores).
+    // Use negative lookahead to avoid consuming the `-` in `->`.
+    const nameM = rest.match(/^([a-zA-Z0-9](?:[a-zA-Z0-9_]|-(?!>))*)/);
     if (!nameM) return fail();
     const envName = nameM[1];
     rest = skipWs(rest.slice(nameM[0].length));

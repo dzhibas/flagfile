@@ -193,7 +193,7 @@ FF-debug-env-logging {
 /**
   flag dependency feature check
   */
-FF-dep-root-new-checkout -> true
+FF-dep-root-new-checkout->true
 
 // This flag only evaluates if FF-dep-root-new-checkout is true
 @requires FF-dep-root-new-checkout
