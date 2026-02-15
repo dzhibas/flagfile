@@ -44,7 +44,7 @@ impl PartialEq<Atom> for Atom {
             (Atom::Date(d1), Atom::Date(d2)) => d1 == d2,
             (Atom::DateTime(t1), Atom::DateTime(t2)) => t1 == t2,
             (Atom::DateTime(dt), Atom::Date(d)) | (Atom::Date(d), Atom::DateTime(dt)) => {
-                d.and_hms_opt(0, 0, 0).map_or(false, |d_dt| d_dt == *dt)
+                d.and_hms_opt(0, 0, 0) == Some(*dt)
             }
             (Atom::Semver(a1, b1, c1), Atom::Semver(a2, b2, c2)) => {
                 a1 == a2 && b1 == b2 && c1 == c2

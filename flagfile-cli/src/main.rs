@@ -964,7 +964,11 @@ fn run_find(
             println!("{:>6}  {}", cnt, flag);
         }
         println!();
-        println!("{} total occurrences across {} unique flags", total, sorted.len());
+        println!(
+            "{} total occurrences across {} unique flags",
+            total,
+            sorted.len()
+        );
     } else if files_only {
         // --files-only mode: collect unique file paths with matches
         let matched_files: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new());
@@ -1217,7 +1221,10 @@ fn run_find_unused(path: &str, flagfile_path: &str) {
             "\u{26a0}"
         };
         for flag in &unused {
-            println!("{} {}  (unused - not found in source code)", warn_icon, flag);
+            println!(
+                "{} {}  (unused - not found in source code)",
+                warn_icon, flag
+            );
         }
         println!();
         println!(
@@ -1263,7 +1270,14 @@ async fn main() {
             files_only,
             unused,
             flagfile,
-        } => run_find(&path, search.as_deref(), count, files_only, unused, &flagfile),
+        } => run_find(
+            &path,
+            search.as_deref(),
+            count,
+            files_only,
+            unused,
+            &flagfile,
+        ),
         Command::Serve {
             flagfile,
             port,

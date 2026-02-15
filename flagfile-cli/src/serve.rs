@@ -14,6 +14,12 @@ use flagfile_lib::parse_flagfile::{parse_flagfile_with_segments, FlagReturn, Rul
 use notify::{EventKind, RecursiveMode, Watcher};
 use tokio::sync::RwLock;
 
+type ParsedFlags = (
+    HashMap<String, Vec<Rule>>,
+    HashMap<String, FlagMetadata>,
+    Segments,
+);
+
 // --- OFREP request/response types ---
 
 #[derive(serde::Deserialize)]
@@ -385,13 +391,7 @@ async fn handle_ofrep_bulk(
     (StatusCode::OK, Json(OFREPBulkResponse { flags })).into_response()
 }
 
-fn parse_flags(
-    content: &str,
-) -> Option<(
-    HashMap<String, Vec<Rule>>,
-    HashMap<String, FlagMetadata>,
-    Segments,
-)> {
+fn parse_flags(content: &str) -> Option<ParsedFlags> {
     let (remainder, parsed) = match parse_flagfile_with_segments(content) {
         Ok(result) => result,
         Err(e) => {
