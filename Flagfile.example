@@ -184,9 +184,9 @@ FF-launch-event {
 
 @test FF-debug-env-logging == false
 FF-debug-env-logging {
-    @env dev -> true
-    @env stage -> true
-    @env prod -> false
+    @env dev->true
+    @env stage->true
+    @env prod->false
     false
 }
 

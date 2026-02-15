@@ -13,6 +13,7 @@ use flagfile_lib::eval::{eval_with_segments, Context, Segments};
 use flagfile_lib::parse_flagfile::{parse_flagfile_with_segments, FlagReturn, Rule};
 use notify::{EventKind, RecursiveMode, Watcher};
 use tokio::sync::RwLock;
+use tower_http::compression::CompressionLayer;
 
 type ParsedFlags = (
     HashMap<String, Vec<Rule>>,
@@ -564,6 +565,7 @@ pub async fn run_serve(
         .route("/v1/eval/{flag_name}", get(handle_eval))
         .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
         .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
+        .layer(CompressionLayer::new())
         .with_state(state);
 
     let addr = format!("{}:{}", hostname, port);
