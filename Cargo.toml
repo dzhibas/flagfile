@@ -1,6 +1,6 @@
 [package]
 name = "flagfile-lib"
-version = "0.4.10"
+version = "0.4.11"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 repository = "https://github.com/dzhibas/flagfile"
