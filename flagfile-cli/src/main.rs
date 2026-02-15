@@ -1,6 +1,6 @@
 mod formatter;
 mod lint;
-mod serve;
+mod server;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{self, BufRead, IsTerminal, Write};
@@ -1308,7 +1308,7 @@ async fn main() {
             watch,
             config,
             env,
-        } => serve::run_serve(flagfile, port, hostname, watch, &config, env).await,
+        } => server::run_serve(flagfile, port, hostname, watch, &config, env).await,
         Command::Fmt {
             flagfile,
             check,
