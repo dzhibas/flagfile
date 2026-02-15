@@ -1,3 +1,4 @@
+mod formatter;
 mod lint;
 mod serve;
 
@@ -129,6 +130,20 @@ enum Command {
         /// Environment to evaluate @env rules against
         #[arg(short = 'e', long = "env")]
         env: Option<String>,
+    },
+    /// Format a Flagfile with consistent style
+    Fmt {
+        /// Path to the Flagfile to format
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+
+        /// Check if file is formatted (exit 1 if not, no changes written)
+        #[arg(long = "check")]
+        check: bool,
+
+        /// Print a diff of what would change
+        #[arg(long = "diff")]
+        diff: bool,
     },
 }
 
@@ -1284,5 +1299,10 @@ async fn main() {
             config,
             env,
         } => serve::run_serve(flagfile, port, &config, env).await,
+        Command::Fmt {
+            flagfile,
+            check,
+            diff,
+        } => formatter::run_fmt(&flagfile, check, diff),
     }
 }
