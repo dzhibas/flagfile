@@ -29,7 +29,7 @@ fn return_type_name(ret: &FlagReturn) -> &'static str {
     }
 }
 
-fn collect_return_types<'a>(rules: &'a [Rule], out: &mut HashSet<&'static str>) {
+fn collect_return_types(rules: &[Rule], out: &mut HashSet<&'static str>) {
     for rule in rules {
         match rule {
             Rule::Value(ret) | Rule::BoolExpressionValue(_, ret) => {

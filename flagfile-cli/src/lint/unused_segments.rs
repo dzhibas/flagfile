@@ -15,7 +15,7 @@ pub fn check(parsed: &ParsedFlagfile) -> Vec<LintWarning> {
         }
     }
     // Segments can reference other segments
-    for (_, expr) in &parsed.segments {
+    for expr in parsed.segments.values() {
         collect_refs(expr, &mut used);
     }
 
