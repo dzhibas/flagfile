@@ -53,6 +53,7 @@ struct OFREPBulkResponse {
 #[derive(serde::Deserialize, Default, Debug)]
 struct ServeConfig {
     port: Option<u16>,
+    hostname: Option<String>,
     flagfile: Option<String>,
     env: Option<String>,
 }
@@ -489,6 +490,7 @@ async fn watch_flagfile(state: Arc<AppState>, path: PathBuf) {
 pub async fn run_serve(
     flagfile_arg: Option<String>,
     port_arg: Option<u16>,
+    hostname_arg: Option<String>,
     config_path: &str,
     env_arg: Option<String>,
 ) {
@@ -503,6 +505,9 @@ pub async fn run_serve(
         .or(config.flagfile)
         .unwrap_or_else(|| "Flagfile".to_string());
     let port = port_arg.or(config.port).unwrap_or(8080);
+    let hostname = hostname_arg
+        .or(config.hostname)
+        .unwrap_or_else(|| "0.0.0.0".to_string());
     let env = env_arg.or(config.env);
 
     // Read and parse flagfile
@@ -547,7 +552,7 @@ pub async fn run_serve(
         .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
         .with_state(state);
 
-    let addr = format!("0.0.0.0:{}", port);
+    let addr = format!("{}:{}", hostname, port);
     if let Some(ref env) = env {
         println!(
             "Serving {} on http://{} (env: {})",

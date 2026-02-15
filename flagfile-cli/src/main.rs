@@ -123,6 +123,10 @@ enum Command {
         #[arg(short = 'p', long = "port")]
         port: Option<u16>,
 
+        /// Hostname to bind to (e.g. 127.0.0.1, 0.0.0.0)
+        #[arg(long = "hostname")]
+        hostname: Option<String>,
+
         /// Path to config file
         #[arg(short = 'c', long = "config", default_value = "ff.toml")]
         config: String,
@@ -1296,9 +1300,10 @@ async fn main() {
         Command::Serve {
             flagfile,
             port,
+            hostname,
             config,
             env,
-        } => serve::run_serve(flagfile, port, &config, env).await,
+        } => serve::run_serve(flagfile, port, hostname, &config, env).await,
         Command::Fmt {
             flagfile,
             check,
