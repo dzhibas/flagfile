@@ -145,8 +145,11 @@ pub fn normalize_line(trimmed: &str, line_type: &LineType) -> String {
             trimmed.to_string()
         }
         LineType::Annotation => {
-            // Annotations: just trim, no content changes
-            trimmed.to_string()
+            if trimmed.starts_with("@test") {
+                normalize_test_annotation(trimmed)
+            } else {
+                trimmed.to_string()
+            }
         }
         LineType::ClosingBrace => "}".to_string(),
         LineType::FlagHeaderBlock => normalize_flag_header_block(trimmed),
@@ -391,7 +394,7 @@ fn normalize_commas(expr: &str) -> String {
     })
 }
 
-/// Normalize a return value: boolean case, JSON pretty-print, trim.
+/// Normalize a return value: boolean case, JSON formatting via serde, trim.
 fn normalize_return_value(val: &str) -> String {
     match val.to_lowercase().as_str() {
         "true" => return "TRUE".to_string(),
@@ -399,15 +402,10 @@ fn normalize_return_value(val: &str) -> String {
         _ => {}
     }
 
-    // Pretty-print JSON return values using serde_json
+    // Format JSON return values using serde_json
     if let Some(json_body) = extract_json_body(val) {
         if let Ok(parsed) = serde_json::from_str::<serde_json::Value>(json_body) {
-            // For compact objects (no nesting or few keys), use single-line
-            if is_simple_json(&parsed) {
-                return format!("json({})", serde_json::to_string(&parsed).unwrap());
-            }
-            // For complex objects, pretty-print
-            return format!("json({})", serde_json::to_string_pretty(&parsed).unwrap());
+            return format!("json({})", serde_json::to_string(&parsed).unwrap());
         }
     }
 
@@ -423,38 +421,118 @@ fn extract_json_body(val: &str) -> Option<&str> {
     Some(&trimmed[5..trimmed.len() - 1])
 }
 
-/// Check if a JSON value is "simple" enough for single-line rendering:
-/// no nested objects/arrays, or very few top-level keys.
-fn is_simple_json(val: &serde_json::Value) -> bool {
-    match val {
-        serde_json::Value::Object(map) => {
-            if map.len() > 4 {
-                return false;
+// ── @test annotation normalization ────────────────────────────────
+
+/// Normalize a `@test` annotation line:
+/// - Normalize comma spacing in function params: `(a=b,c=d)` → `(a=b, c=d)`
+/// - Normalize spaces around `==` / `!=`: `)==true` → `) == true`
+fn normalize_test_annotation(line: &str) -> String {
+    let body = match line.strip_prefix("@test") {
+        Some(rest) => rest.trim_start(),
+        None => return line.to_string(),
+    };
+
+    // Find the == or != assertion operator outside of parens, brackets, and quotes
+    let mut paren_depth: usize = 0;
+    let mut bracket_depth: usize = 0;
+    let mut in_double = false;
+    let mut in_single = false;
+    let bytes = body.as_bytes();
+    let len = bytes.len();
+    let mut i = 0;
+
+    while i < len {
+        let ch = bytes[i];
+        match ch {
+            b'\'' if !in_double => in_single = !in_single,
+            b'"' if !in_single => in_double = !in_double,
+            b'(' if !in_single && !in_double => paren_depth += 1,
+            b')' if !in_single && !in_double => paren_depth = paren_depth.saturating_sub(1),
+            b'[' if !in_single && !in_double => bracket_depth += 1,
+            b']' if !in_single && !in_double => bracket_depth = bracket_depth.saturating_sub(1),
+            b'!' if !in_single
+                && !in_double
+                && paren_depth == 0
+                && bracket_depth == 0
+                && i + 1 < len
+                && bytes[i + 1] == b'=' =>
+            {
+                let flag_part = body[..i].trim_end();
+                let expected = body[i + 2..].trim_start();
+                let flag_normalized = normalize_test_params(flag_part);
+                return format!("@test {} != {}", flag_normalized, expected);
             }
-            map.values().all(|v| {
-                matches!(
-                    v,
-                    serde_json::Value::Null
-                        | serde_json::Value::Bool(_)
-                        | serde_json::Value::Number(_)
-                        | serde_json::Value::String(_)
-                )
-            })
+            b'=' if !in_single && !in_double && paren_depth == 0 && bracket_depth == 0 => {
+                let op_len = if i + 1 < len && bytes[i + 1] == b'=' {
+                    2
+                } else {
+                    1
+                };
+                let flag_part = body[..i].trim_end();
+                let expected = body[i + op_len..].trim_start();
+                let flag_normalized = normalize_test_params(flag_part);
+                return format!("@test {} == {}", flag_normalized, expected);
+            }
+            _ => {}
         }
-        serde_json::Value::Array(arr) => {
-            arr.len() <= 4
-                && arr.iter().all(|v| {
-                    matches!(
-                        v,
-                        serde_json::Value::Null
-                            | serde_json::Value::Bool(_)
-                            | serde_json::Value::Number(_)
-                            | serde_json::Value::String(_)
-                    )
-                })
-        }
-        _ => true,
+        i += 1;
     }
+
+    // No assertion operator found, just normalize params
+    format!("@test {}", normalize_test_params(body))
+}
+
+/// Normalize comma spacing in the parameter list of a test flag call.
+/// `FF-name(a=b,c=d)` → `FF-name(a=b, c=d)`
+fn normalize_test_params(flag_call: &str) -> String {
+    if let Some(paren_start) = flag_call.find('(') {
+        if let Some(paren_end) = flag_call.rfind(')') {
+            let before = &flag_call[..paren_start + 1];
+            let params = &flag_call[paren_start + 1..paren_end];
+            let after = &flag_call[paren_end..];
+            let normalized_params = normalize_param_commas(params);
+            return format!("{}{}{}", before, normalized_params, after);
+        }
+    }
+    flag_call.to_string()
+}
+
+/// Normalize commas in a parameter list, respecting quotes and brackets.
+/// `a=b,c=d` → `a=b, c=d`
+fn normalize_param_commas(params: &str) -> String {
+    let mut parts = Vec::new();
+    let mut current = String::new();
+    let mut in_double = false;
+    let mut in_single = false;
+    let mut bracket_depth: usize = 0;
+
+    for ch in params.chars() {
+        match ch {
+            '"' if !in_single => {
+                in_double = !in_double;
+                current.push(ch);
+            }
+            '\'' if !in_double => {
+                in_single = !in_single;
+                current.push(ch);
+            }
+            '[' if !in_double && !in_single => {
+                bracket_depth += 1;
+                current.push(ch);
+            }
+            ']' if !in_double && !in_single => {
+                bracket_depth = bracket_depth.saturating_sub(1);
+                current.push(ch);
+            }
+            ',' if !in_double && !in_single && bracket_depth == 0 => {
+                parts.push(current.trim().to_string());
+                current = String::new();
+            }
+            _ => current.push(ch),
+        }
+    }
+    parts.push(current.trim().to_string());
+    parts.join(", ")
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -670,16 +748,10 @@ mod tests {
 
     #[test]
     fn test_json_nested_braces() {
-        // Nested JSON gets pretty-printed via serde_json
-        let input = "json({\"a\": {\"b\": 1}})";
-        let result = normalize_static_value(input);
-        assert!(result.starts_with("json({"), "got: {}", result);
-        assert!(result.contains("\"a\""), "got: {}", result);
-        // Should contain newlines (pretty-printed)
-        assert!(
-            result.contains('\n'),
-            "should be pretty-printed, got: {}",
-            result
+        // Nested JSON is compacted via serde_json
+        assert_eq!(
+            normalize_static_value("json({\"a\": {\"b\": 1}})"),
+            "json({\"a\":{\"b\":1}})"
         );
     }
 
@@ -710,5 +782,96 @@ mod tests {
     fn test_collapse_spaces() {
         assert_eq!(collapse_spaces("a  ==  b"), "a == b");
         assert_eq!(collapse_spaces("a  ==  \"x  y\""), "a == \"x  y\"");
+    }
+
+    // ── @test annotation normalization ─────────────────────────
+
+    #[test]
+    fn test_normalize_test_annotation_spaces_around_eq() {
+        assert_eq!(
+            normalize_test_annotation("@test FF-flag==true"),
+            "@test FF-flag == true"
+        );
+        assert_eq!(
+            normalize_test_annotation("@test FF-flag  ==  true"),
+            "@test FF-flag == true"
+        );
+        assert_eq!(
+            normalize_test_annotation("@test FF-flag == true"),
+            "@test FF-flag == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_single_eq() {
+        // Single = is normalized to ==
+        assert_eq!(
+            normalize_test_annotation("@test FF-flag=true"),
+            "@test FF-flag == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_neq() {
+        assert_eq!(
+            normalize_test_annotation("@test FF-flag!=false"),
+            "@test FF-flag != false"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_params_commas() {
+        assert_eq!(
+            normalize_test_annotation("@test FF-feature(a=b,c=d,dd=4,z=\"demo car\")==true"),
+            "@test FF-feature(a=b, c=d, dd=4, z=\"demo car\") == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_params_already_spaced() {
+        assert_eq!(
+            normalize_test_annotation("@test FF-feature(a=b, c=d) == true"),
+            "@test FF-feature(a=b, c=d) == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_empty_params() {
+        assert_eq!(
+            normalize_test_annotation("@test FF-timer-feature() == true"),
+            "@test FF-timer-feature() == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_no_params() {
+        assert_eq!(
+            normalize_test_annotation("@test FF-launch-event == true"),
+            "@test FF-launch-event == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_annotation_array_param() {
+        // Commas inside brackets should not be split
+        assert_eq!(
+            normalize_test_annotation(
+                "@test FF-admin-panel(roles=[\"viewer\", \"editor\", \"admin\"]) == true"
+            ),
+            "@test FF-admin-panel(roles=[\"viewer\", \"editor\", \"admin\"]) == true"
+        );
+    }
+
+    #[test]
+    fn test_normalize_test_via_normalize_line() {
+        assert_eq!(
+            normalize_line("@test FF-flag==true", &LineType::Annotation),
+            "@test FF-flag == true"
+        );
+        // Non-test annotations are preserved verbatim
+        assert_eq!(
+            normalize_line("@owner \"team\"", &LineType::Annotation),
+            "@owner \"team\""
+        );
     }
 }
