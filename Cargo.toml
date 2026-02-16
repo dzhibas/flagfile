@@ -8,7 +8,7 @@ repository = "https://github.com/dzhibas/flagfile"
 [workspace]
 resolver = "2"
 
-members = ["flagfile-cli", ".", "examples/rust_example"]
+members = ["flagfile-cli", ".", "examples/rust_example", "examples/rust_remote_example"]
 default-members = [".", "flagfile-cli"]
 
 [lints.rust]
@@ -25,12 +25,18 @@ opt-level = "z"
 inherits = "release"
 lto = "thin"
 
+[features]
+default = []
+remote = ["reqwest", "tokio"]
+
 [dependencies]
 chrono = "0.4.34"
 nom = "7.1.3"
 regex = "1"
+reqwest = { version = "0.12", features = ["blocking"], optional = true }
 serde_json = "1.0.114"
 sha1 = "0.10"
+tokio = { version = "1", features = ["rt-multi-thread", "sync"], optional = true }
 wasm-bindgen = "0.2"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]

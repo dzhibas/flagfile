@@ -1,0 +1,7 @@
+FF-checking-remote {
+    @env dev -> true
+    @env stage -> false
+    true
+}
+
+FF-something-else -> "local"

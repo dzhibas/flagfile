@@ -11,6 +11,7 @@ use flagfile_lib::parse_flagfile::FlagReturn;
 
 use super::routes::evaluate_flag_with_reason;
 use super::state::AppState;
+use super::store::ROOT_NAMESPACE;
 
 #[derive(serde::Deserialize)]
 pub struct OFREPEvalRequest {
@@ -93,9 +94,23 @@ pub async fn handle_ofrep_single(
     Path(key): Path<String>,
     Json(body): Json<OFREPEvalRequest>,
 ) -> Response {
-    let store = state.store.read().await;
+    let namespaces = state.namespaces.read().await;
+    let ns = match namespaces.get(ROOT_NAMESPACE) {
+        Some(ns) => ns,
+        None => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(OFREPEvalError {
+                    key: key.clone(),
+                    error_code: "FLAG_NOT_FOUND".to_string(),
+                    error_details: "No flags loaded".to_string(),
+                }),
+            )
+                .into_response();
+        }
+    };
 
-    if !store.flags.contains_key(&key) {
+    if !ns.flags.contains_key(&key) {
         return (
             StatusCode::NOT_FOUND,
             Json(OFREPEvalError {
@@ -121,10 +136,10 @@ pub async fn handle_ofrep_single(
     match evaluate_flag_with_reason(
         &key,
         &context,
-        &store.flags,
-        &store.metadata,
-        &store.segments,
-        store.env.as_deref(),
+        &ns.flags,
+        &ns.metadata,
+        &ns.segments,
+        ns.env.as_deref(),
     ) {
         Some((ret, reason)) => {
             let success = flag_return_to_ofrep(&key, &ret, reason);
@@ -147,7 +162,17 @@ pub async fn handle_ofrep_bulk(
     State(state): State<Arc<AppState>>,
     Json(body): Json<OFREPEvalRequest>,
 ) -> Response {
-    let store = state.store.read().await;
+    let namespaces = state.namespaces.read().await;
+    let ns = match namespaces.get(ROOT_NAMESPACE) {
+        Some(ns) => ns,
+        None => {
+            return (
+                StatusCode::OK,
+                Json(OFREPBulkResponse { flags: vec![] }),
+            )
+                .into_response();
+        }
+    };
 
     let string_ctx = body
         .context
@@ -161,14 +186,14 @@ pub async fn handle_ofrep_bulk(
         .collect();
 
     let mut flags = Vec::new();
-    for key in store.flags.keys() {
+    for key in ns.flags.keys() {
         let result = match evaluate_flag_with_reason(
             key,
             &context,
-            &store.flags,
-            &store.metadata,
-            &store.segments,
-            store.env.as_deref(),
+            &ns.flags,
+            &ns.metadata,
+            &ns.segments,
+            ns.env.as_deref(),
         ) {
             Some((ret, reason)) => flag_return_to_ofrep(key, &ret, reason),
             None => OFREPEvalSuccess {

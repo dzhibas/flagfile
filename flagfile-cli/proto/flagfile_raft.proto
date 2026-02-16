@@ -1,0 +1,34 @@
+syntax = "proto3";
+package flagfile.raft;
+
+service RaftService {
+  rpc SendMessage(RaftMessage) returns (RaftResponse);
+  rpc SendSnapshot(SnapshotChunk) returns (RaftResponse);
+  rpc ForwardWrite(WriteRequest) returns (WriteResponse);
+}
+
+message RaftMessage {
+  bytes data = 1;
+}
+
+message SnapshotChunk {
+  bytes data = 1;
+  bool done = 2;
+}
+
+message WriteRequest {
+  string namespace = 1;
+  bytes content = 2;
+  string token = 3;
+}
+
+message WriteResponse {
+  bool success = 1;
+  string hash = 2;
+  uint64 flags_count = 3;
+  string error = 4;
+}
+
+message RaftResponse {
+  bool success = 1;
+}

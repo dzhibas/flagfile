@@ -16,15 +16,32 @@ name = "flagfile"
 path = "src/main.rs"
 
 [dependencies]
+async-stream = "0.3"
+async-trait = "0.1"
 axum = "0.8"
 chrono = "0.4.43"
 clap = { version = "4.5.0", features = ["derive", "env"] }
 flagfile-lib = { path = ".." }
+futures = "0.3"
 ignore = "0.4"
 notify = "7"
+prometheus = "0.13"
 regex = "1"
+reqwest = { version = "0.12", features = ["blocking", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.114"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal", "fs"] }
+sha1 = "0.10"
+sled = "0.34"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal", "fs", "time"] }
 toml = "0.8"
 tower-http = { version = "0.6.8", features = ["compression-full"] }
+
+# Raft cluster dependencies
+prost = "0.13"
+protobuf = "2"
+raft = "0.7"
+slog = "2"
+tonic = "0.12"
+
+[build-dependencies]
+tonic-build = "0.12"
