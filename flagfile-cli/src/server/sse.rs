@@ -8,6 +8,8 @@ use futures::Stream;
 use serde::Serialize;
 use tokio::sync::{broadcast, RwLock};
 
+use super::metrics::metrics;
+
 /// Event sent when a flagfile is updated
 #[derive(Debug, Clone, Serialize)]
 pub struct FlagUpdateEvent {
@@ -75,8 +77,14 @@ pub async fn create_sse_stream(
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let mut rx = broadcaster.subscribe(&namespace).await;
     let mut shutdown_rx = broadcaster.subscribe_shutdown();
+    let ns = namespace.clone();
 
     let stream = async_stream::stream! {
+        // Track SSE connection
+        let m = metrics();
+        m.sse_active.with_label_values(&[&ns]).inc();
+        m.sse_total.with_label_values(&[&ns]).inc();
+
         // Yield initial "connected" event with current state
         let connected_data = serde_json::json!({
             "hash": current_hash.unwrap_or_default(),
@@ -92,6 +100,7 @@ pub async fn create_sse_stream(
                 result = rx.recv() => {
                     match result {
                         Ok(event) => {
+                            metrics().sse_events.with_label_values(&[&ns, "flag_update"]).inc();
                             let data = serde_json::json!({
                                 "hash": event.hash,
                                 "timestamp": event.timestamp,
@@ -102,6 +111,7 @@ pub async fn create_sse_stream(
                                 .data(data.to_string()));
                         }
                         Err(broadcast::error::RecvError::Lagged(n)) => {
+                            metrics().sse_events.with_label_values(&[&ns, "lag_warning"]).inc();
                             let data = serde_json::json!({
                                 "warning": format!("missed {} events", n),
                             });
@@ -121,12 +131,16 @@ pub async fn create_sse_stream(
                     break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(30)) => {
+                    metrics().sse_events.with_label_values(&[&ns, "heartbeat"]).inc();
                     yield Ok(Event::default()
                         .event("heartbeat")
                         .data("{}".to_string()));
                 }
             }
         }
+
+        // Decrement active connections when stream ends
+        metrics().sse_active.with_label_values(&[&ns]).dec();
     };
 
     Sse::new(stream).keep_alive(

@@ -108,6 +108,9 @@ async fn run_serve_single_tenant(
         }
     };
 
+    // Record startup flags metric
+    metrics::metrics().flags_total.with_label_values(&[ROOT_NAMESPACE]).set(flags.len() as i64);
+
     let mut namespaces = HashMap::new();
     namespaces.insert(
         ROOT_NAMESPACE.to_string(),
@@ -148,7 +151,7 @@ async fn run_serve_single_tenant(
         ));
     }
 
-    let app = build_single_tenant_router(state);
+    let app = build_single_tenant_router(Arc::clone(&state));
 
     let addr = format!("{}:{}", hostname, port);
     if let Some(ref env) = env {
@@ -160,7 +163,7 @@ async fn run_serve_single_tenant(
         println!("Serving {} on http://{}", flagfile_path, addr);
     }
 
-    serve_with_shutdown(app, &addr, broadcaster).await;
+    serve_with_shutdown(app, &addr, broadcaster, state).await;
 }
 
 // ── Multi-tenant mode ───────────────────────────────────────
@@ -182,6 +185,7 @@ async fn run_serve_multi_tenant(
     let persistent_store: Arc<dyn store::FlagStore + Send + Sync> =
         match server_config.server.storage {
             StorageBackend::Sled => {
+                metrics::metrics().storage_backend.with_label_values(&["sled"]).set(1);
                 match store::sled_store::SledStore::open(&server_config.server.data_dir) {
                     Ok(s) => Arc::new(s),
                     Err(e) => {
@@ -190,7 +194,10 @@ async fn run_serve_multi_tenant(
                     }
                 }
             }
-            StorageBackend::Memory => Arc::new(store::memory::MemoryStore::new()),
+            StorageBackend::Memory => {
+                metrics::metrics().storage_backend.with_label_values(&["memory"]).set(1);
+                Arc::new(store::memory::MemoryStore::new())
+            }
         };
 
     // Load existing flagfiles from persistent store into parsed namespaces
@@ -213,6 +220,11 @@ async fn run_serve_multi_tenant(
                 }
             }
         }
+    }
+
+    // Record flags_total per namespace at startup
+    for (ns_key, ns_data) in &namespaces {
+        metrics::metrics().flags_total.with_label_values(&[ns_key]).set(ns_data.flags.len() as i64);
     }
 
     let broadcaster = Arc::new(SseBroadcaster::new());
@@ -290,7 +302,7 @@ async fn run_serve_multi_tenant(
         addr, ns_count
     );
 
-    serve_with_shutdown(app, &addr, broadcaster).await;
+    serve_with_shutdown(app, &addr, broadcaster, state).await;
 }
 
 // ── Router builders ─────────────────────────────────────────
@@ -499,7 +511,12 @@ async fn watch_flagfile_new(
 
 // ── Shared server startup ───────────────────────────────────
 
-async fn serve_with_shutdown(app: Router, addr: &str, broadcaster: Arc<SseBroadcaster>) {
+async fn serve_with_shutdown(
+    app: Router,
+    addr: &str,
+    broadcaster: Arc<SseBroadcaster>,
+    state: Arc<AppState>,
+) {
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .unwrap_or_else(|e| {
@@ -523,7 +540,36 @@ async fn serve_with_shutdown(app: Router, addr: &str, broadcaster: Arc<SseBroadc
         #[cfg(not(unix))]
         ctrl_c.await.ok();
 
-        println!("Shutdown signal received, notifying SSE clients...");
+        println!("Shutdown signal received");
+
+        // Attempt Raft leadership transfer before shutting down.
+        if let Some(handle) = state.raft_handle.get() {
+            if handle.is_leader() {
+                println!("Transferring Raft leadership...");
+                match handle.transfer_leader().await {
+                    Ok(()) => {
+                        // Poll is_leader() until we're no longer leader, up to 5s.
+                        let deadline =
+                            tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+                        while handle.is_leader()
+                            && tokio::time::Instant::now() < deadline
+                        {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                        if handle.is_leader() {
+                            println!("Leadership transfer timed out, proceeding with shutdown");
+                        } else {
+                            println!("Leadership transferred successfully");
+                        }
+                    }
+                    Err(e) => {
+                        println!("Leadership transfer skipped: {}", e);
+                    }
+                }
+            }
+        }
+
+        println!("Notifying SSE clients...");
         broadcaster.shutdown();
         // Brief pause so SSE clients receive the shutdown event before
         // connections are torn down.

@@ -13,6 +13,7 @@ use super::storage::MemRaftStorage;
 use super::transport::RaftTransport;
 use super::RaftCommand;
 use crate::server::config::ClusterConfig;
+use crate::server::metrics::metrics;
 
 /// Proposal sent to the Raft node for replication.
 pub struct Proposal {
@@ -20,12 +21,21 @@ pub struct Proposal {
     pub response_tx: oneshot::Sender<Result<(), String>>,
 }
 
+/// Commands sent to the Raft node loop (besides proposals and messages).
+pub enum RaftNodeCommand {
+    TransferLeader {
+        response_tx: oneshot::Sender<Result<(), String>>,
+    },
+}
+
 /// Handle for interacting with the Raft node from HTTP handlers.
 #[derive(Clone)]
 pub struct RaftHandle {
     proposal_tx: mpsc::Sender<Proposal>,
+    command_tx: mpsc::Sender<RaftNodeCommand>,
     leader_id: Arc<AtomicU64>,
     node_id: u64,
+    peer_ids: Vec<u64>,
 }
 
 impl RaftHandle {
@@ -60,6 +70,21 @@ impl RaftHandle {
     /// Get this node's ID.
     pub fn node_id(&self) -> u64 {
         self.node_id
+    }
+
+    /// Transfer leadership to another node in the cluster. Returns once the
+    /// transfer has been initiated (the caller should poll `is_leader()` to
+    /// confirm the transfer completed).
+    pub async fn transfer_leader(&self) -> Result<(), String> {
+        if self.peer_ids.is_empty() {
+            return Err("no peers to transfer leadership to".to_string());
+        }
+        let (tx, rx) = oneshot::channel();
+        self.command_tx
+            .send(RaftNodeCommand::TransferLeader { response_tx: tx })
+            .await
+            .map_err(|_| "raft node shut down".to_string())?;
+        rx.await.map_err(|_| "command dropped".to_string())?
     }
 }
 
@@ -103,14 +128,19 @@ pub async fn run_raft_node(
 
     let (proposal_tx, mut proposal_rx) = mpsc::channel::<Proposal>(256);
     let (raft_msg_tx, mut raft_msg_rx) = mpsc::channel::<Message>(256);
+    let (command_tx, mut command_rx) = mpsc::channel::<RaftNodeCommand>(16);
 
     let leader_id = Arc::new(AtomicU64::new(0));
     let leader_id_clone = Arc::clone(&leader_id);
 
+    let peer_ids: Vec<u64> = cluster_cfg.peers.iter().map(|p| p.id).collect();
+
     let handle = RaftHandle {
         proposal_tx,
+        command_tx,
         leader_id: Arc::clone(&leader_id),
         node_id,
+        peer_ids: peer_ids.clone(),
     };
 
     let tick_ms = 100;
@@ -130,6 +160,7 @@ pub async fn run_raft_node(
         let mut applied_index: u64 = 0;
         let mut tick_count: usize = 0;
         let mut last_leader: u64 = 0;
+        let node_id_str = node_id.to_string();
 
         loop {
             tokio::select! {
@@ -157,6 +188,19 @@ pub async fn run_raft_node(
                         eprintln!("raft step error: {}", e);
                     }
                 }
+                Some(cmd) = command_rx.recv() => {
+                    match cmd {
+                        RaftNodeCommand::TransferLeader { response_tx } => {
+                            // Pick the first peer as the transfer target.
+                            if let Some(&target) = peer_ids.first() {
+                                raw_node.transfer_leader(target);
+                                let _ = response_tx.send(Ok(()));
+                            } else {
+                                let _ = response_tx.send(Err("no peers".to_string()));
+                            }
+                        }
+                    }
+                }
                 else => break,
             }
 
@@ -167,12 +211,18 @@ pub async fn run_raft_node(
                     println!("raft node {}: leader unknown", node_id);
                 } else if current_leader == node_id {
                     println!("raft node {}: became leader (term {})", node_id, raw_node.raft.term);
+                    metrics().raft_elections.with_label_values(&[&node_id_str]).inc();
                 } else {
                     println!(
                         "raft node {}: following leader {} (term {})",
                         node_id, current_leader, raw_node.raft.term
                     );
                 }
+                let m = metrics();
+                let state_val = if current_leader == 0 { 0 } else if current_leader == node_id { 3 } else { 1 };
+                m.raft_state.with_label_values(&[&node_id_str]).set(state_val);
+                m.raft_leader_id.with_label_values(&[&node_id_str]).set(current_leader as i64);
+                m.raft_term.with_label_values(&[&node_id_str]).set(raw_node.raft.term as i64);
                 last_leader = current_leader;
             }
             leader_id_clone.store(current_leader, Ordering::Relaxed);
@@ -186,6 +236,7 @@ pub async fn run_raft_node(
             // 1. Persist hard state and entries.
             if let Some(hs) = ready.hs() {
                 storage.set_hard_state(hs.clone());
+                metrics().raft_committed.with_label_values(&[&node_id_str]).set(hs.commit as i64);
             }
             if !ready.entries().is_empty() {
                 if let Err(e) = storage.append(ready.entries()) {
@@ -251,6 +302,7 @@ pub async fn run_raft_node(
             // This is a simplified approach: we drain all pending senders once
             // any committed entries come through.
             if !committed.is_empty() {
+                metrics().raft_last_applied.with_label_values(&[&node_id_str]).set(applied_index as i64);
                 for tx in pending.drain(..) {
                     let _ = tx.send(Ok(()));
                 }
@@ -307,6 +359,7 @@ pub async fn run_raft_node(
                         if let Err(e) = storage.compact(applied_index) {
                             eprintln!("raft compact error: {}", e);
                         }
+                        metrics().raft_snapshots.with_label_values(&[&node_id_str]).inc();
                     }
                     Err(e) => {
                         eprintln!("raft state_machine snapshot error: {}", e);

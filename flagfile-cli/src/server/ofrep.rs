@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
@@ -9,6 +10,7 @@ use flagfile_lib::ast::Atom;
 use flagfile_lib::eval::Context;
 use flagfile_lib::parse_flagfile::FlagReturn;
 
+use super::metrics::metrics;
 use super::routes::evaluate_flag_with_reason;
 use super::state::AppState;
 use super::store::ROOT_NAMESPACE;
@@ -94,10 +96,15 @@ pub async fn handle_ofrep_single(
     Path(key): Path<String>,
     Json(body): Json<OFREPEvalRequest>,
 ) -> Response {
+    let start = Instant::now();
     let namespaces = state.namespaces.read().await;
     let ns = match namespaces.get(ROOT_NAMESPACE) {
         Some(ns) => ns,
         None => {
+            let m = metrics();
+            m.eval_total.with_label_values(&[ROOT_NAMESPACE, &key]).inc();
+            m.eval_errors.with_label_values(&[ROOT_NAMESPACE]).inc();
+            m.eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
             return (
                 StatusCode::NOT_FOUND,
                 Json(OFREPEvalError {
@@ -111,6 +118,10 @@ pub async fn handle_ofrep_single(
     };
 
     if !ns.flags.contains_key(&key) {
+        let m = metrics();
+        m.eval_total.with_label_values(&[ROOT_NAMESPACE, &key]).inc();
+        m.eval_errors.with_label_values(&[ROOT_NAMESPACE]).inc();
+        m.eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
         return (
             StatusCode::NOT_FOUND,
             Json(OFREPEvalError {
@@ -133,14 +144,20 @@ pub async fn handle_ofrep_single(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag_with_reason(
+    let result = evaluate_flag_with_reason(
         &key,
         &context,
         &ns.flags,
         &ns.metadata,
         &ns.segments,
         ns.env.as_deref(),
-    ) {
+    );
+
+    let m = metrics();
+    m.eval_total.with_label_values(&[ROOT_NAMESPACE, &key]).inc();
+    m.eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
+
+    match result {
         Some((ret, reason)) => {
             let success = flag_return_to_ofrep(&key, &ret, reason);
             (StatusCode::OK, Json(success)).into_response()
@@ -162,6 +179,7 @@ pub async fn handle_ofrep_bulk(
     State(state): State<Arc<AppState>>,
     Json(body): Json<OFREPEvalRequest>,
 ) -> Response {
+    let start = Instant::now();
     let namespaces = state.namespaces.read().await;
     let ns = match namespaces.get(ROOT_NAMESPACE) {
         Some(ns) => ns,
@@ -204,8 +222,11 @@ pub async fn handle_ofrep_bulk(
                 metadata: serde_json::json!({}),
             },
         };
+        metrics().eval_total.with_label_values(&[ROOT_NAMESPACE, key]).inc();
         flags.push(serde_json::to_value(result).unwrap());
     }
+
+    metrics().eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
 
     (StatusCode::OK, Json(OFREPBulkResponse { flags })).into_response()
 }

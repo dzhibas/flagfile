@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::time::Instant;
 
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
@@ -9,6 +10,8 @@ use flagfile_lib::ast::{Atom, FlagMetadata};
 use flagfile_lib::eval::{eval_with_segments, Context, Segments};
 use flagfile_lib::parse_flagfile::{parse_flagfile_with_segments, FlagReturn, Rule};
 use sha1::{Digest, Sha1};
+
+use super::metrics::metrics;
 
 use super::auth::{check_token, extract_bearer_token, forbidden, unauthorized, TokenPermission};
 use super::state::{AppState, ParsedNamespace};
@@ -104,6 +107,7 @@ pub async fn handle_put_flagfile(
     ns_param: Option<Path<String>>,
     body: String,
 ) -> Response {
+    let start = Instant::now();
     let ns_key = AppState::resolve_namespace(ns_param.as_ref().map(|p| p.0.as_str()));
     let ns_config = match state.namespace_config(ns_key) {
         Some(c) => c,
@@ -120,6 +124,7 @@ pub async fn handle_put_flagfile(
     let (remainder, parsed) = match parse_flagfile_with_segments(&body_for_parse) {
         Ok(result) => result,
         Err(e) => {
+            metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(serde_json::json!({"error": format!("parse error: {}", e)})),
@@ -129,6 +134,7 @@ pub async fn handle_put_flagfile(
     };
 
     if !remainder.trim().is_empty() {
+        metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(serde_json::json!({
@@ -171,25 +177,35 @@ pub async fn handle_put_flagfile(
                 meta,
             };
             return match handle.propose(cmd).await {
-                Ok(()) => (
-                    StatusCode::OK,
-                    Json(serde_json::json!({
-                        "status": "ok",
-                        "flags_count": flags_count,
-                        "hash": hash,
-                    })),
-                )
-                    .into_response(),
-                Err(e) => (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    Json(serde_json::json!({"error": format!("raft propose: {}", e)})),
-                )
-                    .into_response(),
+                Ok(()) => {
+                    let m = metrics();
+                    m.push_total.with_label_values(&[ns_key, "ok"]).inc();
+                    m.push_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
+                    m.flags_total.with_label_values(&[ns_key]).set(flags_count as i64);
+                    (
+                        StatusCode::OK,
+                        Json(serde_json::json!({
+                            "status": "ok",
+                            "flags_count": flags_count,
+                            "hash": hash,
+                        })),
+                    )
+                        .into_response()
+                }
+                Err(e) => {
+                    metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                    (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(serde_json::json!({"error": format!("raft propose: {}", e)})),
+                    )
+                        .into_response()
+                }
             };
         } else {
             // Follower: forward the write to the current leader.
             let leader_id = handle.leader_id();
             if leader_id == 0 {
+                metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
                     Json(serde_json::json!({"error": "no leader elected yet"})),
@@ -202,27 +218,39 @@ pub async fn handle_put_flagfile(
                     .forward_write(leader_id, ns_key, body.as_bytes(), &token)
                     .await
                 {
-                    Ok(resp) if resp.success => (
-                        StatusCode::OK,
-                        Json(serde_json::json!({
-                            "status": "ok",
-                            "flags_count": resp.flags_count,
-                            "hash": resp.hash,
-                        })),
-                    )
-                        .into_response(),
-                    Ok(resp) => (
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        Json(serde_json::json!({"error": resp.error})),
-                    )
-                        .into_response(),
-                    Err(e) => (
-                        StatusCode::BAD_GATEWAY,
-                        Json(serde_json::json!({
-                            "error": format!("forward to leader failed: {}", e)
-                        })),
-                    )
-                        .into_response(),
+                    Ok(resp) if resp.success => {
+                        let m = metrics();
+                        m.push_total.with_label_values(&[ns_key, "ok"]).inc();
+                        m.push_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
+                        m.flags_total.with_label_values(&[ns_key]).set(resp.flags_count as i64);
+                        (
+                            StatusCode::OK,
+                            Json(serde_json::json!({
+                                "status": "ok",
+                                "flags_count": resp.flags_count,
+                                "hash": resp.hash,
+                            })),
+                        )
+                            .into_response()
+                    }
+                    Ok(resp) => {
+                        metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                        (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(serde_json::json!({"error": resp.error})),
+                        )
+                            .into_response()
+                    }
+                    Err(e) => {
+                        metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                        (
+                            StatusCode::BAD_GATEWAY,
+                            Json(serde_json::json!({
+                                "error": format!("forward to leader failed: {}", e)
+                            })),
+                        )
+                            .into_response()
+                    }
                 };
             }
         }
@@ -244,6 +272,7 @@ pub async fn handle_put_flagfile(
             flags_count,
         };
         if let Err(e) = store.put_flagfile(ns_key, body.as_bytes(), &meta).await {
+            metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("storage error: {}", e)})),
@@ -279,6 +308,11 @@ pub async fn handle_put_flagfile(
             },
         )
         .await;
+
+    let m = metrics();
+    m.push_total.with_label_values(&[ns_key, "ok"]).inc();
+    m.push_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
+    m.flags_total.with_label_values(&[ns_key]).set(flags_count as i64);
 
     (
         StatusCode::OK,
@@ -340,6 +374,7 @@ pub async fn handle_eval(
     Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Response {
+    let start = Instant::now();
     let ns_key = params
         .namespace
         .as_deref()
@@ -359,6 +394,7 @@ pub async fn handle_eval(
     let ns = match namespaces.get(ns_key) {
         Some(n) => n,
         None => {
+            metrics().eval_errors.with_label_values(&[ns_key]).inc();
             return (
                 StatusCode::NOT_FOUND,
                 Json(serde_json::json!({"error": "namespace not found"})),
@@ -373,6 +409,10 @@ pub async fn handle_eval(
         .unwrap_or(false);
 
     if !ns.flags.contains_key(flag_name.as_str()) {
+        let m = metrics();
+        m.eval_total.with_label_values(&[ns_key, flag_name]).inc();
+        m.eval_errors.with_label_values(&[ns_key]).inc();
+        m.eval_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
         if plain {
             return (StatusCode::NOT_FOUND, "flag not found").into_response();
         }
@@ -389,16 +429,23 @@ pub async fn handle_eval(
         .map(|(k, v)| (k.as_str(), Atom::from(v.as_str())))
         .collect();
 
-    match evaluate_flag_with_reason(
+    let result = evaluate_flag_with_reason(
         flag_name,
         &context,
         &ns.flags,
         &ns.metadata,
         &ns.segments,
         ns.env.as_deref(),
-    ) {
+    );
+
+    let m = metrics();
+    m.eval_total.with_label_values(&[ns_key, flag_name]).inc();
+    m.eval_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
+
+    match result {
         Some((val, _reason)) => format_flag_response(flag_name, &val, plain),
         None => {
+            m.eval_errors.with_label_values(&[ns_key]).inc();
             if plain {
                 (StatusCode::UNPROCESSABLE_ENTITY, "no rule matched").into_response()
             } else {

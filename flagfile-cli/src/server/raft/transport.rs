@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 
 use protobuf::Message as ProtoMessage;
 use raft::prelude::Message;
@@ -9,6 +10,7 @@ use tonic::{Request, Response, Status};
 use super::node::{RaftHandle, RaftMsgSender};
 use super::RaftCommand;
 use crate::server::config::PeerConfig;
+use crate::server::metrics::metrics;
 
 pub mod proto {
     tonic::include_proto!("flagfile.raft");
@@ -71,15 +73,25 @@ impl RaftTransport {
         target: u64,
         msg: &Message,
     ) -> Result<(), String> {
+        let start = Instant::now();
+        let peer = target.to_string();
         let data = msg.write_to_bytes().map_err(|e| format!("encode: {}", e))?;
         let mut client = self.get_client(target).await?;
 
         let request = Request::new(RaftMessage { data });
-        client
+        let result = client
             .send_message(request)
             .await
-            .map_err(|e| format!("send to {}: {}", target, e))?;
+            .map_err(|e| format!("send to {}: {}", target, e));
 
+        let m = metrics();
+        m.grpc_requests.with_label_values(&[&peer, "send_message"]).inc();
+        m.grpc_latency.with_label_values(&[&peer]).observe(start.elapsed().as_secs_f64());
+        if result.is_err() {
+            m.grpc_errors.with_label_values(&[&peer]).inc();
+        }
+
+        result?;
         Ok(())
     }
 
@@ -91,6 +103,8 @@ impl RaftTransport {
         content: &[u8],
         token: &str,
     ) -> Result<WriteResponse, String> {
+        let start = Instant::now();
+        let peer = leader_id.to_string();
         let mut client = self.get_client(leader_id).await?;
 
         let request = Request::new(WriteRequest {
@@ -99,12 +113,19 @@ impl RaftTransport {
             token: token.to_string(),
         });
 
-        let response = client
+        let result = client
             .forward_write(request)
             .await
-            .map_err(|e| format!("forward write to leader {}: {}", leader_id, e))?;
+            .map_err(|e| format!("forward write to leader {}: {}", leader_id, e));
 
-        Ok(response.into_inner())
+        let m = metrics();
+        m.grpc_requests.with_label_values(&[&peer, "forward_write"]).inc();
+        m.grpc_latency.with_label_values(&[&peer]).observe(start.elapsed().as_secs_f64());
+        if result.is_err() {
+            m.grpc_errors.with_label_values(&[&peer]).inc();
+        }
+
+        Ok(result?.into_inner())
     }
 
     /// Remove a cached client connection (e.g. after a connection error).
@@ -139,14 +160,22 @@ impl RaftService for RaftGrpcService {
         &self,
         request: Request<RaftMessage>,
     ) -> Result<Response<RaftResponse>, Status> {
+        metrics().grpc_requests.with_label_values(&["incoming", "send_message"]).inc();
+
         let data = request.into_inner().data;
         let msg = Message::parse_from_bytes(&data)
-            .map_err(|e| Status::invalid_argument(format!("decode raft message: {}", e)))?;
+            .map_err(|e| {
+                metrics().grpc_errors.with_label_values(&["incoming"]).inc();
+                Status::invalid_argument(format!("decode raft message: {}", e))
+            })?;
 
         self.raft_msg_tx
             .send(msg)
             .await
-            .map_err(|_| Status::internal("raft node shut down"))?;
+            .map_err(|_| {
+                metrics().grpc_errors.with_label_values(&["incoming"]).inc();
+                Status::internal("raft node shut down")
+            })?;
 
         Ok(Response::new(RaftResponse { success: true }))
     }
@@ -177,6 +206,7 @@ impl RaftService for RaftGrpcService {
         &self,
         request: Request<WriteRequest>,
     ) -> Result<Response<WriteResponse>, Status> {
+        metrics().grpc_requests.with_label_values(&["incoming", "forward_write"]).inc();
         let req = request.into_inner();
 
         if !self.raft_handle.is_leader() {
