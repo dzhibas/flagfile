@@ -104,30 +104,38 @@ impl Drop for FlagfileBuilder {
                         request = request.bearer_auth(t);
                     }
 
-                    let content = match request
+                    let remote_ok = match request
                         .send()
                         .and_then(|r| r.error_for_status())
                         .and_then(|r| r.text())
                     {
-                        Ok(content) => content,
+                        Ok(content) => {
+                            super::init_from_str_inner(&content, env.clone());
+                            true
+                        }
                         Err(e) => {
                             eprintln!(
                                 "flagfile: remote fetch failed: {}, using fallback '{}'",
                                 e, fallback
                             );
-                            std::fs::read_to_string(&fallback).unwrap_or_else(|_| {
-                                panic!("Could not read fallback '{}'", fallback)
-                            })
+                            let content =
+                                std::fs::read_to_string(&fallback).unwrap_or_else(|_| {
+                                    panic!("Could not read fallback '{}'", fallback)
+                                });
+                            super::init_from_str_inner(&content, env.clone());
+                            false
                         }
                     };
 
-                    super::init_from_str_inner(&content, env.clone());
-
-                    // Spawn background thread to listen for SSE updates.
-                    let on_update = self.on_update.take();
-                    std::thread::spawn(move || {
-                        sse_listener(&events_url, &flagfile_url, token.as_deref(), env, on_update.as_deref());
-                    });
+                    // Only subscribe to SSE if the initial fetch succeeded.
+                    // If the server was unreachable / 404 there is no point
+                    // in trying to open an event stream.
+                    if remote_ok {
+                        let on_update = self.on_update.take();
+                        std::thread::spawn(move || {
+                            sse_listener(&events_url, &flagfile_url, token.as_deref(), env, on_update.as_deref());
+                        });
+                    }
                 }
                 #[cfg(not(feature = "remote"))]
                 {
@@ -139,9 +147,9 @@ impl Drop for FlagfileBuilder {
     }
 }
 
-/// Background SSE listener that reconnects on failure.
+/// Background SSE listener that reconnects with exponential backoff.
 /// On each `flag_update` event, re-fetches the flagfile content and reloads
-/// the global state.
+/// the global state. On `server_shutdown`, breaks out and reconnects.
 #[cfg(feature = "remote")]
 fn sse_listener(
     events_url: &str,
@@ -153,7 +161,11 @@ fn sse_listener(
     use std::io::{BufRead, BufReader};
     use std::time::Duration;
 
+    const BASE_DELAY_MS: u64 = 1_000;
+    const MAX_DELAY_MS: u64 = 30_000;
+
     let client = reqwest::blocking::Client::new();
+    let mut attempt: u32 = 0;
 
     loop {
         let mut request = client
@@ -165,8 +177,12 @@ fn sse_listener(
 
         match request.send().and_then(|r| r.error_for_status()) {
             Ok(resp) => {
+                // Connected successfully — reset backoff
+                attempt = 0;
+
                 let reader = BufReader::new(resp);
                 let mut event_type = String::new();
+                let mut shutdown = false;
 
                 for line in reader.lines() {
                     match line {
@@ -178,6 +194,9 @@ fn sse_listener(
                             } else if line.starts_with("data: ") {
                                 if event_type == "flag_update" {
                                     reload_from_remote(&client, flagfile_url, token, &env, on_update);
+                                } else if event_type == "server_shutdown" {
+                                    shutdown = true;
+                                    break;
                                 }
                                 event_type.clear();
                             } else if line.is_empty() {
@@ -190,14 +209,23 @@ fn sse_listener(
                         }
                     }
                 }
+
+                if shutdown {
+                    // Server is restarting — try to refresh flags once before
+                    // entering the backoff loop.
+                    reload_from_remote(&client, flagfile_url, token, &env, on_update);
+                }
             }
             Err(e) => {
                 eprintln!("flagfile: SSE connection failed: {}", e);
             }
         }
 
-        // Wait before reconnecting.
-        std::thread::sleep(Duration::from_secs(5));
+        // Exponential backoff: 1s, 2s, 4s, 8s, … capped at 30s
+        let delay_ms = BASE_DELAY_MS.saturating_mul(1u64.checked_shl(attempt).unwrap_or(u64::MAX));
+        let delay = Duration::from_millis(delay_ms.min(MAX_DELAY_MS));
+        attempt = attempt.saturating_add(1);
+        std::thread::sleep(delay);
     }
 }
 

@@ -160,7 +160,7 @@ async fn run_serve_single_tenant(
         println!("Serving {} on http://{}", flagfile_path, addr);
     }
 
-    serve_with_shutdown(app, &addr).await;
+    serve_with_shutdown(app, &addr, broadcaster).await;
 }
 
 // ── Multi-tenant mode ───────────────────────────────────────
@@ -290,7 +290,7 @@ async fn run_serve_multi_tenant(
         addr, ns_count
     );
 
-    serve_with_shutdown(app, &addr).await;
+    serve_with_shutdown(app, &addr, broadcaster).await;
 }
 
 // ── Router builders ─────────────────────────────────────────
@@ -499,7 +499,7 @@ async fn watch_flagfile_new(
 
 // ── Shared server startup ───────────────────────────────────
 
-async fn serve_with_shutdown(app: Router, addr: &str) {
+async fn serve_with_shutdown(app: Router, addr: &str, broadcaster: Arc<SseBroadcaster>) {
     let listener = tokio::net::TcpListener::bind(addr)
         .await
         .unwrap_or_else(|e| {
@@ -507,7 +507,7 @@ async fn serve_with_shutdown(app: Router, addr: &str) {
             process::exit(1);
         });
 
-    let shutdown = async {
+    let shutdown = async move {
         let ctrl_c = tokio::signal::ctrl_c();
         #[cfg(unix)]
         let mut sigterm =
@@ -523,7 +523,12 @@ async fn serve_with_shutdown(app: Router, addr: &str) {
         #[cfg(not(unix))]
         ctrl_c.await.ok();
 
-        println!("Shutdown signal received, finishing in-flight requests...");
+        println!("Shutdown signal received, notifying SSE clients...");
+        broadcaster.shutdown();
+        // Brief pause so SSE clients receive the shutdown event before
+        // connections are torn down.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        println!("Finishing in-flight requests...");
     };
 
     axum::serve(listener, app)

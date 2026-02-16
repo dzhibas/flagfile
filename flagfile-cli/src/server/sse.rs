@@ -19,12 +19,15 @@ pub struct FlagUpdateEvent {
 /// Manages SSE broadcast channels per namespace
 pub struct SseBroadcaster {
     channels: RwLock<HashMap<String, broadcast::Sender<FlagUpdateEvent>>>,
+    shutdown_tx: broadcast::Sender<()>,
 }
 
 impl SseBroadcaster {
     pub fn new() -> Self {
+        let (shutdown_tx, _) = broadcast::channel(1);
         Self {
             channels: RwLock::new(HashMap::new()),
+            shutdown_tx,
         }
     }
 
@@ -38,12 +41,23 @@ impl SseBroadcaster {
         tx.subscribe()
     }
 
+    /// Subscribe to the shutdown signal.
+    pub fn subscribe_shutdown(&self) -> broadcast::Receiver<()> {
+        self.shutdown_tx.subscribe()
+    }
+
     /// Broadcast an event to all subscribers of a namespace.
     pub async fn broadcast(&self, namespace: &str, event: FlagUpdateEvent) {
         let channels = self.channels.read().await;
         if let Some(tx) = channels.get(namespace) {
             let _ = tx.send(event); // ignore error if no subscribers
         }
+    }
+
+    /// Signal all SSE clients that the server is shutting down.
+    /// Each stream will emit a `server_shutdown` event and close.
+    pub fn shutdown(&self) {
+        let _ = self.shutdown_tx.send(());
     }
 }
 
@@ -60,6 +74,7 @@ pub async fn create_sse_stream(
     current_flags_count: Option<u64>,
 ) -> Sse<impl Stream<Item = Result<Event, Infallible>>> {
     let mut rx = broadcaster.subscribe(&namespace).await;
+    let mut shutdown_rx = broadcaster.subscribe_shutdown();
 
     let stream = async_stream::stream! {
         // Yield initial "connected" event with current state
@@ -98,6 +113,12 @@ pub async fn create_sse_stream(
                             break;
                         }
                     }
+                }
+                _ = shutdown_rx.recv() => {
+                    yield Ok(Event::default()
+                        .event("server_shutdown")
+                        .data("{\"reason\":\"server restarting\"}".to_string()));
+                    break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(30)) => {
                     yield Ok(Event::default()

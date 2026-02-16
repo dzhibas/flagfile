@@ -79,6 +79,8 @@ function unwrap(val: FlagReturn): boolean | number | string | unknown {
 let FLAGS: Map<string, FlagDefinition> | null = null;
 let SEGMENTS: Segments = new Map();
 let ENV: string | null = null;
+let SSE_ABORT: AbortController | null = null;
+let REMOTE_URL: string | null = null;
 
 function evaluateRules(
     rules: Rule[],
@@ -250,6 +252,186 @@ export function ffMetadata(flagName: string): FlagMetadata | null {
     return def.metadata;
 }
 
+// ── Remote init ──────────────────────────────────────────────
+
+/**
+ * Initializes the flag state from a remote flagfile server.
+ *
+ * Fetches `GET {url}/flagfile` and parses the response. If the server is
+ * unreachable or returns a non-OK status (e.g. 404), the function throws
+ * and does **not** attempt to subscribe to SSE.
+ *
+ * On success, subscribes to `{url}/events` for live flag updates so that
+ * the in-memory state is refreshed automatically when flags change on
+ * the server.
+ */
+export async function initRemote(
+    url: string,
+    options?: { env?: string },
+): Promise<void> {
+    if (FLAGS !== null) {
+        throw new Error('init() or initFromString() was called more than once');
+    }
+    if (options?.env) {
+        ENV = options.env;
+    }
+
+    const baseUrl = url.replace(/\/$/, '');
+
+    // Fetch flagfile content from remote server
+    let response: Response;
+    try {
+        response = await fetch(`${baseUrl}/flagfile`);
+    } catch {
+        throw new Error(
+            `Failed to connect to remote flagfile server at ${baseUrl}`,
+        );
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            `Remote flagfile server returned HTTP ${response.status}`,
+        );
+    }
+
+    const content = await response.text();
+    const result = parseFlagfileWithSegments(content);
+    if (!result.ok) {
+        throw new Error('Failed to parse remote Flagfile');
+    }
+    if (result.rest.trim().length > 0) {
+        const near = result.rest.trim().split('\n')[0] ?? '';
+        throw new Error(
+            `Flagfile parsing failed: unexpected content near: ${near}`,
+        );
+    }
+
+    FLAGS = result.value.flags;
+    SEGMENTS = result.value.segments;
+    REMOTE_URL = baseUrl;
+
+    // Only subscribe to SSE after a successful fetch
+    connectSSE(baseUrl);
+}
+
+/**
+ * Disconnect from the remote SSE stream. Safe to call even if not connected.
+ */
+export function disconnect(): void {
+    if (SSE_ABORT) {
+        SSE_ABORT.abort();
+        SSE_ABORT = null;
+    }
+    REMOTE_URL = null;
+}
+
+const SSE_BASE_DELAY_MS = 1000;
+const SSE_MAX_DELAY_MS = 30000;
+
+function connectSSE(baseUrl: string): void {
+    SSE_ABORT = new AbortController();
+    const controller = SSE_ABORT;
+
+    const run = async (): Promise<void> => {
+        let attempt = 0;
+
+        while (!controller.signal.aborted) {
+            try {
+                const res = await fetch(`${baseUrl}/events`, {
+                    signal: controller.signal,
+                    headers: { 'Accept': 'text/event-stream' },
+                });
+                if (!res.ok || !res.body) break;
+
+                // Connected successfully — reset backoff
+                attempt = 0;
+
+                const reader = res.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+                let shutdown = false;
+
+                readLoop: for (;;) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    buffer += decoder.decode(value, { stream: true });
+
+                    // Process complete SSE events (delimited by blank lines)
+                    for (;;) {
+                        const idx = buffer.indexOf('\n\n');
+                        if (idx === -1) break;
+
+                        const block = buffer.slice(0, idx);
+                        buffer = buffer.slice(idx + 2);
+
+                        let eventType = '';
+                        let data = '';
+                        for (const line of block.split('\n')) {
+                            if (line.startsWith('event: ')) {
+                                eventType = line.slice(7).trim();
+                            } else if (line.startsWith('data: ')) {
+                                data += line.slice(6);
+                            }
+                        }
+
+                        if (eventType === 'flag_update') {
+                            await refreshFlags(baseUrl);
+                        } else if (eventType === 'server_shutdown') {
+                            // Server is restarting — fall through to
+                            // the retry loop and reconnect with backoff.
+                            shutdown = true;
+                            break readLoop;
+                        }
+                    }
+                }
+
+                // After a clean shutdown hint, also refresh flags on
+                // reconnect so we pick up any changes made during restart.
+                if (shutdown) {
+                    await refreshFlags(baseUrl);
+                }
+            } catch {
+                if (controller.signal.aborted) return;
+            }
+
+            // Exponential backoff: 1s, 2s, 4s, 8s, … capped at 30s
+            const delay = Math.min(
+                SSE_BASE_DELAY_MS * Math.pow(2, attempt),
+                SSE_MAX_DELAY_MS,
+            );
+            attempt++;
+            await sleep(delay, controller.signal);
+        }
+    };
+
+    // Fire-and-forget background task
+    run();
+}
+
+function sleep(ms: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve) => {
+        if (signal.aborted) { resolve(); return; }
+        const timer = setTimeout(resolve, ms);
+        signal.addEventListener('abort', () => { clearTimeout(timer); resolve(); }, { once: true });
+    });
+}
+
+async function refreshFlags(baseUrl: string): Promise<void> {
+    try {
+        const res = await fetch(`${baseUrl}/flagfile`);
+        if (!res.ok) return;
+        const content = await res.text();
+        const result = parseFlagfileWithSegments(content);
+        if (!result.ok) return;
+        if (result.rest.trim().length > 0) return;
+        FLAGS = result.value.flags;
+        SEGMENTS = result.value.segments;
+    } catch {
+        // Failed to refresh — keep existing state
+    }
+}
+
 /**
  * Reset global state. Useful for testing.
  * @internal
@@ -258,4 +440,9 @@ export function _reset(): void {
     FLAGS = null;
     SEGMENTS = new Map();
     ENV = null;
+    if (SSE_ABORT) {
+        SSE_ABORT.abort();
+        SSE_ABORT = null;
+    }
+    REMOTE_URL = null;
 }
