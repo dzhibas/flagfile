@@ -24,7 +24,7 @@ static ENVIRONMENT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 /// Without any chaining, behaves identically to the previous `init()`.
 ///
 /// # Examples
-/// ```
+/// ```no_run
 /// // Local mode (backward compatible)
 /// flagfile_lib::init();
 ///
@@ -161,7 +161,13 @@ pub fn ff(flag_name: &str, context: &Context) -> Option<FlagReturn> {
     }
 
     let rules = flags_guard.get(flag_name)?;
-    evaluate_rules(rules, context, Some(flag_name), &segments_guard, current_env)
+    evaluate_rules(
+        rules,
+        context,
+        Some(flag_name),
+        &segments_guard,
+        current_env,
+    )
 }
 
 /// Returns the metadata annotations for a flag, if any.

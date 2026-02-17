@@ -118,10 +118,9 @@ impl Drop for FlagfileBuilder {
                                 "flagfile: remote fetch failed: {}, using fallback '{}'",
                                 e, fallback
                             );
-                            let content =
-                                std::fs::read_to_string(&fallback).unwrap_or_else(|_| {
-                                    panic!("Could not read fallback '{}'", fallback)
-                                });
+                            let content = std::fs::read_to_string(&fallback).unwrap_or_else(|_| {
+                                panic!("Could not read fallback '{}'", fallback)
+                            });
                             super::init_from_str_inner(&content, env.clone());
                             false
                         }
@@ -133,7 +132,13 @@ impl Drop for FlagfileBuilder {
                     if remote_ok {
                         let on_update = self.on_update.take();
                         std::thread::spawn(move || {
-                            sse_listener(&events_url, &flagfile_url, token.as_deref(), env, on_update.as_deref());
+                            sse_listener(
+                                &events_url,
+                                &flagfile_url,
+                                token.as_deref(),
+                                env,
+                                on_update.as_deref(),
+                            );
                         });
                     }
                 }
@@ -168,9 +173,7 @@ fn sse_listener(
     let mut attempt: u32 = 0;
 
     loop {
-        let mut request = client
-            .get(events_url)
-            .header("Accept", "text/event-stream");
+        let mut request = client.get(events_url).header("Accept", "text/event-stream");
         if let Some(t) = token {
             request = request.bearer_auth(t);
         }
@@ -193,7 +196,13 @@ fn sse_listener(
                                 event_type = ev.trim().to_string();
                             } else if line.starts_with("data: ") {
                                 if event_type == "flag_update" {
-                                    reload_from_remote(&client, flagfile_url, token, &env, on_update);
+                                    reload_from_remote(
+                                        &client,
+                                        flagfile_url,
+                                        token,
+                                        &env,
+                                        on_update,
+                                    );
                                 } else if event_type == "server_shutdown" {
                                     shutdown = true;
                                     break;
