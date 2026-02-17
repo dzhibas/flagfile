@@ -140,6 +140,22 @@ enum Command {
         /// Environment to evaluate @env rules against
         #[arg(short = 'e', long = "env")]
         env: Option<String>,
+
+        /// Run as a read-only sidecar replicating from upstream
+        #[arg(long = "sidecar")]
+        sidecar: bool,
+
+        /// Upstream server URL (required with --sidecar)
+        #[arg(long = "upstream", requires = "sidecar")]
+        upstream: Option<String>,
+
+        /// Upstream namespace to replicate (defaults to root)
+        #[arg(short = 'n', long = "namespace")]
+        namespace: Option<String>,
+
+        /// Auth token for upstream server
+        #[arg(short = 's', long = "secret")]
+        secret: Option<String>,
     },
     /// Push local Flagfile to a remote server
     Push {
@@ -1346,7 +1362,16 @@ async fn main() {
             watch,
             config,
             env,
-        } => server::run_serve(flagfile, port, hostname, watch, &config, env).await,
+            sidecar,
+            upstream,
+            namespace,
+            secret,
+        } => {
+            server::run_serve(
+                flagfile, port, hostname, watch, &config, env, sidecar, upstream, namespace, secret,
+            )
+            .await
+        }
         Command::Push {
             flagfile,
             remote,

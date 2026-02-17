@@ -129,6 +129,7 @@ impl RaftTransport {
     }
 
     /// Remove a cached client connection (e.g. after a connection error).
+    #[allow(dead_code)]
     pub async fn invalidate_client(&self, target: u64) {
         let mut clients = self.clients.lock().await;
         clients.remove(&target);

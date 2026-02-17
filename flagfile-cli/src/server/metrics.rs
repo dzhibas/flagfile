@@ -16,6 +16,7 @@ use prometheus::{
 static REGISTRY: OnceLock<Registry> = OnceLock::new();
 
 /// All application metrics
+#[allow(dead_code)]
 pub struct Metrics {
     // Raft cluster metrics
     pub raft_state: IntGaugeVec,

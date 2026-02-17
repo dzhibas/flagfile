@@ -4,6 +4,7 @@ pub mod metrics;
 mod ofrep;
 pub mod raft;
 mod routes;
+mod sidecar;
 pub mod sse;
 pub mod state;
 pub mod store;
@@ -18,7 +19,7 @@ use axum::routing::{get, post};
 use axum::Router;
 use tower_http::compression::CompressionLayer;
 
-use self::config::{FfServerConfig, StorageBackend};
+use self::config::{FfServerConfig, SidecarConfig, StorageBackend};
 use self::metrics::{handle_health_check, handle_metrics, handle_readyz, track_metrics};
 use self::ofrep::{handle_ofrep_bulk, handle_ofrep_single};
 use self::routes::{
@@ -37,6 +38,7 @@ struct SimpleServeConfig {
     hostname: Option<String>,
     flagfile: Option<String>,
     env: Option<String>,
+    sidecar: Option<SidecarConfig>,
 }
 
 /// Detect whether the config file is a full ff-server.toml (has [server] or [root] sections)
@@ -58,8 +60,14 @@ pub async fn run_serve(
     watch: bool,
     config_path: &str,
     env_arg: Option<String>,
+    sidecar: bool,
+    upstream: Option<String>,
+    namespace: Option<String>,
+    secret: Option<String>,
 ) {
-    if is_multi_tenant_config(config_path) {
+    if sidecar {
+        run_serve_sidecar(port_arg, hostname_arg, config_path, upstream, namespace, secret).await;
+    } else if is_multi_tenant_config(config_path) {
         run_serve_multi_tenant(config_path, port_arg, hostname_arg, env_arg).await;
     } else {
         run_serve_single_tenant(flagfile_arg, port_arg, hostname_arg, watch, config_path, env_arg)
@@ -361,6 +369,130 @@ fn build_multi_tenant_router(state: Arc<AppState>) -> Router {
         .merge(root_routes)
         .merge(ns_routes)
         .merge(obs_routes)
+        .layer(axum::middleware::from_fn(track_metrics))
+        .layer(CompressionLayer::new())
+        .with_state(state)
+}
+
+// ── Sidecar mode ────────────────────────────────────────────
+// Read-only edge proxy that replicates from an upstream ff serve instance.
+
+async fn run_serve_sidecar(
+    port_arg: Option<u16>,
+    hostname_arg: Option<String>,
+    config_path: &str,
+    upstream_arg: Option<String>,
+    namespace_arg: Option<String>,
+    secret_arg: Option<String>,
+) {
+    let config: SimpleServeConfig = std::fs::read_to_string(config_path)
+        .ok()
+        .and_then(|content| toml::from_str(&content).ok())
+        .unwrap_or_default();
+
+    // Resolve config priority: CLI args > ff.toml [sidecar] > env vars
+    let sidecar_cfg = config.sidecar.unwrap_or_default();
+
+    let upstream = upstream_arg
+        .or(sidecar_cfg.upstream)
+        .or_else(|| std::env::var("FF_SIDECAR_UPSTREAM").ok())
+        .unwrap_or_else(|| {
+            eprintln!("Error: --upstream is required in sidecar mode");
+            process::exit(1);
+        });
+
+    let token = secret_arg
+        .or(sidecar_cfg.token)
+        .or_else(|| std::env::var("FF_SIDECAR_TOKEN").ok());
+
+    let namespace = namespace_arg
+        .or(sidecar_cfg.namespace)
+        .or_else(|| std::env::var("FF_SIDECAR_NAMESPACE").ok());
+
+    let port = port_arg.or(config.port).unwrap_or(8080);
+    let hostname = hostname_arg
+        .or(config.hostname)
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+
+    // Build upstream URLs based on namespace
+    let upstream = upstream.trim_end_matches('/');
+    let (flagfile_url, events_url) = match &namespace {
+        Some(ns) => (
+            format!("{}/ns/{}/flagfile", upstream, ns),
+            format!("{}/ns/{}/events", upstream, ns),
+        ),
+        None => (
+            format!("{}/flagfile", upstream),
+            format!("{}/events", upstream),
+        ),
+    };
+
+    // Create empty AppState (in-memory only, no persistent store, no Raft)
+    let broadcaster = Arc::new(SseBroadcaster::new());
+    let state = Arc::new(AppState {
+        namespaces: tokio::sync::RwLock::new(HashMap::new()),
+        config: Arc::new(FfServerConfig::default()),
+        broadcaster: Arc::clone(&broadcaster),
+        persistent_store: None,
+        multi_tenant: false,
+        raft_handle: std::sync::OnceLock::new(),
+        raft_transport: std::sync::OnceLock::new(),
+    });
+
+    // Attempt initial fetch
+    let ok = sidecar::fetch_and_update(
+        &flagfile_url,
+        token.as_deref(),
+        Arc::clone(&state),
+        Arc::clone(&broadcaster),
+    )
+    .await;
+    if !ok {
+        eprintln!("Warning: initial fetch from {} failed, starting anyway", flagfile_url);
+    }
+
+    // Spawn background SSE listener
+    let sse_state = Arc::clone(&state);
+    let sse_broadcaster = Arc::clone(&broadcaster);
+    let sse_flagfile_url = flagfile_url.clone();
+    let sse_token = token.clone();
+    tokio::spawn(sidecar::upstream_sse_listener(
+        events_url,
+        sse_flagfile_url,
+        sse_token,
+        sse_state,
+        sse_broadcaster,
+    ));
+
+    let app = build_sidecar_router(Arc::clone(&state));
+
+    let addr = format!("{}:{}", hostname, port);
+    let ns_label = namespace.as_deref().unwrap_or("root");
+    println!(
+        "Sidecar mode: replicating from {} (namespace: {}) on http://{}",
+        upstream, ns_label, addr
+    );
+
+    serve_with_shutdown(app, &addr, broadcaster, state).await;
+}
+
+fn build_sidecar_router(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/health", get(handle_health))
+        .route(
+            "/flagfile",
+            get(handle_flagfile).put(sidecar::handle_put_readonly),
+        )
+        .route("/flagfile/hash", get(handle_flagfile_hash))
+        .route("/events", get(handle_events))
+        .route("/v1/eval/{flag_name}", get(handle_eval))
+        .route(
+            "/ofrep/v1/evaluate/flags/{key}",
+            post(handle_ofrep_single),
+        )
+        .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
+        .route("/readyz", get(sidecar::handle_sidecar_readyz))
+        .route("/metrics", get(handle_metrics))
         .layer(axum::middleware::from_fn(track_metrics))
         .layer(CompressionLayer::new())
         .with_state(state)

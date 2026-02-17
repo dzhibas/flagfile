@@ -35,7 +35,7 @@ pub struct ParsedNamespace {
 pub struct AppState {
     /// Parsed flags per namespace. Single-tenant uses `ROOT_NAMESPACE`.
     pub namespaces: RwLock<HashMap<String, ParsedNamespace>>,
-    /// Server configuration (tokens, cluster, observability).
+    /// Server configuration (tokens, cluster).
     pub config: Arc<FfServerConfig>,
     /// SSE broadcaster for live flag updates.
     pub broadcaster: Arc<SseBroadcaster>,

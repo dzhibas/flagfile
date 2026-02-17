@@ -10,8 +10,6 @@ pub struct FfServerConfig {
     pub server: ServerConfig,
     pub cluster: Option<ClusterConfig>,
     #[serde(default)]
-    pub observability: ObservabilityConfig,
-    #[serde(default)]
     pub root: NamespaceConfig,
     #[serde(default)]
     pub namespaces: HashMap<String, NamespaceConfig>,
@@ -57,20 +55,21 @@ pub struct PeerConfig {
     pub addr: String,
 }
 
-#[derive(Debug, Deserialize)]
-pub struct ObservabilityConfig {
-    #[serde(default = "default_true")]
-    pub metrics_enabled: bool,
-    #[serde(default = "default_true")]
-    pub readiness_enabled: bool,
-}
-
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct NamespaceConfig {
     #[serde(default)]
     pub read_tokens: Vec<String>,
     #[serde(default)]
     pub write_tokens: Vec<String>,
+}
+
+// ── Sidecar config ──────────────────────────────────
+
+#[derive(Debug, Deserialize, Default)]
+pub struct SidecarConfig {
+    pub upstream: Option<String>,
+    pub token: Option<String>,
+    pub namespace: Option<String>,
 }
 
 // ── Default value functions ──────────────────────────
@@ -107,10 +106,6 @@ fn default_snapshot_threshold() -> u64 {
     1000
 }
 
-fn default_true() -> bool {
-    true
-}
-
 impl Default for ServerConfig {
     fn default() -> Self {
         Self {
@@ -118,15 +113,6 @@ impl Default for ServerConfig {
             hostname: default_hostname(),
             data_dir: default_data_dir(),
             storage: default_storage(),
-        }
-    }
-}
-
-impl Default for ObservabilityConfig {
-    fn default() -> Self {
-        Self {
-            metrics_enabled: true,
-            readiness_enabled: true,
         }
     }
 }

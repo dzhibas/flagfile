@@ -55,9 +55,7 @@ impl MemRaftStorage {
         let first_new = entries[0].index;
 
         if first_new <= core.offset {
-            return Err(RaftError::Store(
-                raft::StorageError::Compacted,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Compacted));
         }
 
         // Truncate any conflicting tail entries.
@@ -77,6 +75,7 @@ impl MemRaftStorage {
     }
 
     /// Persist the conf state (voter / learner membership).
+    #[allow(dead_code)]
     pub fn set_conf_state(&self, cs: ConfState) {
         let mut core = self.inner.write().unwrap();
         core.conf_state = cs;
@@ -88,9 +87,7 @@ impl MemRaftStorage {
 
         let mut core = self.inner.write().unwrap();
         if snap_index <= core.offset {
-            return Err(RaftError::Store(
-                raft::StorageError::SnapshotOutOfDate,
-            ));
+            return Err(RaftError::Store(raft::StorageError::SnapshotOutOfDate));
         }
 
         core.conf_state = snapshot.get_metadata().get_conf_state().clone();
@@ -112,16 +109,12 @@ impl MemRaftStorage {
         let mut core = self.inner.write().unwrap();
 
         if index <= core.offset {
-            return Err(RaftError::Store(
-                raft::StorageError::Compacted,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Compacted));
         }
 
         let last_idx = core.entries.last().map(|e| e.index).unwrap_or(0);
         if index > last_idx {
-            return Err(RaftError::Store(
-                raft::StorageError::Unavailable,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Unavailable));
         }
 
         let drain_to = (index - core.offset) as usize;
@@ -132,28 +125,19 @@ impl MemRaftStorage {
 
     /// Create a snapshot at the given index with the provided conf state and
     /// application data.
-    pub fn create_snapshot(
-        &self,
-        index: u64,
-        cs: ConfState,
-        data: Vec<u8>,
-    ) -> RaftResult<()> {
+    pub fn create_snapshot(&self, index: u64, cs: ConfState, data: Vec<u8>) -> RaftResult<()> {
         let mut core = self.inner.write().unwrap();
 
         let last_idx = core.entries.last().map(|e| e.index).unwrap_or(0);
         if index > last_idx {
-            return Err(RaftError::Store(
-                raft::StorageError::Unavailable,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Unavailable));
         }
 
         // Find the term for the snapshot index.
         let term = {
             let relative = (index - core.offset) as usize;
             if relative >= core.entries.len() {
-                return Err(RaftError::Store(
-                    raft::StorageError::Unavailable,
-                ));
+                return Err(RaftError::Store(raft::StorageError::Unavailable));
             }
             core.entries[relative].term
         };
@@ -190,9 +174,7 @@ impl Storage for MemRaftStorage {
         let core = self.inner.read().unwrap();
 
         if low <= core.offset {
-            return Err(RaftError::Store(
-                raft::StorageError::Compacted,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Compacted));
         }
 
         let last_idx = core.entries.last().map(|e| e.index).unwrap_or(0);
@@ -226,9 +208,7 @@ impl Storage for MemRaftStorage {
         let core = self.inner.read().unwrap();
 
         if idx < core.offset {
-            return Err(RaftError::Store(
-                raft::StorageError::Compacted,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Compacted));
         }
 
         // Check if the snapshot covers this index.
@@ -238,9 +218,7 @@ impl Storage for MemRaftStorage {
 
         let relative = (idx - core.offset) as usize;
         if relative >= core.entries.len() {
-            return Err(RaftError::Store(
-                raft::StorageError::Unavailable,
-            ));
+            return Err(RaftError::Store(raft::StorageError::Unavailable));
         }
 
         Ok(core.entries[relative].term)
@@ -253,11 +231,7 @@ impl Storage for MemRaftStorage {
 
     fn last_index(&self) -> RaftResult<u64> {
         let core = self.inner.read().unwrap();
-        let last = core
-            .entries
-            .last()
-            .map(|e| e.index)
-            .unwrap_or(core.offset);
+        let last = core.entries.last().map(|e| e.index).unwrap_or(core.offset);
         Ok(last)
     }
 
