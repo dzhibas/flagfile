@@ -345,7 +345,7 @@ pub async fn run_raft_node(
             raw_node.advance_apply();
 
             // 6. Trigger snapshot if enough entries have been applied.
-            if snapshot_threshold > 0 && applied_index > 0 && applied_index % snapshot_threshold == 0
+            if snapshot_threshold > 0 && applied_index > 0 && applied_index.is_multiple_of(snapshot_threshold)
             {
                 match state_machine.snapshot().await {
                     Ok(data) => {

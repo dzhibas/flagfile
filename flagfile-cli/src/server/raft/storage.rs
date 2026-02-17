@@ -25,13 +25,17 @@ struct MemRaftStorageCore {
 impl MemRaftStorage {
     /// Create a new in-memory storage with the given set of initial voter IDs.
     pub fn new(voters: Vec<u64>) -> Self {
-        let mut cs = ConfState::default();
-        cs.voters = voters;
+        let cs = ConfState {
+            voters,
+            ..Default::default()
+        };
 
         // Seed with a dummy entry at index 0 so that first_index() == 1.
-        let mut dummy = Entry::default();
-        dummy.index = 0;
-        dummy.term = 0;
+        let dummy = Entry {
+            index: 0,
+            term: 0,
+            ..Default::default()
+        };
 
         Self {
             inner: Arc::new(RwLock::new(MemRaftStorageCore {
@@ -95,9 +99,11 @@ impl MemRaftStorage {
         core.entries.clear();
 
         // Keep a dummy entry so that first_index / last_index stay consistent.
-        let mut dummy = Entry::default();
-        dummy.index = snap_index;
-        dummy.term = snapshot.get_metadata().term;
+        let dummy = Entry {
+            index: snap_index,
+            term: snapshot.get_metadata().term,
+            ..Default::default()
+        };
         core.entries.push(dummy);
 
         core.snapshot = snapshot;

@@ -127,14 +127,14 @@ pub async fn create_sse_stream(
                 _ = shutdown_rx.recv() => {
                     yield Ok(Event::default()
                         .event("server_shutdown")
-                        .data("{\"reason\":\"server restarting\"}".to_string()));
+                        .data("{\"reason\":\"server restarting\"}"));
                     break;
                 }
                 _ = tokio::time::sleep(Duration::from_secs(30)) => {
                     metrics().sse_events.with_label_values(&[&ns, "heartbeat"]).inc();
                     yield Ok(Event::default()
                         .event("heartbeat")
-                        .data("{}".to_string()));
+                        .data("{}"));
                 }
             }
         }

@@ -214,10 +214,7 @@ impl FfServerConfig {
             if let Some(rest) = key.strip_prefix("FF_NS_") {
                 if let Some(name) = rest.strip_suffix("_READ_TOKENS") {
                     let ns_name = name.to_lowercase();
-                    let ns = self
-                        .namespaces
-                        .entry(ns_name)
-                        .or_insert_with(NamespaceConfig::default);
+                    let ns = self.namespaces.entry(ns_name).or_default();
                     ns.read_tokens = val
                         .split(',')
                         .map(|s| s.trim().to_string())
@@ -225,10 +222,7 @@ impl FfServerConfig {
                         .collect();
                 } else if let Some(name) = rest.strip_suffix("_WRITE_TOKENS") {
                     let ns_name = name.to_lowercase();
-                    let ns = self
-                        .namespaces
-                        .entry(ns_name)
-                        .or_insert_with(NamespaceConfig::default);
+                    let ns = self.namespaces.entry(ns_name).or_default();
                     ns.write_tokens = val
                         .split(',')
                         .map(|s| s.trim().to_string())

@@ -53,6 +53,7 @@ fn is_multi_tenant_config(path: &str) -> bool {
         || content.contains("[cluster]")
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_serve(
     flagfile_arg: Option<String>,
     port_arg: Option<u16>,
