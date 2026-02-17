@@ -13,7 +13,7 @@ fn resolve_read_token(
         .or_else(|| config.tokens.as_ref().and_then(|t| t.read.clone()))
 }
 
-pub fn run_pull(
+pub async fn run_pull(
     flagfile_path: &str,
     remote_arg: Option<&str>,
     namespace_arg: Option<&str>,
@@ -49,11 +49,12 @@ pub fn run_pull(
     };
 
     // 2. Send GET request
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::Client::new();
     let response = match client
         .get(&url)
         .header("Authorization", format!("Bearer {}", token))
         .send()
+        .await
     {
         Ok(r) => r,
         Err(e) => {
@@ -64,13 +65,13 @@ pub fn run_pull(
 
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().unwrap_or_default();
+        let body = response.text().await.unwrap_or_default();
         eprintln!("Pull failed ({}): {}", status, body);
         process::exit(1);
     }
 
     // 3. Write response body to output file
-    let body = match response.text() {
+    let body = match response.text().await {
         Ok(b) => b,
         Err(e) => {
             eprintln!("Failed to read response body: {}", e);

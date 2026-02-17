@@ -30,7 +30,68 @@ PUT http://0.0.0.0:8080/flagfile
 Authorization: Bearer wt_global_xyz789
 Content-Type: text/plain
 
-FF-something-else -> false
+// ─── Segments ────────────────────────────────────────────────
+// Reusable audience segments that can be referenced in any flag
+@segment beta_users {
+    beta == true or role == developer
+}
+
+@segment eu_region {
+    country in (DE, FR, ES, IT, NL, PL, SE)
+}
+
+// ─── Simple flag ─────────────────────────────────────────────
+// A basic on/off toggle
+
+FF-welcome-banner -> true
+
+// ─── Flag with metadata ─────────────────────────────────────
+// Metadata annotations help document ownership and lifecycle
+
+@owner "payments-team"
+@ticket "PAY-1234"
+@description "Premium features for paying customers"
+@type release
+@test FF-premium-feature(plan=premium) == true
+@test FF-premium-feature(plan=free,beta=true) == true
+@test FF-premium-feature(plan=free) == false
+FF-premium-feature {
+    plan == premium -> true
+    segment(beta_users) -> true
+    false
+}
+
+// ─── Flag with @env rules ────────────────────────────────────
+// Use @env to vary behavior per environment (dev, staging, prod)
+// Set the active env via `ff serve --env prod` or in ff.toml
+
+@owner "platform-team"
+@description "New checkout flow rollout"
+@test FF-new-checkout(country=US,platform=web) == false
+@test FF-new-checkout(country=DE,platform=web) == false
+FF-new-checkout {
+    // always on in dev and staging
+    @env dev -> true
+    @env staging -> true
+
+    // gradual rollout in production
+    @env prod {
+        country in (US, CA, GB) and platform == web -> true
+        false
+    }
+
+    // default when no env is set
+    false
+}
+
+// ─── Percentage rollout ──────────────────────────────────────
+
+@description "Dark mode for 25% of users"
+FF-dark-mode {
+    segment(eu_region) -> true
+    percentage(25%, userId) -> true
+    false
+}
 ###
 
 ###
@@ -39,6 +100,11 @@ Authorization: Bearer rt_checkout_abc123
 ###
 
 ###
-GET http://0.0.0.0:8081/flagfile
+GET http://0.0.0.0:8084/flagfile
+Authorization: Bearer wt_global_xyz789
+###
+
+###
+GET http://0.0.0.0:8084/v1/eval/FF-premium-feature?role=developer
 Authorization: Bearer wt_global_xyz789
 ###

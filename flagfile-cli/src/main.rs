@@ -1378,26 +1378,32 @@ async fn main() {
             namespace,
             secret,
             config,
-        } => push::run_push(
-            &flagfile,
-            remote.as_deref(),
-            namespace.as_deref(),
-            secret.as_deref(),
-            &config,
-        ),
+        } => {
+            push::run_push(
+                &flagfile,
+                remote.as_deref(),
+                namespace.as_deref(),
+                secret.as_deref(),
+                &config,
+            )
+            .await
+        }
         Command::Pull {
             flagfile,
             remote,
             namespace,
             secret,
             config,
-        } => pull::run_pull(
-            &flagfile,
-            remote.as_deref(),
-            namespace.as_deref(),
-            secret.as_deref(),
-            &config,
-        ),
+        } => {
+            pull::run_pull(
+                &flagfile,
+                remote.as_deref(),
+                namespace.as_deref(),
+                secret.as_deref(),
+                &config,
+            )
+            .await
+        }
         Command::Fmt {
             flagfile,
             check,

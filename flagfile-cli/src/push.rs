@@ -44,7 +44,7 @@ pub fn resolve_remote_url(remote_arg: Option<&str>, config: &RemoteConfig) -> Op
     remote_arg.map(String::from).or_else(|| config.url.clone())
 }
 
-pub fn run_push(
+pub async fn run_push(
     flagfile_path: &str,
     remote_arg: Option<&str>,
     namespace_arg: Option<&str>,
@@ -95,13 +95,14 @@ pub fn run_push(
     };
 
     // 4. Send PUT request
-    let client = reqwest::blocking::Client::new();
+    let client = reqwest::Client::new();
     let response = match client
         .put(&url)
         .header("Authorization", format!("Bearer {}", token))
         .header("Content-Type", "text/plain")
         .body(content)
         .send()
+        .await
     {
         Ok(r) => r,
         Err(e) => {
@@ -112,7 +113,7 @@ pub fn run_push(
 
     if !response.status().is_success() {
         let status = response.status();
-        let body = response.text().unwrap_or_default();
+        let body = response.text().await.unwrap_or_default();
         eprintln!("Push failed ({}): {}", status, body);
         process::exit(1);
     }
@@ -125,7 +126,7 @@ pub fn run_push(
     }
 
     let ns_display = namespace.as_deref().unwrap_or("root");
-    match response.json::<PushResponse>() {
+    match response.json::<PushResponse>().await {
         Ok(resp) => {
             let count = resp.flags_count.unwrap_or(0);
             let hash = resp.hash.unwrap_or_else(|| "unknown".to_string());
