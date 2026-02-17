@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>flagfile — feature flags that live in your repo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #0A0A0A;
+      --bg-alt:    #0F0F0F;
+      --green:     #10B981;
+      --yellow:    #F59E0B;
+      --text:      #FAFAFA;
+      --muted:     #6B7280;
+      --dimmed:    #4B5563;
+      --border:    #1a1a1a;
+      --mono:      'JetBrains Mono', monospace;
+      --mono2:     'IBM Plex Mono', monospace;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--mono);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    a { color: inherit; text-decoration: none; }
+
+    /* ── Header ────────────────────────────────────── */
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(10,10,10,0.92);
+      backdrop-filter: blur(8px);
+      height: 72px;
+      padding: 0 80px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .logo-prompt { color: var(--green); font-size: 20px; font-weight: 700; }
+    .logo-text   { color: var(--text);  font-size: 18px; font-weight: 500; }
+
+    nav {
+      display: flex;
+      align-items: center;
+      gap: 32px;
+    }
+    nav a {
+      color: var(--muted);
+      font-size: 13px;
+      transition: color .15s;
+    }
+    nav a:hover { color: var(--text); }
+
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      background: var(--green);
+      color: var(--bg);
+      padding: 10px 20px;
+      font-family: var(--mono);
+      font-size: 12px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: opacity .15s;
+    }
+    .btn-primary:hover { opacity: .88; }
+
+    .btn-ghost {
+      display: inline-flex;
+      align-items: center;
+      color: var(--text);
+      padding: 14px 28px;
+      font-family: var(--mono);
+      font-size: 14px;
+      border: 1px solid var(--border);
+      cursor: pointer;
+      background: transparent;
+      transition: border-color .15s;
+    }
+    .btn-ghost:hover { border-color: var(--muted); }
+
+    /* ── Hero ──────────────────────────────────────── */
+    .hero {
+      background: var(--bg);
+      padding: 80px 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+    }
+
+    .badge {
+      display: inline-flex;
+      padding: 6px 14px;
+      border: 1px solid #2a2a2a;
+      width: fit-content;
+    }
+    .badge span { color: var(--yellow); font-size: 12px; }
+
+    .hero-headline {
+      font-size: 56px;
+      font-weight: 700;
+      line-height: 1.1;
+      white-space: pre-line;
+    }
+    .hero-headline .prompt { color: var(--green); }
+
+    .hero-accent {
+      color: var(--green);
+      font-size: 13px;
+    }
+
+    .hero-sub {
+      color: var(--muted);
+      font-family: var(--mono2);
+      font-size: 18px;
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .hero-ctas .btn-primary { padding: 14px 28px; font-size: 14px; }
+
+    /* ── Code Block ─────────────────────────────────── */
+    .code-block {
+      background: var(--bg-alt);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .code-bar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 24px;
+      margin-bottom: 12px;
+    }
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #2a2a2a;
+    }
+    .code-title { color: var(--muted); font-size: 11px; margin-left: 4px; }
+
+    .code-line {
+      font-family: var(--mono);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+    .c-muted  { color: var(--muted); }
+    .c-white  { color: var(--text); }
+    .c-green  { color: var(--green); }
+    .c-yellow { color: var(--yellow); }
+
+    /* ── Section base ───────────────────────────────── */
+    .section { padding: 80px 120px; }
+    .section-label {
+      font-size: 12px;
+      margin-bottom: 24px;
+    }
+    .section-headline {
+      font-size: 40px;
+      font-weight: 700;
+      line-height: 1.15;
+      white-space: pre-line;
+    }
+
+    /* ── Problem ────────────────────────────────────── */
+    .problem { background: var(--bg-alt); gap: 48px; display: flex; flex-direction: column; }
+
+    .prob-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 24px;
+    }
+
+    .prob-card {
+      background: var(--bg);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .prob-card .icon { color: var(--yellow); font-size: 18px; }
+    .prob-card .title { color: var(--text); font-size: 14px; }
+    .prob-card .desc  { color: var(--muted); font-family: var(--mono2); font-size: 13px; line-height: 1.6; }
+
+    /* ── HowItWorks ─────────────────────────────────── */
+    .how { background: var(--bg); gap: 48px; display: flex; flex-direction: column; }
+
+    .how-steps {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+
+    .step {
+      background: var(--bg-alt);
+      padding: 32px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .step-num   { color: var(--green); font-size: 28px; font-weight: 700; }
+    .step-title { color: var(--text);  font-size: 14px; }
+    .step-desc  { color: var(--muted); font-family: var(--mono2); font-size: 13px; line-height: 1.6; }
+
+    /* ── CoreFeatures ───────────────────────────────── */
+    .core-features { background: var(--bg-alt); display: flex; flex-direction: column; }
+    .feat-spacer { height: 60px; }
+
+    .feat-row {
+      display: flex;
+      align-items: center;
+      gap: 80px;
+      padding: 60px 0;
+      border-top: 1px solid var(--border);
+    }
+    .feat-row:first-child { border-top: none; }
+
+    .feat-text {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .feat-num   { color: var(--green); font-size: 13px; }
+    .feat-title { color: var(--text);  font-size: 28px; font-weight: 700; line-height: 1.2; white-space: pre-line; }
+    .feat-desc  { color: var(--muted); font-family: var(--mono2); font-size: 15px; line-height: 1.7; }
+
+    .feat-tags {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .tag {
+      padding: 4px 10px;
+      border: 1px solid #2a2a2a;
+      font-size: 11px;
+    }
+    .tag-green { color: var(--green); border-color: rgba(16,185,129,.3); }
+    .tag-muted { color: var(--muted); }
+
+    .feat-visual {
+      width: 560px;
+      flex-shrink: 0;
+      height: 320px;
+      background: var(--bg);
+      display: flex;
+      align-items: stretch;
+    }
+    .feat-visual .code-block {
+      width: 100%;
+      height: 100%;
+      font-size: 12px;
+      overflow: hidden;
+    }
+
+    /* ── SecondaryFeatures ──────────────────────────── */
+    .secondary { background: var(--bg); gap: 48px; display: flex; flex-direction: column; }
+
+    .sec-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 2px;
+    }
+    .sec-col {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .sec-card {
+      background: var(--bg-alt);
+      padding: 28px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .sec-card .icon  { color: var(--green); font-size: 13px; }
+    .sec-card .title { color: var(--text);  font-size: 14px; }
+    .sec-card .desc  { color: var(--muted); font-family: var(--mono2); font-size: 12px; line-height: 1.6; }
+
+    /* ── Stats ──────────────────────────────────────── */
+    .stats {
+      background: var(--green);
+      padding: 0 120px;
+      height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .stat { display: flex; flex-direction: column; gap: 4px; }
+    .stat-val   { color: var(--bg); font-size: 40px; font-weight: 700; }
+    .stat-label { color: var(--bg); font-size: 13px; }
+
+    /* ── CodeShowcase ───────────────────────────────── */
+    .showcase { background: var(--bg-alt); gap: 40px; display: flex; flex-direction: column; }
+
+    .showcase-code {
+      background: var(--bg);
+      padding: 40px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    /* ── FinalCTA ───────────────────────────────────── */
+    .final-cta {
+      background: var(--bg);
+      padding: 100px 120px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 32px;
+      text-align: center;
+    }
+    .final-cta .section-label { margin-bottom: 0; }
+    .cta-headline {
+      font-size: 48px;
+      font-weight: 700;
+      line-height: 1.1;
+      white-space: pre-line;
+    }
+    .cta-sub {
+      color: var(--muted);
+      font-family: var(--mono2);
+      font-size: 16px;
+    }
+    .cta-buttons {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .cta-buttons .btn-primary { padding: 16px 32px; font-size: 14px; }
+    .cta-buttons .btn-ghost   { padding: 16px 32px; }
+    .cta-trust { color: var(--dimmed); font-size: 12px; margin-top: 8px; }
+
+    /* ── Footer ─────────────────────────────────────── */
+    footer {
+      background: var(--bg);
+      border-top: 1px solid var(--border);
+      padding: 60px 120px;
+      display: flex;
+      flex-direction: column;
+      gap: 48px;
+    }
+    .footer-main {
+      display: flex;
+      gap: 80px;
+      justify-content: space-between;
+    }
+    .footer-brand {
+      width: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      flex-shrink: 0;
+    }
+    .footer-tagline {
+      color: var(--muted);
+      font-family: var(--mono2);
+      font-size: 12px;
+      line-height: 1.6;
+      white-space: pre-line;
+    }
+    .footer-links {
+      flex: 1;
+      display: flex;
+      gap: 80px;
+      justify-content: flex-end;
+    }
+    .footer-col {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .footer-col-title { color: var(--text);  font-size: 11px; }
+    .footer-col a     { color: var(--muted); font-size: 12px; transition: color .15s; }
+    .footer-col a:hover { color: var(--text); }
+
+    .footer-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+    }
+    .footer-copy { color: var(--dimmed); font-size: 12px; }
+    .footer-bottom-links { display: flex; gap: 24px; }
+    .footer-bottom-links a { color: var(--dimmed); font-size: 12px; transition: color .15s; }
+    .footer-bottom-links a:hover { color: var(--muted); }
+
+    /* ── Responsive ─────────────────────────────────── */
+    @media (max-width: 1100px) {
+      header        { padding: 0 40px; }
+      .hero         { padding: 60px 40px; }
+      .section      { padding: 60px 40px; }
+      .stats        { padding: 0 40px; }
+      footer        { padding: 60px 40px; }
+      .final-cta    { padding: 80px 40px; }
+      .feat-row     { flex-direction: column; gap: 40px; }
+      .feat-visual  { width: 100%; }
+      .feat-row.reverse { flex-direction: column-reverse; }
+    }
+
+    @media (max-width: 900px) {
+      .hero-headline { font-size: 36px; }
+      .prob-cards    { grid-template-columns: 1fr; }
+      .how-steps     { grid-template-columns: 1fr; }
+      .sec-grid      { grid-template-columns: 1fr; }
+      .stats         { flex-wrap: wrap; height: auto; padding: 40px; gap: 32px; }
+      nav            { display: none; }
+      .cta-buttons   { flex-direction: column; }
+      .cta-headline  { font-size: 32px; }
+      .footer-main   { flex-direction: column; }
+      .footer-links  { flex-wrap: wrap; justify-content: flex-start; gap: 40px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<header>
+  <div class="logo">
+    <span class="logo-prompt">&gt;</span>
+    <span class="logo-text">flagfile</span>
+  </div>
+  <nav>
+    <a href="#">docs</a>
+    <a href="#">examples</a>
+    <a href="#">cli</a>
+    <a href="#">github</a>
+  </nav>
+  <button class="btn-primary">$ get_started</button>
+</header>
+
+<!-- ── Hero ────────────────────────────────────────────── -->
+<section class="hero">
+  <div class="badge"><span>[open source]</span></div>
+
+  <h1 class="hero-headline"><span class="prompt">&gt; feature_flags</span>
+that live in your repo</h1>
+
+  <p class="hero-accent">++ zero vendor lock-in &nbsp; ++ in version control &nbsp; ++ fully testable</p>
+
+  <p class="hero-sub">// a powerful dsl for defining, testing, and evaluating flags
+in version control — not in a saas dashboard</p>
+
+  <div class="hero-ctas">
+    <button class="btn-primary">$ npm install flagfile</button>
+    <button class="btn-ghost">view_examples &gt;&gt;</button>
+  </div>
+
+  <!-- Code preview -->
+  <div class="code-block" style="margin-top: 8px;">
+    <div class="code-bar">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      <span class="code-title">Flagfile</span>
+    </div>
+    <div class="code-line c-muted">segment beta_users = email ~ /@beta\.example\.com$/</div>
+    <div class="code-line c-white">&nbsp;</div>
+    <div class="code-line c-white">FF-new-dashboard {</div>
+    <div class="code-line c-muted">&nbsp;&nbsp;@owner "platform-team"&nbsp; @expires 2025-06-01</div>
+    <div class="code-line c-green">&nbsp;&nbsp;segment(beta_users) -&gt; true</div>
+    <div class="code-line c-white">&nbsp;&nbsp;@env prod {</div>
+    <div class="code-line c-green">&nbsp;&nbsp;&nbsp;&nbsp;percentage() &lt;= 25 and NOW() &gt; "2024-02-01" -&gt; true</div>
+    <div class="code-line c-green">&nbsp;&nbsp;&nbsp;&nbsp;percentage() &lt;= 75 and NOW() &gt; "2024-03-01" -&gt; true</div>
+    <div class="code-line c-white">&nbsp;&nbsp;}</div>
+    <div class="code-line c-muted">&nbsp;&nbsp;false</div>
+    <div class="code-line c-yellow">&nbsp;&nbsp;@test { email: "a@beta.example.com" } -&gt; true</div>
+    <div class="code-line c-white">}</div>
+  </div>
+</section>
+
+<!-- ── Problem ──────────────────────────────────────────── -->
+<section class="section problem">
+  <p class="section-label c-muted">// the_problem</p>
+  <h2 class="section-headline">flags shouldn't outlive<br>your sprints</h2>
+  <div class="prob-cards">
+    <div class="prob-card">
+      <span class="icon">[x]</span>
+      <span class="title">no_tests</span>
+      <p class="desc">flags ship without any test coverage. you find out they're broken in production.</p>
+    </div>
+    <div class="prob-card">
+      <span class="icon">[x]</span>
+      <span class="title">vendor_lock-in</span>
+      <p class="desc">your flags live in a saas dashboard. change plans and lose your entire config history.</p>
+    </div>
+    <div class="prob-card">
+      <span class="icon">[x]</span>
+      <span class="title">stale_flags</span>
+      <p class="desc">flags pile up. nobody knows which are safe to delete. the codebase rots.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── HowItWorks ───────────────────────────────────────── -->
+<section class="section how">
+  <p class="section-label c-green">// how_it_works</p>
+  <h2 class="section-headline">three commands. total control.</h2>
+  <div class="how-steps">
+    <div class="step">
+      <span class="step-num">01.</span>
+      <span class="step-title">write your flagfile</span>
+      <p class="step-desc">define flags using the clean dsl. segments, environments, return values — all in one file next to your code.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">02.</span>
+      <span class="step-title">$ ff check</span>
+      <p class="step-desc">validate syntax, run 22 lint rules, and execute inline @test annotations — all in one command.</p>
+    </div>
+    <div class="step">
+      <span class="step-num">03.</span>
+      <span class="step-title">evaluate anywhere</span>
+      <p class="step-desc">use the rust crate, typescript library, or http api. identical behavior across all runtimes.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ── CoreFeatures ─────────────────────────────────────── -->
+<section class="section core-features">
+  <p class="section-label c-muted">// core_features</p>
+  <h2 class="section-headline">everything you need.<br>nothing you don't.</h2>
+  <div class="feat-spacer"></div>
+
+  <!-- Feature 1 -->
+  <div class="feat-row">
+    <div class="feat-text">
+      <span class="feat-num">01.</span>
+      <h3 class="feat-title">expressive dsl</h3>
+      <p class="feat-desc">comparisons, regex, semver, date/time, and built-in functions. write flag rules that match exactly how your system thinks — not how your saas vendor thinks.</p>
+      <div class="feat-tags">
+        <span class="tag tag-muted">semver</span>
+        <span class="tag tag-muted">regex</span>
+        <span class="tag tag-muted">date/time</span>
+      </div>
+    </div>
+    <div class="feat-visual">
+      <div class="code-block">
+        <div class="code-bar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <span class="code-title">Flagfile</span>
+        </div>
+        <div class="code-line c-muted">segment mobile = platform in ("ios", "android")</div>
+        <div class="code-line c-white">&nbsp;</div>
+        <div class="code-line c-white">FF-new-ui {</div>
+        <div class="code-line c-green">&nbsp;&nbsp;appVersion &gt;= "3.0.0" -&gt; true</div>
+        <div class="code-line c-green">&nbsp;&nbsp;segment(mobile) and locale ~ /^en/ -&gt; true</div>
+        <div class="code-line c-muted">&nbsp;&nbsp;false</div>
+        <div class="code-line c-white">}</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature 2 -->
+  <div class="feat-row reverse">
+    <div class="feat-visual">
+      <div class="code-block">
+        <div class="code-bar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <span class="code-title">$ ff check</span>
+        </div>
+        <div class="code-line c-green">✓ syntax valid</div>
+        <div class="code-line c-green">✓ 22 lint rules passed</div>
+        <div class="code-line c-green">✓ 4/4 @test annotations passed</div>
+        <div class="code-line c-white">&nbsp;</div>
+        <div class="code-line c-muted">FF-new-dashboard</div>
+        <div class="code-line c-green">&nbsp;&nbsp;@test { email: "a@beta.example.com" } -&gt; true  ✓</div>
+        <div class="code-line c-green">&nbsp;&nbsp;@test { email: "user@other.com" } -&gt; false  ✓</div>
+      </div>
+    </div>
+    <div class="feat-text">
+      <span class="feat-num">02.</span>
+      <h3 class="feat-title">inline tests +<br>22 lint rules</h3>
+      <p class="feat-desc">write @test annotations right next to your flags. catch circular dependencies, tautologies, unreachable rules, and stale flags before they ever hit production.</p>
+      <div class="feat-tags">
+        <span class="tag tag-green">@test</span>
+        <span class="tag tag-muted">ff lint</span>
+        <span class="tag tag-muted">ff check</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Feature 3 -->
+  <div class="feat-row">
+    <div class="feat-text">
+      <span class="feat-num">03.</span>
+      <h3 class="feat-title">environments<br>+ segments</h3>
+      <p class="feat-desc">define @env prod {} blocks for per-environment rules. create reusable segments to target your audiences precisely. use @requires to enforce flag dependencies.</p>
+      <div class="feat-tags">
+        <span class="tag tag-muted">@env</span>
+        <span class="tag tag-muted">segment()</span>
+        <span class="tag tag-muted">@requires</span>
+      </div>
+    </div>
+    <div class="feat-visual">
+      <div class="code-block">
+        <div class="code-bar">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <span class="code-title">Flagfile</span>
+        </div>
+        <div class="code-line c-white">FF-dark-mode {</div>
+        <div class="code-line c-muted">&nbsp;&nbsp;@requires FF-settings-v2</div>
+        <div class="code-line c-green">&nbsp;&nbsp;segment(beta_users) -&gt; true</div>
+        <div class="code-line c-white">&nbsp;&nbsp;@env prod {</div>
+        <div class="code-line c-green">&nbsp;&nbsp;&nbsp;&nbsp;percentage() &lt;= 50 -&gt; true</div>
+        <div class="code-line c-white">&nbsp;&nbsp;}</div>
+        <div class="code-line c-muted">&nbsp;&nbsp;false</div>
+        <div class="code-line c-white">}</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── SecondaryFeatures ─────────────────────────────────── -->
+<section class="section secondary">
+  <p class="section-label c-muted">// more_capabilities</p>
+  <h2 class="section-headline" style="font-size:32px;">built for the full lifecycle</h2>
+  <div class="sec-grid">
+    <div class="sec-col">
+      <div class="sec-card">
+        <span class="icon">&gt; percentage()</span>
+        <span class="title">gradual rollouts</span>
+        <p class="desc">bucket users by stable hash. roll out to 10%, then 50%, then 100% — no code changes required.</p>
+      </div>
+      <div class="sec-card">
+        <span class="icon">&gt; ff_serve</span>
+        <span class="title">http api server</span>
+        <p class="desc">built-in http server with openfeature compatibility. evaluate flags from any language over the network.</p>
+      </div>
+    </div>
+    <div class="sec-col">
+      <div class="sec-card">
+        <span class="icon">&gt; json_returns</span>
+        <span class="title">rich return values</span>
+        <p class="desc">flags don't have to return booleans. return json configs, strings, or numbers to drive full feature configurations.</p>
+      </div>
+      <div class="sec-card">
+        <span class="icon">&gt; ff_find</span>
+        <span class="title">codebase search</span>
+        <p class="desc">find every usage of a flag across your codebase. detect unused flags before they become dead weight.</p>
+      </div>
+    </div>
+    <div class="sec-col">
+      <div class="sec-card">
+        <span class="icon">&gt; push / pull</span>
+        <span class="title">distributed sync</span>
+        <p class="desc">sync flagfiles across services and environments. push updates centrally, pull remotely. offline-capable.</p>
+      </div>
+      <div class="sec-card">
+        <span class="icon">&gt; wasm</span>
+        <span class="title">browser + edge</span>
+        <p class="desc">compiled to wasm. evaluate flags at the edge, in the browser, or in any wasm runtime — with identical semantics.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Stats ────────────────────────────────────────────── -->
+<div class="stats">
+  <div class="stat">
+    <span class="stat-val">++ 22</span>
+    <span class="stat-label">lint_rules</span>
+  </div>
+  <div class="stat">
+    <span class="stat-val">++ 11</span>
+    <span class="stat-label">operators</span>
+  </div>
+  <div class="stat">
+    <span class="stat-val">++ 10</span>
+    <span class="stat-label">cli_commands</span>
+  </div>
+  <div class="stat">
+    <span class="stat-val">++ 2</span>
+    <span class="stat-label">languages</span>
+  </div>
+</div>
+
+<!-- ── CodeShowcase ──────────────────────────────────────── -->
+<section class="section showcase">
+  <p class="section-label c-muted">// real_world_example</p>
+  <h2 class="section-headline">flags that read<br>like your domain</h2>
+  <p style="color:var(--muted);font-family:var(--mono2);font-size:15px;line-height:1.6;">geo-aware feature configuration with a/b testing, environments, and inline tests — all in one place.</p>
+
+  <div class="showcase-code">
+    <div class="code-line c-muted">segment power_users = tier == "enterprise" and seats &gt;= 50</div>
+    <div class="code-line c-white">&nbsp;</div>
+    <div class="code-line c-white">FF-premium-checkout {</div>
+    <div class="code-line c-muted">&nbsp;&nbsp;@owner "payments-team"&nbsp; @ticket JIRA-4821&nbsp; @expires 2025-09-01</div>
+    <div class="code-line c-muted">&nbsp;&nbsp;@requires FF-new-checkout-enabled</div>
+    <div class="code-line c-white">&nbsp;</div>
+    <div class="code-line c-green">&nbsp;&nbsp;segment(power_users) -&gt; json({ "flow": "express", "skipReview": true })</div>
+    <div class="code-line c-green">&nbsp;&nbsp;countryCode in ("US", "CA") and appVersion &gt;= "3.2.0" -&gt; json({ "flow": "standard", "taxCalc": "realtime" })</div>
+    <div class="code-line c-white">&nbsp;</div>
+    <div class="code-line c-white">&nbsp;&nbsp;@env prod {</div>
+    <div class="code-line c-green">&nbsp;&nbsp;&nbsp;&nbsp;percentage() &lt;= 10 -&gt; json({ "flow": "beta" })</div>
+    <div class="code-line c-white">&nbsp;&nbsp;}</div>
+    <div class="code-line c-white">&nbsp;</div>
+    <div class="code-line c-muted">&nbsp;&nbsp;json({ "flow": "legacy" }) &nbsp; // default</div>
+    <div class="code-line c-yellow">&nbsp;&nbsp;@test { tier: "enterprise", seats: 100 } -&gt; { "flow": "express" }</div>
+    <div class="code-line c-white">}</div>
+  </div>
+</section>
+
+<!-- ── FinalCTA ──────────────────────────────────────────── -->
+<section class="final-cta">
+  <p class="section-label c-green">// ready_to_ship?</p>
+  <h2 class="cta-headline"><span class="c-green">&gt; take_control</span><br>of your flags</h2>
+  <p class="cta-sub">// ship with confidence — flags in git, not in the cloud</p>
+  <div class="cta-buttons">
+    <button class="btn-primary">$ npm install flagfile</button>
+    <button class="btn-ghost">view_on_github &gt;&gt;</button>
+  </div>
+  <p class="cta-trust">[mit license] &nbsp;// &nbsp;open source forever &nbsp;// &nbsp;no vendor lock-in</p>
+</section>
+
+<!-- ── Footer ───────────────────────────────────────────── -->
+<footer>
+  <div class="footer-main">
+    <div class="footer-brand">
+      <div class="logo">
+        <span class="logo-prompt">&gt;</span>
+        <span class="logo-text">flagfile</span>
+      </div>
+      <p class="footer-tagline">// feature_flags_for_developers
+open source · mit license</p>
+    </div>
+    <div class="footer-links">
+      <div class="footer-col">
+        <span class="footer-col-title">product</span>
+        <a href="#">docs</a>
+        <a href="#">cli reference</a>
+        <a href="#">examples</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">resources</span>
+        <a href="#">github</a>
+        <a href="#">changelog</a>
+        <a href="#">crates.io</a>
+      </div>
+      <div class="footer-col">
+        <span class="footer-col-title">legal</span>
+        <a href="#">mit license</a>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span class="footer-copy">&copy; 2025 flagfile</span>
+    <div class="footer-bottom-links">
+      <a href="#">github</a>
+      <a href="#">crates.io</a>
+      <a href="#">npm</a>
+    </div>
+  </div>
+</footer>
+
+</body>
+</html>
