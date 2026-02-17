@@ -262,15 +262,169 @@ async fn run_serve_multi_tenant(
         }
         voter_ids.sort();
 
-        let storage = MemRaftStorage::new(voter_ids);
         let transport = Arc::new(RaftTransport::new(cluster_cfg.peers.clone()));
+
+        // ── Leader discovery ────────────────────────────────────
+        // Probe peers to check whether the cluster already has a leader.
+        // If one is found, this node will join as a follower and skip
+        // its own election campaign. We also record the term and committed
+        // index so we can seed the Raft log if we need to bootstrap.
+        let mut discovered_leader: Option<u64> = None;
+        let mut discovered_term: u64 = 0;
+        let mut discovered_committed: u64 = 0;
+        for peer in &cluster_cfg.peers {
+            match transport.probe_peer_status(peer.id).await {
+                Ok((leader_id, term, committed)) if leader_id != 0 => {
+                    discovered_leader = Some(leader_id);
+                    discovered_term = term;
+                    discovered_committed = committed;
+                    break;
+                }
+                Ok(_) => {
+                    // Peer is up but doesn't know the leader yet.
+                }
+                Err(_) => {
+                    // Peer unreachable — may not be started yet.
+                }
+            }
+        }
+
+        let skip_campaign = discovered_leader.is_some();
+        if let Some(leader) = discovered_leader {
+            println!(
+                "raft node {}: discovered existing leader {}, joining as follower",
+                cluster_cfg.node_id, leader
+            );
+        }
+
+        // ── Bootstrap from snapshot if storage is empty/corrupted ──
+        // If the in-memory namespace map is empty (store was empty or all
+        // entries were unparsable) and a leader exists, request a snapshot
+        // to populate the store before starting the Raft node.
+        let namespaces_empty = state.namespaces.read().await.is_empty();
+        if namespaces_empty && !cluster_cfg.peers.is_empty() {
+            let snapshot_source = discovered_leader.or_else(|| {
+                // No leader discovered, but try any peer for a snapshot.
+                cluster_cfg.peers.first().map(|p| p.id)
+            });
+
+            if let Some(source) = snapshot_source {
+                println!(
+                    "raft node {}: storage is empty or corrupted, requesting snapshot from node {}",
+                    cluster_cfg.node_id, source
+                );
+                match transport.request_snapshot_from_peer(source).await {
+                    Ok(data) if !data.is_empty() => {
+                        if let Err(e) = persistent_store.apply_snapshot(&data).await {
+                            eprintln!(
+                                "raft node {}: failed to apply bootstrap snapshot: {}",
+                                cluster_cfg.node_id, e
+                            );
+                        } else {
+                            // Reload namespaces from the freshly-populated store.
+                            let new_ns = persistent_store.list_namespaces().await;
+                            let mut ns_map = state.namespaces.write().await;
+                            for ns_key in new_ns {
+                                if let Some(content_bytes) =
+                                    persistent_store.get_flagfile(&ns_key).await
+                                {
+                                    if let Ok(content) = String::from_utf8(content_bytes) {
+                                        if let Some((flags, metadata, segments)) =
+                                            parse_flags(&content)
+                                        {
+                                            ns_map.insert(
+                                                ns_key.clone(),
+                                                ParsedNamespace {
+                                                    flagfile_content: content,
+                                                    flags,
+                                                    metadata,
+                                                    segments,
+                                                    env: env_arg.clone(),
+                                                },
+                                            );
+                                            // Update metrics for the bootstrapped namespace.
+                                            metrics::metrics()
+                                                .flags_total
+                                                .with_label_values(&[&ns_key])
+                                                .set(
+                                                    ns_map
+                                                        .get(&ns_key)
+                                                        .map(|n| n.flags.len() as i64)
+                                                        .unwrap_or(0),
+                                                );
+                                        }
+                                    }
+                                }
+                            }
+                            println!(
+                                "raft node {}: bootstrap snapshot applied ({} namespaces loaded)",
+                                cluster_cfg.node_id,
+                                ns_map.len()
+                            );
+                        }
+                    }
+                    Ok(_) => {
+                        println!(
+                            "raft node {}: peer returned empty snapshot (cluster may be new)",
+                            cluster_cfg.node_id
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "raft node {}: failed to request snapshot: {}",
+                            cluster_cfg.node_id, e
+                        );
+                    }
+                }
+            }
+        }
+
+        let storage = MemRaftStorage::new(voter_ids.clone());
+
+        // If we bootstrapped from a peer snapshot, seed the Raft log storage
+        // with a Raft-level snapshot at the leader's committed index. Without
+        // this the Raft log has last_index=0 and the first heartbeat from the
+        // leader (which carries the commit index) would cause a panic.
+        if discovered_committed > 0 {
+            use ::raft::prelude::{HardState, Snapshot};
+
+            let mut snap = Snapshot::default();
+            snap.mut_metadata().index = discovered_committed;
+            snap.mut_metadata().term = discovered_term;
+            snap.mut_metadata().mut_conf_state().voters = voter_ids.clone();
+            // Application data can be empty — the store is already populated.
+            snap.data = Vec::new().into();
+
+            if let Err(e) = storage.apply_snapshot(snap) {
+                eprintln!(
+                    "raft node {}: failed to seed raft storage with bootstrap snapshot: {}",
+                    cluster_cfg.node_id, e
+                );
+            } else {
+                // Also set the hard state so the Raft node starts with the
+                // correct term and commit index.
+                let hs = HardState {
+                    term: discovered_term,
+                    commit: discovered_committed,
+                    ..HardState::default()
+                };
+                storage.set_hard_state(hs);
+            }
+        }
+
         let state_machine = Arc::new(RaftStateMachine::new(
             Arc::clone(&persistent_store),
             Arc::clone(&state),
         ));
 
-        let (handle, raft_msg_tx) =
-            run_raft_node(cluster_cfg, storage, Arc::clone(&transport), state_machine).await;
+        let (handle, raft_msg_tx) = run_raft_node(
+            cluster_cfg,
+            storage,
+            Arc::clone(&transport),
+            state_machine,
+            skip_campaign,
+        )
+        .await;
 
         // Store handle and transport in AppState for route handlers.
         let _ = state.raft_handle.set(handle.clone());
@@ -278,7 +432,8 @@ async fn run_serve_multi_tenant(
 
         // Spawn gRPC server for inter-node Raft communication.
         let grpc_port = cluster_cfg.grpc_port;
-        let grpc_service = RaftGrpcService::new(raft_msg_tx, handle);
+        let grpc_service =
+            RaftGrpcService::new(raft_msg_tx, handle, Arc::clone(&persistent_store));
 
         tokio::spawn(async move {
             use self::raft::transport::proto::raft_service_server::RaftServiceServer;

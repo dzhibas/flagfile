@@ -1,25 +1,12 @@
 use std::collections::HashMap;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
-use super::{FlagStore, Meta};
+use super::{FlagStore, Meta, StoreSnapshot, StoreSnapshotEntry};
 
 /// Persistent flagfile storage backed by sled.
 pub struct SledStore {
     db: sled::Db,
-}
-
-/// Serializable snapshot of the entire store.
-#[derive(Serialize, Deserialize)]
-struct Snapshot {
-    entries: HashMap<String, SnapshotEntry>,
-}
-
-#[derive(Serialize, Deserialize)]
-struct SnapshotEntry {
-    content: Vec<u8>,
-    meta: Meta,
 }
 
 impl SledStore {
@@ -93,7 +80,7 @@ impl FlagStore for SledStore {
     }
 
     async fn apply_snapshot(&self, data: &[u8]) -> Result<(), String> {
-        let snapshot: Snapshot = serde_json::from_slice(data)
+        let snapshot: StoreSnapshot = serde_json::from_slice(data)
             .map_err(|e| format!("failed to deserialize snapshot: {}", e))?;
 
         self.db
@@ -138,14 +125,14 @@ impl FlagStore for SledStore {
 
             entries.insert(
                 namespace.to_string(),
-                SnapshotEntry {
+                StoreSnapshotEntry {
                     content: value.to_vec(),
                     meta,
                 },
             );
         }
 
-        let snapshot = Snapshot { entries };
+        let snapshot = StoreSnapshot { entries };
         serde_json::to_vec(&snapshot)
             .map_err(|e| format!("failed to serialize snapshot: {}", e))
     }

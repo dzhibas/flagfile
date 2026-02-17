@@ -1,6 +1,8 @@
 pub mod memory;
 pub mod sled_store;
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
@@ -10,6 +12,21 @@ pub struct Meta {
     pub hash: String,
     pub pushed_at: String,
     pub flags_count: u64,
+}
+
+/// Common serializable snapshot format shared by all `FlagStore` implementations.
+/// All backends must use this type for `create_snapshot` / `apply_snapshot` so that
+/// snapshots are interchangeable across storage engines (e.g. during Raft recovery).
+#[derive(Serialize, Deserialize)]
+pub struct StoreSnapshot {
+    pub entries: HashMap<String, StoreSnapshotEntry>,
+}
+
+/// A single namespace entry inside a [`StoreSnapshot`].
+#[derive(Serialize, Deserialize)]
+pub struct StoreSnapshotEntry {
+    pub content: Vec<u8>,
+    pub meta: Meta,
 }
 
 /// Storage trait for flagfile content. Implementations must be thread-safe.

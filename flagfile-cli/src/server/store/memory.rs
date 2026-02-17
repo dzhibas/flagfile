@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use super::{FlagStore, Meta};
+use super::{FlagStore, Meta, StoreSnapshot, StoreSnapshotEntry};
 
 /// In-memory flagfile storage backed by a `RwLock<HashMap>`.
 pub struct MemoryStore {
@@ -47,15 +47,31 @@ impl FlagStore for MemoryStore {
     }
 
     async fn apply_snapshot(&self, snapshot: &[u8]) -> Result<(), String> {
-        let deserialized: HashMap<String, (Vec<u8>, Meta)> =
+        let deserialized: StoreSnapshot =
             serde_json::from_slice(snapshot).map_err(|e| format!("failed to deserialize snapshot: {}", e))?;
         let mut data = self.data.write().await;
-        *data = deserialized;
+        data.clear();
+        for (namespace, entry) in deserialized.entries {
+            data.insert(namespace, (entry.content, entry.meta));
+        }
         Ok(())
     }
 
     async fn create_snapshot(&self) -> Result<Vec<u8>, String> {
         let data = self.data.read().await;
-        serde_json::to_vec(&*data).map_err(|e| format!("failed to serialize snapshot: {}", e))
+        let entries = data
+            .iter()
+            .map(|(k, (content, meta))| {
+                (
+                    k.clone(),
+                    StoreSnapshotEntry {
+                        content: content.clone(),
+                        meta: meta.clone(),
+                    },
+                )
+            })
+            .collect();
+        let snapshot = StoreSnapshot { entries };
+        serde_json::to_vec(&snapshot).map_err(|e| format!("failed to serialize snapshot: {}", e))
     }
 }

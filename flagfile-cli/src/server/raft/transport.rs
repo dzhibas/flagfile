@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Instant;
 
 use protobuf::Message as ProtoMessage;
@@ -11,6 +12,7 @@ use super::node::{RaftHandle, RaftMsgSender};
 use super::RaftCommand;
 use crate::server::config::PeerConfig;
 use crate::server::metrics::metrics;
+use crate::server::store::FlagStore;
 
 pub mod proto {
     tonic::include_proto!("flagfile.raft");
@@ -19,7 +21,8 @@ pub mod proto {
 use proto::raft_service_client::RaftServiceClient;
 use proto::raft_service_server::RaftService;
 use proto::{
-    RaftMessage, RaftResponse, SnapshotChunk, WriteRequest, WriteResponse,
+    RaftMessage, RaftResponse, SnapshotChunk, SnapshotRequest, SnapshotResponse,
+    StatusRequest, StatusResponse, WriteRequest, WriteResponse,
 };
 
 // ── Client-side transport ────────────────────────────
@@ -128,6 +131,36 @@ impl RaftTransport {
         Ok(result?.into_inner())
     }
 
+    /// Probe a peer for its current cluster status (leader ID, term, committed index).
+    /// Returns `(leader_id, term, committed)` on success. A `leader_id` of 0 means the
+    /// peer does not know who the leader is.
+    pub async fn probe_peer_status(
+        &self,
+        target: u64,
+    ) -> Result<(u64, u64, u64), String> {
+        let mut client = self.get_client(target).await?;
+        let response = client
+            .get_status(Request::new(StatusRequest {}))
+            .await
+            .map_err(|e| format!("get_status from peer {}: {}", target, e))?;
+        let status = response.into_inner();
+        Ok((status.leader_id, status.term, status.committed))
+    }
+
+    /// Request a full application-level snapshot from a peer. Returns the
+    /// serialised snapshot bytes (empty if the peer has no data).
+    pub async fn request_snapshot_from_peer(
+        &self,
+        target: u64,
+    ) -> Result<Vec<u8>, String> {
+        let mut client = self.get_client(target).await?;
+        let response = client
+            .request_snapshot(Request::new(SnapshotRequest {}))
+            .await
+            .map_err(|e| format!("request_snapshot from peer {}: {}", target, e))?;
+        Ok(response.into_inner().data)
+    }
+
     /// Remove a cached client connection (e.g. after a connection error).
     #[allow(dead_code)]
     pub async fn invalidate_client(&self, target: u64) {
@@ -142,13 +175,19 @@ impl RaftTransport {
 pub struct RaftGrpcService {
     raft_msg_tx: RaftMsgSender,
     raft_handle: RaftHandle,
+    store: Arc<dyn FlagStore + Send + Sync>,
 }
 
 impl RaftGrpcService {
-    pub fn new(raft_msg_tx: RaftMsgSender, raft_handle: RaftHandle) -> Self {
+    pub fn new(
+        raft_msg_tx: RaftMsgSender,
+        raft_handle: RaftHandle,
+        store: Arc<dyn FlagStore + Send + Sync>,
+    ) -> Self {
         Self {
             raft_msg_tx,
             raft_handle,
+            store,
         }
     }
 }
@@ -199,6 +238,30 @@ impl RaftService for RaftGrpcService {
         }
 
         Ok(Response::new(RaftResponse { success: true }))
+    }
+
+    /// Return this node's view of the cluster status (leader ID and term).
+    async fn get_status(
+        &self,
+        _request: Request<StatusRequest>,
+    ) -> Result<Response<StatusResponse>, Status> {
+        let leader_id = self.raft_handle.leader_id();
+        let term = self.raft_handle.term();
+        let committed = self.raft_handle.committed();
+        Ok(Response::new(StatusResponse { leader_id, term, committed }))
+    }
+
+    /// Create and return a full application-level snapshot of the flag store.
+    async fn request_snapshot(
+        &self,
+        _request: Request<SnapshotRequest>,
+    ) -> Result<Response<SnapshotResponse>, Status> {
+        let data = self
+            .store
+            .create_snapshot()
+            .await
+            .map_err(|e| Status::internal(format!("snapshot creation failed: {}", e)))?;
+        Ok(Response::new(SnapshotResponse { data }))
     }
 
     /// Handle a forwarded write request from a follower. If this node is the

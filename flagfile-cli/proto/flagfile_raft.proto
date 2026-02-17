@@ -5,6 +5,8 @@ service RaftService {
   rpc SendMessage(RaftMessage) returns (RaftResponse);
   rpc SendSnapshot(SnapshotChunk) returns (RaftResponse);
   rpc ForwardWrite(WriteRequest) returns (WriteResponse);
+  rpc GetStatus(StatusRequest) returns (StatusResponse);
+  rpc RequestSnapshot(SnapshotRequest) returns (SnapshotResponse);
 }
 
 message RaftMessage {
@@ -31,4 +33,18 @@ message WriteResponse {
 
 message RaftResponse {
   bool success = 1;
+}
+
+message StatusRequest {}
+
+message StatusResponse {
+  uint64 leader_id = 1;
+  uint64 term = 2;
+  uint64 committed = 3;
+}
+
+message SnapshotRequest {}
+
+message SnapshotResponse {
+  bytes data = 1;
 }

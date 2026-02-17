@@ -34,6 +34,8 @@ pub struct RaftHandle {
     proposal_tx: mpsc::Sender<Proposal>,
     command_tx: mpsc::Sender<RaftNodeCommand>,
     leader_id: Arc<AtomicU64>,
+    term: Arc<AtomicU64>,
+    committed: Arc<AtomicU64>,
     node_id: u64,
     peer_ids: Vec<u64>,
 }
@@ -72,6 +74,16 @@ impl RaftHandle {
         self.node_id
     }
 
+    /// Get the current Raft term as seen by this node.
+    pub fn term(&self) -> u64 {
+        self.term.load(Ordering::Relaxed)
+    }
+
+    /// Get the current Raft committed index as seen by this node.
+    pub fn committed(&self) -> u64 {
+        self.committed.load(Ordering::Relaxed)
+    }
+
     /// Transfer leadership to another node in the cluster. Returns once the
     /// transfer has been initiated (the caller should poll `is_leader()` to
     /// confirm the transfer completed).
@@ -101,6 +113,7 @@ pub async fn run_raft_node(
     storage: MemRaftStorage,
     transport: Arc<RaftTransport>,
     state_machine: Arc<RaftStateMachine>,
+    skip_campaign: bool,
 ) -> (RaftHandle, RaftMsgSender) {
     let node_id = cluster_cfg.node_id;
 
@@ -132,6 +145,10 @@ pub async fn run_raft_node(
 
     let leader_id = Arc::new(AtomicU64::new(0));
     let leader_id_clone = Arc::clone(&leader_id);
+    let term = Arc::new(AtomicU64::new(0));
+    let term_clone = Arc::clone(&term);
+    let committed = Arc::new(AtomicU64::new(0));
+    let committed_clone = Arc::clone(&committed);
 
     let peer_ids: Vec<u64> = cluster_cfg.peers.iter().map(|p| p.id).collect();
 
@@ -139,6 +156,8 @@ pub async fn run_raft_node(
         proposal_tx,
         command_tx,
         leader_id: Arc::clone(&leader_id),
+        term: Arc::clone(&term),
+        committed: Arc::clone(&committed),
         node_id,
         peer_ids: peer_ids.clone(),
     };
@@ -148,10 +167,12 @@ pub async fn run_raft_node(
 
     // For multi-node clusters, stagger the initial campaign to avoid split votes.
     // The lowest node_id campaigns first (after ~1s), others wait longer.
-    let campaign_at_tick: usize = if is_single_node {
-        0
-    } else {
+    // If skip_campaign is set (an existing leader was discovered), suppress the
+    // campaign entirely — the node will join as a follower via heartbeats.
+    let campaign_at_tick: usize = if !is_single_node && !skip_campaign {
         10 + (node_id as usize % 10) * 5
+    } else {
+        0
     };
 
     tokio::spawn(async move {
@@ -169,7 +190,8 @@ pub async fn run_raft_node(
                     tick_count += 1;
 
                     // Trigger initial election after a short staggered delay.
-                    if !is_single_node && tick_count == campaign_at_tick {
+                    // Suppressed when skip_campaign is true (existing leader discovered).
+                    if !is_single_node && !skip_campaign && tick_count == campaign_at_tick {
                         println!("raft node {}: triggering initial election", node_id);
                         if let Err(e) = raw_node.campaign() {
                             eprintln!("raft node {}: campaign error: {}", node_id, e);
@@ -226,6 +248,7 @@ pub async fn run_raft_node(
                 last_leader = current_leader;
             }
             leader_id_clone.store(current_leader, Ordering::Relaxed);
+            term_clone.store(raw_node.raft.term, Ordering::Relaxed);
 
             // Process ready states.
             if !raw_node.has_ready() {
@@ -236,6 +259,7 @@ pub async fn run_raft_node(
             // 1. Persist hard state and entries.
             if let Some(hs) = ready.hs() {
                 storage.set_hard_state(hs.clone());
+                committed_clone.store(hs.commit, Ordering::Relaxed);
                 metrics().raft_committed.with_label_values(&[&node_id_str]).set(hs.commit as i64);
             }
             if !ready.entries().is_empty() {
