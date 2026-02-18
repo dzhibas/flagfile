@@ -17,8 +17,7 @@ targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-da
 publish-jobs = ["homebrew"]
 
 # System dependencies needed for building (protoc for tonic/gRPC)
+# Note: Homebrew's protobuf (v33+) breaks raft-proto's version check.
+# protoc is installed via a custom workflow step instead.
 [dist.dependencies.apt]
 protobuf-compiler = { version = "*" }
-
-[dist.dependencies.homebrew]
-protobuf = { version = "*" }
