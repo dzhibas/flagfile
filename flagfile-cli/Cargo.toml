@@ -1,6 +1,6 @@
 [package]
 name = "flagfile-cli"
-version = "0.1.23"
+version = "0.1.24"
 edition = "2021"
 description = "CLI tool for managing and evaluating Flagfile feature flags"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
@@ -32,7 +32,14 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1.0.114"
 sha1 = "0.10"
 sled = "0.34"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "signal", "fs", "time"] }
+tokio = { version = "1", features = [
+    "rt-multi-thread",
+    "macros",
+    "sync",
+    "signal",
+    "fs",
+    "time",
+] }
 toml = "0.8"
 tower-http = { version = "0.6.8", features = ["compression-full"] }
 
