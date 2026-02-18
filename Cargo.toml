@@ -4,6 +4,7 @@ version = "0.4.12"
 edition = "2021"
 authors = ["Nikolajus Krauklis <nikolajus@gmail.com>"]
 repository = "https://github.com/dzhibas/flagfile"
+allow-dirty = true
 
 [workspace]
 resolver = "2"
