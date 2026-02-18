@@ -1,30 +1,59 @@
+pub mod auth;
+pub mod config;
+pub mod metrics;
 mod ofrep;
+pub mod raft;
 mod routes;
-mod state;
+mod sidecar;
+pub mod sse;
+pub mod state;
+pub mod store;
 mod watch;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
 use std::process;
 use std::sync::Arc;
 
 use axum::routing::{get, post};
 use axum::Router;
-use tokio::sync::RwLock;
 use tower_http::compression::CompressionLayer;
 
+use self::config::{FfServerConfig, SidecarConfig, StorageBackend};
+use self::metrics::{handle_health_check, handle_metrics, handle_readyz, track_metrics};
 use self::ofrep::{handle_ofrep_bulk, handle_ofrep_single};
-use self::routes::{handle_eval, handle_flagfile, handle_health};
-use self::state::{AppState, FlagStore};
-use self::watch::{parse_flags, watch_flagfile};
+use self::routes::{
+    handle_eval, handle_events, handle_flagfile, handle_flagfile_hash, handle_health,
+    handle_put_flagfile,
+};
+use self::sse::SseBroadcaster;
+use self::state::{AppState, ParsedNamespace};
+use self::store::ROOT_NAMESPACE;
+use self::watch::parse_flags;
 
+/// Legacy simple config for single-tenant mode (ff.toml without [server] section).
 #[derive(serde::Deserialize, Default, Debug)]
-struct ServeConfig {
+struct SimpleServeConfig {
     port: Option<u16>,
     hostname: Option<String>,
     flagfile: Option<String>,
     env: Option<String>,
+    sidecar: Option<SidecarConfig>,
 }
 
+/// Detect whether the config file is a full ff-server.toml (has [server] or [root] sections)
+/// or a simple ff.toml.
+fn is_multi_tenant_config(path: &str) -> bool {
+    let Ok(content) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    content.contains("[server]")
+        || content.contains("[root]")
+        || content.contains("[namespaces")
+        || content.contains("[cluster]")
+}
+
+#[allow(clippy::too_many_arguments)]
 pub async fn run_serve(
     flagfile_arg: Option<String>,
     port_arg: Option<u16>,
@@ -32,14 +61,37 @@ pub async fn run_serve(
     watch: bool,
     config_path: &str,
     env_arg: Option<String>,
+    sidecar: bool,
+    upstream: Option<String>,
+    namespace: Option<String>,
+    secret: Option<String>,
 ) {
-    // Load config from file if it exists
-    let config: ServeConfig = std::fs::read_to_string(config_path)
+    if sidecar {
+        run_serve_sidecar(port_arg, hostname_arg, config_path, upstream, namespace, secret).await;
+    } else if is_multi_tenant_config(config_path) {
+        run_serve_multi_tenant(config_path, port_arg, hostname_arg, env_arg).await;
+    } else {
+        run_serve_single_tenant(flagfile_arg, port_arg, hostname_arg, watch, config_path, env_arg)
+            .await;
+    }
+}
+
+// ── Single-tenant mode ──────────────────────────────────────
+// Backward compatible: `ff serve -f Flagfile --watch`
+
+async fn run_serve_single_tenant(
+    flagfile_arg: Option<String>,
+    port_arg: Option<u16>,
+    hostname_arg: Option<String>,
+    watch: bool,
+    config_path: &str,
+    env_arg: Option<String>,
+) {
+    let config: SimpleServeConfig = std::fs::read_to_string(config_path)
         .ok()
         .and_then(|content| toml::from_str(&content).ok())
         .unwrap_or_default();
 
-    // CLI args override config file values, which override defaults
     let flagfile_path = flagfile_arg
         .or(config.flagfile)
         .unwrap_or_else(|| "Flagfile".to_string());
@@ -49,7 +101,6 @@ pub async fn run_serve(
         .unwrap_or_else(|| "0.0.0.0".to_string());
     let env = env_arg.or(config.env);
 
-    // Read and parse flagfile
     let flagfile_content = match std::fs::read_to_string(&flagfile_path) {
         Ok(content) => content,
         Err(_) => {
@@ -66,33 +117,50 @@ pub async fn run_serve(
         }
     };
 
-    let state = Arc::new(AppState {
-        store: RwLock::new(FlagStore {
+    // Record startup flags metric
+    metrics::metrics().flags_total.with_label_values(&[ROOT_NAMESPACE]).set(flags.len() as i64);
+
+    let mut namespaces = HashMap::new();
+    namespaces.insert(
+        ROOT_NAMESPACE.to_string(),
+        ParsedNamespace {
             flagfile_content,
             flags,
             metadata,
             segments,
             env: env.clone(),
-        }),
+        },
+    );
+
+    let broadcaster = Arc::new(SseBroadcaster::new());
+
+    let state = Arc::new(AppState {
+        namespaces: tokio::sync::RwLock::new(namespaces),
+        config: Arc::new(FfServerConfig::default()),
+        broadcaster: Arc::clone(&broadcaster),
+        persistent_store: None,
+        multi_tenant: false,
+        raft_handle: std::sync::OnceLock::new(),
+        raft_transport: std::sync::OnceLock::new(),
     });
 
     // Spawn file watcher if --watch is enabled
     if watch {
         let watcher_state = Arc::clone(&state);
+        let watcher_broadcaster = Arc::clone(&broadcaster);
         let watcher_path = PathBuf::from(&flagfile_path)
             .canonicalize()
             .unwrap_or_else(|_| PathBuf::from(&flagfile_path));
-        tokio::spawn(watch_flagfile(watcher_state, watcher_path));
+        let watcher_env = env.clone();
+        tokio::spawn(watch_flagfile_new(
+            watcher_state,
+            watcher_broadcaster,
+            watcher_path,
+            watcher_env,
+        ));
     }
 
-    let app = Router::new()
-        .route("/health", get(handle_health))
-        .route("/flagfile", get(handle_flagfile))
-        .route("/v1/eval/{flag_name}", get(handle_eval))
-        .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
-        .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
-        .layer(CompressionLayer::new())
-        .with_state(state);
+    let app = build_single_tenant_router(Arc::clone(&state));
 
     let addr = format!("{}:{}", hostname, port);
     if let Some(ref env) = env {
@@ -104,14 +172,647 @@ pub async fn run_serve(
         println!("Serving {} on http://{}", flagfile_path, addr);
     }
 
-    let listener = tokio::net::TcpListener::bind(&addr)
+    serve_with_shutdown(app, &addr, broadcaster, state).await;
+}
+
+// ── Multi-tenant mode ───────────────────────────────────────
+// Config-based: `ff serve --config ff-server.toml`
+
+async fn run_serve_multi_tenant(
+    config_path: &str,
+    port_arg: Option<u16>,
+    hostname_arg: Option<String>,
+    env_arg: Option<String>,
+) {
+    let mut server_config = FfServerConfig::load(config_path);
+    server_config.apply_env_overrides();
+
+    let port = port_arg.unwrap_or(server_config.server.port);
+    let hostname = hostname_arg.unwrap_or_else(|| server_config.server.hostname.clone());
+
+    // Initialize persistent storage
+    let persistent_store: Arc<dyn store::FlagStore + Send + Sync> =
+        match server_config.server.storage {
+            StorageBackend::Sled => {
+                metrics::metrics().storage_backend.with_label_values(&["sled"]).set(1);
+                match store::sled_store::SledStore::open(&server_config.server.data_dir) {
+                    Ok(s) => Arc::new(s),
+                    Err(e) => {
+                        eprintln!("Failed to open sled storage: {}", e);
+                        process::exit(1);
+                    }
+                }
+            }
+            StorageBackend::Memory => {
+                metrics::metrics().storage_backend.with_label_values(&["memory"]).set(1);
+                Arc::new(store::memory::MemoryStore::new())
+            }
+        };
+
+    // Load existing flagfiles from persistent store into parsed namespaces
+    let mut namespaces = HashMap::new();
+    let stored_ns: Vec<String> = persistent_store.list_namespaces().await;
+    for ns_key in &stored_ns {
+        if let Some(content_bytes) = persistent_store.get_flagfile(ns_key).await {
+            if let Ok(content) = String::from_utf8(content_bytes) {
+                if let Some((flags, metadata, segments)) = parse_flags(&content) {
+                    namespaces.insert(
+                        ns_key.clone(),
+                        ParsedNamespace {
+                            flagfile_content: content,
+                            flags,
+                            metadata,
+                            segments,
+                            env: env_arg.clone(),
+                        },
+                    );
+                }
+            }
+        }
+    }
+
+    // Record flags_total per namespace at startup
+    for (ns_key, ns_data) in &namespaces {
+        metrics::metrics().flags_total.with_label_values(&[ns_key]).set(ns_data.flags.len() as i64);
+    }
+
+    let broadcaster = Arc::new(SseBroadcaster::new());
+
+    let state = Arc::new(AppState {
+        namespaces: tokio::sync::RwLock::new(namespaces),
+        config: Arc::new(server_config),
+        broadcaster: Arc::clone(&broadcaster),
+        persistent_store: Some(Arc::clone(&persistent_store)),
+        multi_tenant: true,
+        raft_handle: std::sync::OnceLock::new(),
+        raft_transport: std::sync::OnceLock::new(),
+    });
+
+    // Start Raft consensus node + gRPC server if cluster is configured.
+    if let Some(ref cluster_cfg) = state.config.cluster {
+        use self::raft::node::run_raft_node;
+        use self::raft::state_machine::RaftStateMachine;
+        use self::raft::storage::MemRaftStorage;
+        use self::raft::transport::{RaftGrpcService, RaftTransport};
+
+        // Collect all voter IDs (this node + peers).
+        let mut voter_ids: Vec<u64> = cluster_cfg.peers.iter().map(|p| p.id).collect();
+        if !voter_ids.contains(&cluster_cfg.node_id) {
+            voter_ids.push(cluster_cfg.node_id);
+        }
+        voter_ids.sort();
+
+        let transport = Arc::new(RaftTransport::new(cluster_cfg.peers.clone()));
+
+        // ── Leader discovery ────────────────────────────────────
+        // Probe peers to check whether the cluster already has a leader.
+        // If one is found, this node will join as a follower and skip
+        // its own election campaign. We also record the term and committed
+        // index so we can seed the Raft log if we need to bootstrap.
+        let mut discovered_leader: Option<u64> = None;
+        let mut discovered_term: u64 = 0;
+        let mut discovered_committed: u64 = 0;
+        for peer in &cluster_cfg.peers {
+            match transport.probe_peer_status(peer.id).await {
+                Ok((leader_id, term, committed)) if leader_id != 0 => {
+                    discovered_leader = Some(leader_id);
+                    discovered_term = term;
+                    discovered_committed = committed;
+                    break;
+                }
+                Ok(_) => {
+                    // Peer is up but doesn't know the leader yet.
+                }
+                Err(_) => {
+                    // Peer unreachable — may not be started yet.
+                }
+            }
+        }
+
+        let skip_campaign = discovered_leader.is_some();
+        if let Some(leader) = discovered_leader {
+            println!(
+                "raft node {}: discovered existing leader {}, joining as follower",
+                cluster_cfg.node_id, leader
+            );
+        }
+
+        // ── Bootstrap from snapshot if storage is empty/corrupted ──
+        // If the in-memory namespace map is empty (store was empty or all
+        // entries were unparsable) and a leader exists, request a snapshot
+        // to populate the store before starting the Raft node.
+        let namespaces_empty = state.namespaces.read().await.is_empty();
+        if namespaces_empty && !cluster_cfg.peers.is_empty() {
+            let snapshot_source = discovered_leader.or_else(|| {
+                // No leader discovered, but try any peer for a snapshot.
+                cluster_cfg.peers.first().map(|p| p.id)
+            });
+
+            if let Some(source) = snapshot_source {
+                println!(
+                    "raft node {}: storage is empty or corrupted, requesting snapshot from node {}",
+                    cluster_cfg.node_id, source
+                );
+                match transport.request_snapshot_from_peer(source).await {
+                    Ok(data) if !data.is_empty() => {
+                        if let Err(e) = persistent_store.apply_snapshot(&data).await {
+                            eprintln!(
+                                "raft node {}: failed to apply bootstrap snapshot: {}",
+                                cluster_cfg.node_id, e
+                            );
+                        } else {
+                            // Reload namespaces from the freshly-populated store.
+                            let new_ns = persistent_store.list_namespaces().await;
+                            let mut ns_map = state.namespaces.write().await;
+                            for ns_key in new_ns {
+                                if let Some(content_bytes) =
+                                    persistent_store.get_flagfile(&ns_key).await
+                                {
+                                    if let Ok(content) = String::from_utf8(content_bytes) {
+                                        if let Some((flags, metadata, segments)) =
+                                            parse_flags(&content)
+                                        {
+                                            ns_map.insert(
+                                                ns_key.clone(),
+                                                ParsedNamespace {
+                                                    flagfile_content: content,
+                                                    flags,
+                                                    metadata,
+                                                    segments,
+                                                    env: env_arg.clone(),
+                                                },
+                                            );
+                                            // Update metrics for the bootstrapped namespace.
+                                            metrics::metrics()
+                                                .flags_total
+                                                .with_label_values(&[&ns_key])
+                                                .set(
+                                                    ns_map
+                                                        .get(&ns_key)
+                                                        .map(|n| n.flags.len() as i64)
+                                                        .unwrap_or(0),
+                                                );
+                                        }
+                                    }
+                                }
+                            }
+                            println!(
+                                "raft node {}: bootstrap snapshot applied ({} namespaces loaded)",
+                                cluster_cfg.node_id,
+                                ns_map.len()
+                            );
+                        }
+                    }
+                    Ok(_) => {
+                        println!(
+                            "raft node {}: peer returned empty snapshot (cluster may be new)",
+                            cluster_cfg.node_id
+                        );
+                    }
+                    Err(e) => {
+                        eprintln!(
+                            "raft node {}: failed to request snapshot: {}",
+                            cluster_cfg.node_id, e
+                        );
+                    }
+                }
+            }
+        }
+
+        let storage = MemRaftStorage::new(voter_ids.clone());
+
+        // If we bootstrapped from a peer snapshot, seed the Raft log storage
+        // with a Raft-level snapshot at the leader's committed index. Without
+        // this the Raft log has last_index=0 and the first heartbeat from the
+        // leader (which carries the commit index) would cause a panic.
+        if discovered_committed > 0 {
+            use ::raft::prelude::{HardState, Snapshot};
+
+            let mut snap = Snapshot::default();
+            snap.mut_metadata().index = discovered_committed;
+            snap.mut_metadata().term = discovered_term;
+            snap.mut_metadata().mut_conf_state().voters = voter_ids.clone();
+            // Application data can be empty — the store is already populated.
+            snap.data = Vec::new().into();
+
+            if let Err(e) = storage.apply_snapshot(snap) {
+                eprintln!(
+                    "raft node {}: failed to seed raft storage with bootstrap snapshot: {}",
+                    cluster_cfg.node_id, e
+                );
+            } else {
+                // Also set the hard state so the Raft node starts with the
+                // correct term and commit index.
+                let hs = HardState {
+                    term: discovered_term,
+                    commit: discovered_committed,
+                    ..HardState::default()
+                };
+                storage.set_hard_state(hs);
+            }
+        }
+
+        let state_machine = Arc::new(RaftStateMachine::new(
+            Arc::clone(&persistent_store),
+            Arc::clone(&state),
+        ));
+
+        let (handle, raft_msg_tx) = run_raft_node(
+            cluster_cfg,
+            storage,
+            Arc::clone(&transport),
+            state_machine,
+            skip_campaign,
+        )
+        .await;
+
+        // Store handle and transport in AppState for route handlers.
+        let _ = state.raft_handle.set(handle.clone());
+        let _ = state.raft_transport.set(Arc::clone(&transport));
+
+        // Spawn gRPC server for inter-node Raft communication.
+        let grpc_port = cluster_cfg.grpc_port;
+        let grpc_service =
+            RaftGrpcService::new(raft_msg_tx, handle, Arc::clone(&persistent_store));
+
+        tokio::spawn(async move {
+            use self::raft::transport::proto::raft_service_server::RaftServiceServer;
+
+            let grpc_addr = format!("0.0.0.0:{}", grpc_port)
+                .parse()
+                .expect("invalid gRPC address");
+
+            println!(
+                "Raft gRPC server listening on 0.0.0.0:{}",
+                grpc_port
+            );
+
+            if let Err(e) = tonic::transport::Server::builder()
+                .add_service(RaftServiceServer::new(grpc_service))
+                .serve(grpc_addr)
+                .await
+            {
+                eprintln!("gRPC server error: {}", e);
+            }
+        });
+    }
+
+    let app = build_multi_tenant_router(Arc::clone(&state));
+
+    let addr = format!("{}:{}", hostname, port);
+    let ns_count = stored_ns.len();
+    println!(
+        "Serving multi-tenant on http://{} ({} namespaces loaded)",
+        addr, ns_count
+    );
+
+    serve_with_shutdown(app, &addr, broadcaster, state).await;
+}
+
+// ── Router builders ─────────────────────────────────────────
+
+fn build_single_tenant_router(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/health", get(handle_health))
+        .route("/flagfile", get(handle_flagfile).put(handle_put_flagfile))
+        .route("/flagfile/hash", get(handle_flagfile_hash))
+        .route("/events", get(handle_events))
+        .route("/v1/eval/{flag_name}", get(handle_eval))
+        .route(
+            "/ofrep/v1/evaluate/flags/{key}",
+            post(handle_ofrep_single),
+        )
+        .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
+        .route("/metrics", get(handle_metrics))
+        .layer(axum::middleware::from_fn(track_metrics))
+        .layer(CompressionLayer::new())
+        .with_state(state)
+}
+
+fn build_multi_tenant_router(state: Arc<AppState>) -> Router {
+    // Root namespace routes
+    let root_routes: Router<Arc<AppState>> = Router::new()
+        .route("/flagfile", get(handle_flagfile).put(handle_put_flagfile))
+        .route("/flagfile/hash", get(handle_flagfile_hash))
+        .route("/events", get(handle_events))
+        .route("/v1/eval/{flag_name}", get(handle_eval))
+        .route(
+            "/ofrep/v1/evaluate/flags/{key}",
+            post(handle_ofrep_single),
+        )
+        .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk));
+
+    // Namespaced routes: /ns/{namespace}/...
+    let ns_routes = Router::new()
+        .route(
+            "/ns/{namespace}/flagfile",
+            get(handle_flagfile_ns).put(handle_put_flagfile_ns),
+        )
+        .route("/ns/{namespace}/flagfile/hash", get(handle_flagfile_hash_ns))
+        .route("/ns/{namespace}/events", get(handle_events_ns))
+        .route(
+            "/ns/{namespace}/v1/eval/{flag_name}",
+            get(handle_eval_ns),
+        );
+
+    // Observability (no auth)
+    let obs_routes = Router::new()
+        .route("/health", get(handle_health_check))
+        .route("/readyz", get(handle_readyz))
+        .route("/metrics", get(handle_metrics));
+
+    Router::new()
+        .merge(root_routes)
+        .merge(ns_routes)
+        .merge(obs_routes)
+        .layer(axum::middleware::from_fn(track_metrics))
+        .layer(CompressionLayer::new())
+        .with_state(state)
+}
+
+// ── Sidecar mode ────────────────────────────────────────────
+// Read-only edge proxy that replicates from an upstream ff serve instance.
+
+async fn run_serve_sidecar(
+    port_arg: Option<u16>,
+    hostname_arg: Option<String>,
+    config_path: &str,
+    upstream_arg: Option<String>,
+    namespace_arg: Option<String>,
+    secret_arg: Option<String>,
+) {
+    let config: SimpleServeConfig = std::fs::read_to_string(config_path)
+        .ok()
+        .and_then(|content| toml::from_str(&content).ok())
+        .unwrap_or_default();
+
+    // Resolve config priority: CLI args > ff.toml [sidecar] > env vars
+    let sidecar_cfg = config.sidecar.unwrap_or_default();
+
+    let upstream = upstream_arg
+        .or(sidecar_cfg.upstream)
+        .or_else(|| std::env::var("FF_SIDECAR_UPSTREAM").ok())
+        .unwrap_or_else(|| {
+            eprintln!("Error: --upstream is required in sidecar mode");
+            process::exit(1);
+        });
+
+    let token = secret_arg
+        .or(sidecar_cfg.token)
+        .or_else(|| std::env::var("FF_SIDECAR_TOKEN").ok());
+
+    let namespace = namespace_arg
+        .or(sidecar_cfg.namespace)
+        .or_else(|| std::env::var("FF_SIDECAR_NAMESPACE").ok());
+
+    let port = port_arg.or(config.port).unwrap_or(8080);
+    let hostname = hostname_arg
+        .or(config.hostname)
+        .unwrap_or_else(|| "0.0.0.0".to_string());
+
+    // Build upstream URLs based on namespace
+    let upstream = upstream.trim_end_matches('/');
+    let (flagfile_url, events_url) = match &namespace {
+        Some(ns) => (
+            format!("{}/ns/{}/flagfile", upstream, ns),
+            format!("{}/ns/{}/events", upstream, ns),
+        ),
+        None => (
+            format!("{}/flagfile", upstream),
+            format!("{}/events", upstream),
+        ),
+    };
+
+    // Create empty AppState (in-memory only, no persistent store, no Raft)
+    let broadcaster = Arc::new(SseBroadcaster::new());
+    let state = Arc::new(AppState {
+        namespaces: tokio::sync::RwLock::new(HashMap::new()),
+        config: Arc::new(FfServerConfig::default()),
+        broadcaster: Arc::clone(&broadcaster),
+        persistent_store: None,
+        multi_tenant: false,
+        raft_handle: std::sync::OnceLock::new(),
+        raft_transport: std::sync::OnceLock::new(),
+    });
+
+    // Attempt initial fetch
+    let ok = sidecar::fetch_and_update(
+        &flagfile_url,
+        token.as_deref(),
+        Arc::clone(&state),
+        Arc::clone(&broadcaster),
+    )
+    .await;
+    if !ok {
+        eprintln!("Warning: initial fetch from {} failed, starting anyway", flagfile_url);
+    }
+
+    // Spawn background SSE listener
+    let sse_state = Arc::clone(&state);
+    let sse_broadcaster = Arc::clone(&broadcaster);
+    let sse_flagfile_url = flagfile_url.clone();
+    let sse_token = token.clone();
+    tokio::spawn(sidecar::upstream_sse_listener(
+        events_url,
+        sse_flagfile_url,
+        sse_token,
+        sse_state,
+        sse_broadcaster,
+    ));
+
+    let app = build_sidecar_router(Arc::clone(&state));
+
+    let addr = format!("{}:{}", hostname, port);
+    let ns_label = namespace.as_deref().unwrap_or("root");
+    println!(
+        "Sidecar mode: replicating from {} (namespace: {}) on http://{}",
+        upstream, ns_label, addr
+    );
+
+    serve_with_shutdown(app, &addr, broadcaster, state).await;
+}
+
+fn build_sidecar_router(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/health", get(handle_health))
+        .route(
+            "/flagfile",
+            get(handle_flagfile).put(sidecar::handle_put_readonly),
+        )
+        .route("/flagfile/hash", get(handle_flagfile_hash))
+        .route("/events", get(handle_events))
+        .route("/v1/eval/{flag_name}", get(handle_eval))
+        .route(
+            "/ofrep/v1/evaluate/flags/{key}",
+            post(handle_ofrep_single),
+        )
+        .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
+        .route("/readyz", get(sidecar::handle_sidecar_readyz))
+        .route("/metrics", get(handle_metrics))
+        .layer(axum::middleware::from_fn(track_metrics))
+        .layer(CompressionLayer::new())
+        .with_state(state)
+}
+
+// ── Namespace wrapper handlers ──────────────────────────────
+// These extract the namespace from the path and delegate to the core handlers.
+
+async fn handle_flagfile_ns(
+    state: axum::extract::State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(namespace): axum::extract::Path<String>,
+) -> axum::response::Response {
+    handle_flagfile(state, headers, Some(axum::extract::Path(namespace))).await
+}
+
+async fn handle_flagfile_hash_ns(
+    state: axum::extract::State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(namespace): axum::extract::Path<String>,
+) -> axum::response::Response {
+    handle_flagfile_hash(state, headers, Some(axum::extract::Path(namespace))).await
+}
+
+async fn handle_put_flagfile_ns(
+    state: axum::extract::State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(namespace): axum::extract::Path<String>,
+    body: String,
+) -> axum::response::Response {
+    handle_put_flagfile(state, headers, Some(axum::extract::Path(namespace)), body).await
+}
+
+async fn handle_events_ns(
+    state: axum::extract::State<Arc<AppState>>,
+    headers: axum::http::HeaderMap,
+    axum::extract::Path(namespace): axum::extract::Path<String>,
+) -> axum::response::Response {
+    handle_events(state, headers, Some(axum::extract::Path(namespace))).await
+}
+
+async fn handle_eval_ns(
+    state: axum::extract::State<Arc<AppState>>,
+    axum::extract::Path((namespace, flag_name)): axum::extract::Path<(String, String)>,
+    query: axum::extract::Query<HashMap<String, String>>,
+    headers: axum::http::HeaderMap,
+) -> axum::response::Response {
+    let params = routes::EvalParams {
+        flag_name,
+        namespace: Some(namespace),
+    };
+    handle_eval(state, axum::extract::Path(params), query, headers).await
+}
+
+// ── File watcher (new state format) ─────────────────────────
+
+async fn watch_flagfile_new(
+    state: Arc<AppState>,
+    broadcaster: Arc<SseBroadcaster>,
+    path: PathBuf,
+    env: Option<String>,
+) {
+    use std::time::Duration;
+
+    use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
+    use sha1::Digest;
+
+    let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+    let parent = path.parent().unwrap_or(&path).to_path_buf();
+
+    let mut watcher = RecommendedWatcher::new(
+        move |event: Result<notify::Event, notify::Error>| {
+            if let Ok(event) = event {
+                let _ = tx.blocking_send(event);
+            }
+        },
+        Config::default(),
+    )
+    .expect("failed to create file watcher");
+
+    watcher
+        .watch(&parent, RecursiveMode::NonRecursive)
+        .expect("failed to watch directory");
+
+    let mut last_reload = std::time::Instant::now();
+
+    while let Some(event) = rx.recv().await {
+        let relevant = event.paths.iter().any(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .map(|n| n.starts_with("Flagfile"))
+                .unwrap_or(false)
+        });
+
+        if !relevant {
+            continue;
+        }
+
+        // Debounce: ignore events within 500ms of last reload
+        if last_reload.elapsed() < Duration::from_millis(500) {
+            continue;
+        }
+        last_reload = std::time::Instant::now();
+
+        match tokio::fs::read_to_string(&path).await {
+            Ok(content) => {
+                if let Some((flags, metadata, segments)) = parse_flags(&content) {
+                    let flags_count = flags.len() as u64;
+                    let mut hasher = sha1::Sha1::new();
+                    hasher.update(content.as_bytes());
+                    let hash = format!("{:x}", hasher.finalize());
+
+                    let mut namespaces = state.namespaces.write().await;
+                    namespaces.insert(
+                        ROOT_NAMESPACE.to_string(),
+                        ParsedNamespace {
+                            flagfile_content: content,
+                            flags,
+                            metadata,
+                            segments,
+                            env: env.clone(),
+                        },
+                    );
+                    drop(namespaces);
+
+                    broadcaster
+                        .broadcast(
+                            ROOT_NAMESPACE,
+                            sse::FlagUpdateEvent {
+                                hash,
+                                timestamp: chrono::Utc::now().to_rfc3339(),
+                                flags_count,
+                            },
+                        )
+                        .await;
+
+                    println!("Flagfile reloaded ({} flags)", flags_count);
+                } else {
+                    eprintln!("Warning: failed to parse updated Flagfile");
+                }
+            }
+            Err(e) => {
+                eprintln!("Warning: failed to read {}: {}", path.display(), e);
+            }
+        }
+    }
+}
+
+// ── Shared server startup ───────────────────────────────────
+
+async fn serve_with_shutdown(
+    app: Router,
+    addr: &str,
+    broadcaster: Arc<SseBroadcaster>,
+    state: Arc<AppState>,
+) {
+    let listener = tokio::net::TcpListener::bind(addr)
         .await
         .unwrap_or_else(|e| {
             eprintln!("Failed to bind to {}: {}", addr, e);
             process::exit(1);
         });
 
-    let shutdown = async {
+    let shutdown = async move {
         let ctrl_c = tokio::signal::ctrl_c();
         #[cfg(unix)]
         let mut sigterm =
@@ -127,7 +828,41 @@ pub async fn run_serve(
         #[cfg(not(unix))]
         ctrl_c.await.ok();
 
-        println!("Shutdown signal received, finishing in-flight requests...");
+        println!("Shutdown signal received");
+
+        // Attempt Raft leadership transfer before shutting down.
+        if let Some(handle) = state.raft_handle.get() {
+            if handle.is_leader() {
+                println!("Transferring Raft leadership...");
+                match handle.transfer_leader().await {
+                    Ok(()) => {
+                        // Poll is_leader() until we're no longer leader, up to 5s.
+                        let deadline =
+                            tokio::time::Instant::now() + std::time::Duration::from_secs(5);
+                        while handle.is_leader()
+                            && tokio::time::Instant::now() < deadline
+                        {
+                            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                        }
+                        if handle.is_leader() {
+                            println!("Leadership transfer timed out, proceeding with shutdown");
+                        } else {
+                            println!("Leadership transferred successfully");
+                        }
+                    }
+                    Err(e) => {
+                        println!("Leadership transfer skipped: {}", e);
+                    }
+                }
+            }
+        }
+
+        println!("Notifying SSE clients...");
+        broadcaster.shutdown();
+        // Brief pause so SSE clients receive the shutdown event before
+        // connections are torn down.
+        tokio::time::sleep(std::time::Duration::from_millis(200)).await;
+        println!("Finishing in-flight requests...");
     };
 
     axum::serve(listener, app)

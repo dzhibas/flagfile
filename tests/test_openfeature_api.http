@@ -6,12 +6,12 @@ Content-Type: application/json
 ###
 
 ### Testing ofrep
-POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-feature-y
+POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-premium-feature
 Content-Type: application/json
 
 {
     "context": {
-        "countryCode": "NL"
+        "role": "developer"
     }
 }
 ###

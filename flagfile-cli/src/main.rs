@@ -1,5 +1,7 @@
 mod formatter;
 mod lint;
+mod pull;
+mod push;
 mod server;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -138,6 +140,58 @@ enum Command {
         /// Environment to evaluate @env rules against
         #[arg(short = 'e', long = "env")]
         env: Option<String>,
+
+        /// Run as a read-only sidecar replicating from upstream
+        #[arg(long = "sidecar")]
+        sidecar: bool,
+
+        /// Upstream server URL (required with --sidecar)
+        #[arg(long = "upstream", requires = "sidecar")]
+        upstream: Option<String>,
+
+        /// Upstream namespace to replicate (defaults to root)
+        #[arg(short = 'n', long = "namespace")]
+        namespace: Option<String>,
+
+        /// Auth token for upstream server
+        #[arg(short = 's', long = "secret")]
+        secret: Option<String>,
+    },
+    /// Push local Flagfile to a remote server
+    Push {
+        /// Path to the Flagfile
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+        /// Remote server URL
+        #[arg(short = 'r', long = "remote")]
+        remote: Option<String>,
+        /// Namespace on the remote server
+        #[arg(short = 'n', long = "namespace")]
+        namespace: Option<String>,
+        /// Write token for authentication
+        #[arg(short = 's', long = "secret")]
+        secret: Option<String>,
+        /// Path to config file
+        #[arg(short = 'c', long = "config", default_value = "ff.toml")]
+        config: String,
+    },
+    /// Pull Flagfile from a remote server
+    Pull {
+        /// Path to write the Flagfile
+        #[arg(short = 'f', long = "flagfile", default_value = "Flagfile")]
+        flagfile: String,
+        /// Remote server URL
+        #[arg(short = 'r', long = "remote")]
+        remote: Option<String>,
+        /// Namespace on the remote server
+        #[arg(short = 'n', long = "namespace")]
+        namespace: Option<String>,
+        /// Read token for authentication
+        #[arg(short = 's', long = "secret")]
+        secret: Option<String>,
+        /// Path to config file
+        #[arg(short = 'c', long = "config", default_value = "ff.toml")]
+        config: String,
     },
     /// Format a Flagfile with consistent style
     Fmt {
@@ -1308,7 +1362,48 @@ async fn main() {
             watch,
             config,
             env,
-        } => server::run_serve(flagfile, port, hostname, watch, &config, env).await,
+            sidecar,
+            upstream,
+            namespace,
+            secret,
+        } => {
+            server::run_serve(
+                flagfile, port, hostname, watch, &config, env, sidecar, upstream, namespace, secret,
+            )
+            .await
+        }
+        Command::Push {
+            flagfile,
+            remote,
+            namespace,
+            secret,
+            config,
+        } => {
+            push::run_push(
+                &flagfile,
+                remote.as_deref(),
+                namespace.as_deref(),
+                secret.as_deref(),
+                &config,
+            )
+            .await
+        }
+        Command::Pull {
+            flagfile,
+            remote,
+            namespace,
+            secret,
+            config,
+        } => {
+            pull::run_pull(
+                &flagfile,
+                remote.as_deref(),
+                namespace.as_deref(),
+                secret.as_deref(),
+                &config,
+            )
+            .await
+        }
         Command::Fmt {
             flagfile,
             check,

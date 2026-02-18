@@ -1,9 +1,10 @@
 use std::collections::HashMap;
-use std::sync::OnceLock;
+use std::sync::{OnceLock, RwLock};
 
 use wasm_bindgen::prelude::wasm_bindgen;
 
 pub mod ast;
+pub mod builder;
 pub mod eval;
 pub mod parse;
 pub mod parse_flagfile;
@@ -14,21 +15,31 @@ pub use parse_flagfile::{
     extract_test_annotations, FlagDefinition, FlagReturn, ParsedFlagfile, Rule, TestAnnotation,
 };
 
-static FLAGS: OnceLock<HashMap<String, Vec<Rule>>> = OnceLock::new();
-static METADATA: OnceLock<HashMap<String, FlagMetadata>> = OnceLock::new();
-static SEGMENTS: OnceLock<Segments> = OnceLock::new();
-static ENVIRONMENT: OnceLock<Option<String>> = OnceLock::new();
+static FLAGS: OnceLock<RwLock<HashMap<String, Vec<Rule>>>> = OnceLock::new();
+static METADATA: OnceLock<RwLock<HashMap<String, FlagMetadata>>> = OnceLock::new();
+static SEGMENTS: OnceLock<RwLock<Segments>> = OnceLock::new();
+static ENVIRONMENT: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 
-/// Reads and parses a `Flagfile` from the current directory, storing the
-/// result in global state for later use with [`ff`].
+/// Returns a builder for configuring flagfile initialization.
+/// Without any chaining, behaves identically to the previous `init()`.
 ///
-/// Panics if the file cannot be read or parsed.
+/// # Examples
+/// ```no_run
+/// // Local mode (backward compatible)
+/// flagfile_lib::init();
+///
+/// // With environment
+/// flagfile_lib::init().env("prod");
+///
+/// // Remote mode
+/// flagfile_lib::init()
+///     .remote("https://flags.example.com")
+///     .token("rt_abc123")
+///     .namespace("checkout");
+/// ```
 #[cfg(not(target_arch = "wasm32"))]
-pub fn init() {
-    init_from_str(
-        &std::fs::read_to_string("Flagfile")
-            .expect("Could not read 'Flagfile' in current directory"),
-    );
+pub fn init() -> builder::FlagfileBuilder {
+    builder::create_builder()
 }
 
 /// Parses flagfile content from a string and stores the result in global
@@ -55,14 +66,16 @@ pub fn init_with_env(env: &str) {
     );
 }
 
-fn init_from_str_inner(content: &str, env: Option<String>) {
-    let (remainder, parsed) =
-        parse_flagfile::parse_flagfile_with_segments(content).expect("Failed to parse Flagfile");
+/// Parse content and store in global state. Returns an error on parse failure
+/// instead of panicking, making it safe for background reloads (e.g. SSE).
+pub(crate) fn parse_and_store(content: &str, env: Option<String>) -> Result<(), String> {
+    let (remainder, parsed) = parse_flagfile::parse_flagfile_with_segments(content)
+        .map_err(|e| format!("Failed to parse Flagfile: {}", e))?;
     if !remainder.trim().is_empty() {
-        panic!(
+        return Err(format!(
             "Flagfile parsing failed: unexpected content near: {}",
             remainder.trim().lines().next().unwrap_or("")
-        );
+        ));
     }
     let mut flags: HashMap<String, Vec<Rule>> = HashMap::new();
     let mut metadata_map: HashMap<String, FlagMetadata> = HashMap::new();
@@ -72,18 +85,29 @@ fn init_from_str_inner(content: &str, env: Option<String>) {
             metadata_map.insert(name.to_string(), def.metadata);
         }
     }
-    FLAGS
-        .set(flags)
-        .expect("init() or init_from_str() was called more than once");
-    METADATA
-        .set(metadata_map)
-        .expect("init() or init_from_str() was called more than once");
-    SEGMENTS
-        .set(parsed.segments)
-        .expect("init() or init_from_str() was called more than once");
-    ENVIRONMENT
-        .set(env)
-        .expect("init() or init_from_str() was called more than once");
+    // Use get_or_init so the OnceLock is created on first call, then
+    // subsequent calls (SSE reloads) just update the inner RwLock value.
+    *FLAGS
+        .get_or_init(|| RwLock::new(HashMap::new()))
+        .write()
+        .unwrap() = flags;
+    *METADATA
+        .get_or_init(|| RwLock::new(HashMap::new()))
+        .write()
+        .unwrap() = metadata_map;
+    *SEGMENTS
+        .get_or_init(|| RwLock::new(Segments::new()))
+        .write()
+        .unwrap() = parsed.segments;
+    *ENVIRONMENT
+        .get_or_init(|| RwLock::new(None))
+        .write()
+        .unwrap() = env;
+    Ok(())
+}
+
+pub(crate) fn init_from_str_inner(content: &str, env: Option<String>) {
+    parse_and_store(content, env).expect("Flagfile initialization failed");
 }
 
 /// Evaluates a flag by name against the given context.
@@ -93,25 +117,41 @@ fn init_from_str_inner(content: &str, env: Option<String>) {
 ///
 /// Panics if [`init`] or [`init_from_str`] has not been called.
 pub fn ff(flag_name: &str, context: &Context) -> Option<FlagReturn> {
-    let flags = FLAGS
+    let flags_guard = FLAGS
         .get()
-        .expect("flagfile_lib::init() must be called before ff()");
-    let segments = SEGMENTS
+        .expect("flagfile_lib::init() must be called before ff()")
+        .read()
+        .unwrap();
+    let metadata_guard = METADATA
         .get()
-        .expect("flagfile_lib::init() must be called before ff()");
-    let metadata_map = METADATA
+        .expect("flagfile_lib::init() must be called before ff()")
+        .read()
+        .unwrap();
+    let segments_guard = SEGMENTS
         .get()
-        .expect("flagfile_lib::init() must be called before ff()");
-
-    let current_env = ENVIRONMENT.get().and_then(|v| v.as_deref());
+        .expect("flagfile_lib::init() must be called before ff()")
+        .read()
+        .unwrap();
+    let env_guard = ENVIRONMENT
+        .get()
+        .expect("flagfile_lib::init() must be called before ff()")
+        .read()
+        .unwrap();
+    let current_env = env_guard.as_deref();
 
     // Check @requires prerequisites
-    if let Some(meta) = metadata_map.get(flag_name) {
+    if let Some(meta) = metadata_guard.get(flag_name) {
         for req in &meta.requires {
-            match flags.get(req.as_str()) {
+            match flags_guard.get(req.as_str()) {
                 None => return None, // required flag doesn't exist
                 Some(req_rules) => {
-                    match evaluate_rules(req_rules, context, Some(req), segments, current_env) {
+                    match evaluate_rules(
+                        req_rules,
+                        context,
+                        Some(req),
+                        &segments_guard,
+                        current_env,
+                    ) {
                         Some(FlagReturn::OnOff(true)) => {} // prerequisite satisfied
                         _ => return None,                   // prerequisite not met
                     }
@@ -120,8 +160,14 @@ pub fn ff(flag_name: &str, context: &Context) -> Option<FlagReturn> {
         }
     }
 
-    let rules = flags.get(flag_name)?;
-    evaluate_rules(rules, context, Some(flag_name), segments, current_env)
+    let rules = flags_guard.get(flag_name)?;
+    evaluate_rules(
+        rules,
+        context,
+        Some(flag_name),
+        &segments_guard,
+        current_env,
+    )
 }
 
 /// Returns the metadata annotations for a flag, if any.
@@ -132,7 +178,9 @@ pub fn ff(flag_name: &str, context: &Context) -> Option<FlagReturn> {
 pub fn ff_metadata(flag_name: &str) -> Option<FlagMetadata> {
     let metadata = METADATA
         .get()
-        .expect("flagfile_lib::init() must be called before ff_metadata()");
+        .expect("flagfile_lib::init() must be called before ff_metadata()")
+        .read()
+        .unwrap();
     metadata.get(flag_name).cloned()
 }
 

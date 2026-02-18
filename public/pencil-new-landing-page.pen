@@ -1,0 +1,2314 @@
+{
+  "version": "2.8",
+  "children": [
+    {
+      "type": "frame",
+      "id": "bi8Au",
+      "x": 0,
+      "y": 0,
+      "name": "Frame",
+      "clip": true,
+      "width": 800,
+      "height": 600,
+      "fill": "#FFFFFF",
+      "layout": "none"
+    },
+    {
+      "type": "frame",
+      "id": "gC1pq",
+      "x": 0,
+      "y": 0,
+      "name": "Flagfile Landing Page",
+      "width": 1440,
+      "fill": "#0A0A0A",
+      "layout": "vertical",
+      "children": [
+        {
+          "type": "frame",
+          "id": "tOCVd",
+          "name": "Header",
+          "clip": true,
+          "width": "fill_container",
+          "height": 72,
+          "fill": "#0A0A0A",
+          "padding": [
+            0,
+            80
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "oTosf",
+              "name": "logoGroup",
+              "gap": 8,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "P9b9H",
+                  "name": "logoPrompt",
+                  "fill": "#10B981",
+                  "content": ">",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 20,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "zDHV6",
+                  "name": "logoText",
+                  "fill": "#FAFAFA",
+                  "content": "flagfile",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 18,
+                  "fontWeight": "500"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "ldIpl",
+              "name": "navGroup",
+              "gap": 32,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "OD71e",
+                  "name": "navDocs",
+                  "fill": "#6B7280",
+                  "content": "docs",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "lpac5",
+                  "name": "navExamples",
+                  "fill": "#6B7280",
+                  "content": "examples",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "YPD48",
+                  "name": "navCli",
+                  "fill": "#6B7280",
+                  "content": "cli",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "Ug5hA",
+                  "name": "navGithub",
+                  "fill": "#6B7280",
+                  "content": "github",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "RVhFk",
+              "name": "headerCta",
+              "fill": "#10B981",
+              "padding": [
+                10,
+                20
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "text",
+                  "id": "RBMFt",
+                  "name": "headerCtaText",
+                  "fill": "#0A0A0A",
+                  "content": "$ get_started",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 12,
+                  "fontWeight": "500"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "iHo26",
+          "name": "Hero",
+          "width": "fill_container",
+          "fill": "#0A0A0A",
+          "layout": "vertical",
+          "gap": 32,
+          "padding": [
+            80,
+            120
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "wq6XL",
+              "name": "badge",
+              "padding": [
+                6,
+                14
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "1qZ4Y",
+                  "name": "badgeText",
+                  "fill": "#F59E0B",
+                  "content": "[open source]",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "x14en",
+              "name": "heroHeadline",
+              "fill": "#FAFAFA",
+              "content": "> feature_flags\nthat live in your repo",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 56,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "RNHLK",
+              "name": "heroAccent",
+              "fill": "#10B981",
+              "content": "++ zero vendor lock-in  ++ in version control  ++ fully testable",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 13,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "DOGW0",
+              "name": "heroSub",
+              "fill": "#6B7280",
+              "content": "// a powerful dsl for defining, testing, and evaluating flags\nin version control — not in a saas dashboard",
+              "fontFamily": "IBM Plex Mono",
+              "fontSize": 18,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "92XAC",
+              "name": "heroCtas",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "n4o6h",
+                  "name": "heroCta1",
+                  "fill": "#10B981",
+                  "padding": [
+                    14,
+                    28
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "jZFFx",
+                      "name": "heroCta1Text",
+                      "fill": "#0A0A0A",
+                      "content": "$ npm install flagfile",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Oy5gM",
+                  "name": "heroCta2",
+                  "padding": [
+                    14,
+                    28
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "xN3AM",
+                      "name": "heroCta2Text",
+                      "fill": "#FAFAFA",
+                      "content": "view_examples >>",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "MNd9V",
+              "name": "CodeBlock",
+              "width": "fill_container",
+              "height": 360,
+              "fill": "#0F0F0F",
+              "layout": "vertical",
+              "gap": 4,
+              "padding": 32,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "yRDFP",
+                  "name": "codeBar",
+                  "width": "fill_container",
+                  "height": 24,
+                  "gap": 8,
+                  "children": [
+                    {
+                      "type": "ellipse",
+                      "id": "I8ZWW",
+                      "name": "codeDot1",
+                      "fill": "#2a2a2a",
+                      "width": 10,
+                      "height": 10
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "Q19nP",
+                      "name": "codeDot2",
+                      "fill": "#2a2a2a",
+                      "width": 10,
+                      "height": 10
+                    },
+                    {
+                      "type": "ellipse",
+                      "id": "CPrRh",
+                      "name": "codeDot3",
+                      "fill": "#2a2a2a",
+                      "width": 10,
+                      "height": 10
+                    },
+                    {
+                      "type": "text",
+                      "id": "0Kivw",
+                      "name": "codeTitle",
+                      "fill": "#6B7280",
+                      "content": "Flagfile",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 11,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "text",
+                  "id": "WN05L",
+                  "name": "codeLine1",
+                  "fill": "#6B7280",
+                  "content": "segment beta_users = email ~ /@beta\\.example\\.com$/",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "TtaLI",
+                  "name": "codeLine2",
+                  "fill": "#FAFAFA",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "xdJ6O",
+                  "name": "codeLine3",
+                  "fill": "#FAFAFA",
+                  "content": "FF-new-dashboard {",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "1PuId",
+                  "name": "codeLine4",
+                  "fill": "#6B7280",
+                  "content": "  @owner \"platform-team\"  @expires 2025-06-01",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "szHjp",
+                  "name": "codeLine5",
+                  "fill": "#10B981",
+                  "content": "  segment(beta_users) -> true",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "FvTPN",
+                  "name": "codeLine6",
+                  "fill": "#FAFAFA",
+                  "content": "  @env prod {",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "bu9SY",
+                  "name": "codeLine7",
+                  "fill": "#10B981",
+                  "content": "    percentage() <= 25 and NOW() > \"2024-02-01\" -> true",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "1mtoh",
+                  "name": "codeLine8",
+                  "fill": "#10B981",
+                  "content": "    percentage() <= 75 and NOW() > \"2024-03-01\" -> true",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "qYCNz",
+                  "name": "codeLine9",
+                  "fill": "#FAFAFA",
+                  "content": "  }",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "eTlY5",
+                  "name": "codeLine10",
+                  "fill": "#6B7280",
+                  "content": "  false",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "NnU0C",
+                  "name": "codeLine11",
+                  "fill": "#F59E0B",
+                  "content": "  @test { email: \"a@beta.example.com\" } -> true",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "u1UCX",
+                  "name": "codeLine12",
+                  "fill": "#FAFAFA",
+                  "content": "}",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "9x6u0",
+          "name": "Problem",
+          "width": "fill_container",
+          "fill": "#0F0F0F",
+          "layout": "vertical",
+          "gap": 48,
+          "padding": [
+            80,
+            120
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "jGPgr",
+              "name": "probLabel",
+              "fill": "#6B7280",
+              "content": "// the_problem",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "0T4nh",
+              "name": "probHeadline",
+              "fill": "#FAFAFA",
+              "content": "flags shouldn't outlive\nyour sprints",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 40,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "TICzA",
+              "name": "probCards",
+              "width": "fill_container",
+              "gap": 24,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "wr5mk",
+                  "name": "probCard1",
+                  "width": "fill_container",
+                  "fill": "#0A0A0A",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 28,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "hLzXj",
+                      "name": "prob1Icon",
+                      "fill": "#F59E0B",
+                      "content": "[x]",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 18,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "PU65Z",
+                      "name": "prob1Title",
+                      "fill": "#FAFAFA",
+                      "content": "no_tests",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "aC6wR",
+                      "name": "prob1Desc",
+                      "fill": "#6B7280",
+                      "content": "flags ship without any test coverage. you find out they're broken in production.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "nCEdr",
+                  "name": "probCard2",
+                  "width": "fill_container",
+                  "fill": "#0A0A0A",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 28,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "25Ic5",
+                      "name": "prob2Icon",
+                      "fill": "#F59E0B",
+                      "content": "[x]",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 18,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "AmpOF",
+                      "name": "prob2Title",
+                      "fill": "#FAFAFA",
+                      "content": "vendor_lock-in",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "dCI56",
+                      "name": "prob2Desc",
+                      "fill": "#6B7280",
+                      "content": "your flags live in a saas dashboard. change plans and lose your entire config history.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "hCaCD",
+                  "name": "probCard3",
+                  "width": "fill_container",
+                  "fill": "#0A0A0A",
+                  "layout": "vertical",
+                  "gap": 12,
+                  "padding": 28,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "nikSK",
+                      "name": "prob3Icon",
+                      "fill": "#F59E0B",
+                      "content": "[x]",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 18,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "9D93M",
+                      "name": "prob3Title",
+                      "fill": "#FAFAFA",
+                      "content": "stale_flags",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "r37eQ",
+                      "name": "prob3Desc",
+                      "fill": "#6B7280",
+                      "content": "flags pile up. nobody knows which are safe to delete. the codebase rots.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "1dThe",
+          "name": "HowItWorks",
+          "width": "fill_container",
+          "fill": "#0A0A0A",
+          "layout": "vertical",
+          "gap": 48,
+          "padding": [
+            80,
+            120
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "50NaD",
+              "name": "howLabel",
+              "fill": "#10B981",
+              "content": "// how_it_works",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "ujCa5",
+              "name": "howHeadline",
+              "fill": "#FAFAFA",
+              "content": "three commands. total control.",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 40,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "4yuol",
+              "name": "howSteps",
+              "width": "fill_container",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "PPoLO",
+                  "name": "step1",
+                  "width": "fill_container",
+                  "fill": "#0F0F0F",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "cWrKJ",
+                      "name": "step1Num",
+                      "fill": "#10B981",
+                      "content": "01.",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 28,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "3bWTl",
+                      "name": "step1Title",
+                      "fill": "#FAFAFA",
+                      "content": "write your flagfile",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "yB7Uk",
+                      "name": "step1Desc",
+                      "fill": "#6B7280",
+                      "content": "define flags using the clean dsl. segments, environments, return values — all in one file next to your code.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "tJ0SY",
+                  "name": "step2",
+                  "width": "fill_container",
+                  "fill": "#0F0F0F",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "YqDOS",
+                      "name": "step2Num",
+                      "fill": "#10B981",
+                      "content": "02.",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 28,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "JY493",
+                      "name": "step2Title",
+                      "fill": "#FAFAFA",
+                      "content": "$ ff check",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "HziG3",
+                      "name": "step2Desc",
+                      "fill": "#6B7280",
+                      "content": "validate syntax, run 22 lint rules, and execute inline @test annotations — all in one command.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "i4vZp",
+                  "name": "step3",
+                  "width": "fill_container",
+                  "fill": "#0F0F0F",
+                  "layout": "vertical",
+                  "gap": 16,
+                  "padding": 32,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "rryXB",
+                      "name": "step3Num",
+                      "fill": "#10B981",
+                      "content": "03.",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 28,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "66ze6",
+                      "name": "step3Title",
+                      "fill": "#FAFAFA",
+                      "content": "evaluate anywhere",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "rbXMS",
+                      "name": "step3Desc",
+                      "fill": "#6B7280",
+                      "content": "use the rust crate, typescript library, or http api. identical behavior across all runtimes.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "P3Wav",
+          "name": "CoreFeatures",
+          "width": "fill_container",
+          "fill": "#0F0F0F",
+          "layout": "vertical",
+          "padding": [
+            80,
+            120
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "K1RIX",
+              "name": "featLabel",
+              "fill": "#6B7280",
+              "content": "// core_features",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "Cmu7r",
+              "name": "featHeadline",
+              "fill": "#FAFAFA",
+              "content": "everything you need.\nnothing you don't.",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 40,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "D6CV4",
+              "name": "featSpacer",
+              "width": "fill_container",
+              "height": 60,
+              "fill": "#0F0F0F"
+            },
+            {
+              "type": "frame",
+              "id": "bH2LT",
+              "name": "feat1",
+              "width": "fill_container",
+              "gap": 80,
+              "padding": [
+                60,
+                0
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "VGhbK",
+                  "name": "feat1Left",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "Xdyah",
+                      "name": "feat1Num",
+                      "fill": "#10B981",
+                      "content": "01.",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "e2fXe",
+                      "name": "feat1Title",
+                      "fill": "#FAFAFA",
+                      "content": "expressive dsl",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 28,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "2dtBW",
+                      "name": "feat1Desc",
+                      "fill": "#6B7280",
+                      "content": "comparisons, regex, semver, date/time, and built-in functions. write flag rules that match exactly how your system thinks — not how your saas vendor thinks.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "dskI8",
+                      "name": "feat1Tags",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "7U6tR",
+                          "name": "feat1T1",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "Ek8Zc",
+                              "name": "feat1T1Text",
+                              "fill": "#6B7280",
+                              "content": "semver",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "1u3Wk",
+                          "name": "feat1T2",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "5NiOd",
+                              "name": "feat1T2Text",
+                              "fill": "#6B7280",
+                              "content": "regex",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "X3cIV",
+                          "name": "feat1T3",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "fHrZi",
+                              "name": "feat1T3Text",
+                              "fill": "#6B7280",
+                              "content": "date/time",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "u5pcX",
+                  "name": "feat1Screenshot",
+                  "width": 560,
+                  "height": 320,
+                  "fill": "#0A0A0A",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "f9cOV",
+                      "name": "feat1ScreenshotLabel",
+                      "fill": "#4B5563",
+                      "content": "screenshot placeholder",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "u4Rm1",
+              "name": "feat2",
+              "width": "fill_container",
+              "gap": 80,
+              "padding": [
+                60,
+                0
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "3QO9E",
+                  "name": "feat2Screenshot",
+                  "width": 560,
+                  "height": 320,
+                  "fill": "#0A0A0A",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "pN5Rn",
+                      "name": "feat2ScreenshotLabel",
+                      "fill": "#4B5563",
+                      "content": "screenshot placeholder",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "yw8lJ",
+                  "name": "feat2Right",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "eugpz",
+                      "name": "feat2Num",
+                      "fill": "#10B981",
+                      "content": "02.",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Tv1AY",
+                      "name": "feat2Title",
+                      "fill": "#FAFAFA",
+                      "content": "inline tests +\n22 lint rules",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 28,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "X5p9m",
+                      "name": "feat2Desc",
+                      "fill": "#6B7280",
+                      "content": "write @test annotations right next to your flags. catch circular dependencies, tautologies, unreachable rules, and stale flags before they ever hit production.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "NqpfN",
+                      "name": "feat2Tags",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "Xg7D4",
+                          "name": "feat2T1",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "jy2Au",
+                              "name": "feat2T1Text",
+                              "fill": "#10B981",
+                              "content": "@test",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "r3cN4",
+                          "name": "feat2T2",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "1UhvQ",
+                              "name": "feat2T2Text",
+                              "fill": "#6B7280",
+                              "content": "ff lint",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "Fflkf",
+                          "name": "feat2T3",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "FOTJU",
+                              "name": "feat2T3Text",
+                              "fill": "#6B7280",
+                              "content": "ff check",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "rEzyx",
+              "name": "feat3",
+              "width": "fill_container",
+              "gap": 80,
+              "padding": [
+                60,
+                0
+              ],
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "5Yg7I",
+                  "name": "feat3Left",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 20,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "b7D48",
+                      "name": "feat3Num",
+                      "fill": "#10B981",
+                      "content": "03.",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 13,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "uxO93",
+                      "name": "feat3Title",
+                      "fill": "#FAFAFA",
+                      "content": "environments\n+ segments",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 28,
+                      "fontWeight": "bold"
+                    },
+                    {
+                      "type": "text",
+                      "id": "Cy4aL",
+                      "name": "feat3Desc",
+                      "fill": "#6B7280",
+                      "content": "define @env prod {} blocks for per-environment rules. create reusable segments to target your audiences precisely. use @requires to enforce flag dependencies.",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 15,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "frame",
+                      "id": "SPr8a",
+                      "name": "feat3Tags",
+                      "gap": 8,
+                      "alignItems": "center",
+                      "children": [
+                        {
+                          "type": "frame",
+                          "id": "meNYe",
+                          "name": "feat3T1",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "RCkW5",
+                              "name": "feat3T1Text",
+                              "fill": "#6B7280",
+                              "content": "@env",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "L7I2k",
+                          "name": "feat3T2",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "T47Hn",
+                              "name": "feat3T2Text",
+                              "fill": "#6B7280",
+                              "content": "segment()",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        },
+                        {
+                          "type": "frame",
+                          "id": "OyNjR",
+                          "name": "feat3T3",
+                          "padding": [
+                            4,
+                            10
+                          ],
+                          "children": [
+                            {
+                              "type": "text",
+                              "id": "XQck0",
+                              "name": "feat3T3Text",
+                              "fill": "#6B7280",
+                              "content": "@requires",
+                              "fontFamily": "JetBrains Mono",
+                              "fontSize": 11,
+                              "fontWeight": "normal"
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "64Cp7",
+                  "name": "feat3Screenshot",
+                  "width": 560,
+                  "height": 320,
+                  "fill": "#0A0A0A",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "PEjhj",
+                      "name": "feat3ScreenshotLabel",
+                      "fill": "#4B5563",
+                      "content": "screenshot placeholder",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "2V4rr",
+          "name": "SecondaryFeatures",
+          "width": "fill_container",
+          "fill": "#0A0A0A",
+          "layout": "vertical",
+          "gap": 48,
+          "padding": [
+            80,
+            120
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "zDaLO",
+              "name": "secFeatLabel",
+              "fill": "#6B7280",
+              "content": "// more_capabilities",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "sOQaF",
+              "name": "secFeatHeadline",
+              "fill": "#FAFAFA",
+              "content": "built for the full lifecycle",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 32,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "frame",
+              "id": "eJELM",
+              "name": "secFeatGrid",
+              "width": "fill_container",
+              "gap": 2,
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "QPRrU",
+                  "name": "sgCol1",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "6auja",
+                      "name": "sgCard1",
+                      "width": "fill_container",
+                      "fill": "#0F0F0F",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "1tO22",
+                          "name": "sg1Icon",
+                          "fill": "#10B981",
+                          "content": "> percentage()",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "kKMLs",
+                          "name": "sg1Title",
+                          "fill": "#FAFAFA",
+                          "content": "gradual rollouts",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "QZKmr",
+                          "name": "sg1Desc",
+                          "fill": "#6B7280",
+                          "content": "bucket users by stable hash. roll out to 10%, then 50%, then 100% — no code changes required.",
+                          "fontFamily": "IBM Plex Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "rb3l1",
+                      "name": "sgCard2",
+                      "width": "fill_container",
+                      "fill": "#0F0F0F",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "sqtMS",
+                          "name": "sg2Icon",
+                          "fill": "#10B981",
+                          "content": "> ff_serve",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "be0IG",
+                          "name": "sg2Title",
+                          "fill": "#FAFAFA",
+                          "content": "http api server",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "pSSKi",
+                          "name": "sg2Desc",
+                          "fill": "#6B7280",
+                          "content": "built-in http server with openfeature compatibility. evaluate flags from any language over the network.",
+                          "fontFamily": "IBM Plex Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "Vn1KB",
+                  "name": "sgCol2",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "qI6fY",
+                      "name": "sgCard3",
+                      "width": "fill_container",
+                      "fill": "#0F0F0F",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "D2usE",
+                          "name": "sg3Icon",
+                          "fill": "#10B981",
+                          "content": "> json_returns",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "GHiTe",
+                          "name": "sg3Title",
+                          "fill": "#FAFAFA",
+                          "content": "rich return values",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "LEtCo",
+                          "name": "sg3Desc",
+                          "fill": "#6B7280",
+                          "content": "flags don't have to return booleans. return json configs, strings, or numbers to drive full feature configurations.",
+                          "fontFamily": "IBM Plex Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "efDap",
+                      "name": "sgCard4",
+                      "width": "fill_container",
+                      "fill": "#0F0F0F",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "G3q00",
+                          "name": "sg4Icon",
+                          "fill": "#10B981",
+                          "content": "> ff_find",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "nvcmp",
+                          "name": "sg4Title",
+                          "fill": "#FAFAFA",
+                          "content": "codebase search",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Q6xRn",
+                          "name": "sg4Desc",
+                          "fill": "#6B7280",
+                          "content": "find every usage of a flag across your codebase. detect unused flags before they become dead weight.",
+                          "fontFamily": "IBM Plex Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "OCfvB",
+                  "name": "sgCol3",
+                  "width": "fill_container",
+                  "layout": "vertical",
+                  "gap": 2,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "gN1fS",
+                      "name": "sgCard5",
+                      "width": "fill_container",
+                      "fill": "#0F0F0F",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xwiei",
+                          "name": "sg5Icon",
+                          "fill": "#10B981",
+                          "content": "> push / pull",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "KvCi0",
+                          "name": "sg5Title",
+                          "fill": "#FAFAFA",
+                          "content": "distributed sync",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "POsky",
+                          "name": "sg5Desc",
+                          "fill": "#6B7280",
+                          "content": "sync flagfiles across services and environments. push updates centrally, pull remotely. offline-capable.",
+                          "fontFamily": "IBM Plex Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "zSy6S",
+                      "name": "sgCard6",
+                      "width": "fill_container",
+                      "fill": "#0F0F0F",
+                      "layout": "vertical",
+                      "gap": 12,
+                      "padding": 28,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "YmX6I",
+                          "name": "sg6Icon",
+                          "fill": "#10B981",
+                          "content": "> wasm",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 13,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "rrPoP",
+                          "name": "sg6Title",
+                          "fill": "#FAFAFA",
+                          "content": "browser + edge",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 14,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "S84tw",
+                          "name": "sg6Desc",
+                          "fill": "#6B7280",
+                          "content": "compiled to wasm. evaluate flags at the edge, in the browser, or in any wasm runtime — with identical semantics.",
+                          "fontFamily": "IBM Plex Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "WGky0",
+          "name": "Stats",
+          "width": "fill_container",
+          "height": 200,
+          "fill": "#10B981",
+          "padding": [
+            0,
+            120
+          ],
+          "justifyContent": "space_between",
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "frame",
+              "id": "fdaQm",
+              "name": "stat1",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "lG1rf",
+                  "name": "stat1Val",
+                  "fill": "#0A0A0A",
+                  "content": "++ 22",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 40,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "Vu2QY",
+                  "name": "stat1Label",
+                  "fill": "#0A0A0A",
+                  "content": "lint_rules",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "QX2MZ",
+              "name": "stat2",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "7wonr",
+                  "name": "stat2Val",
+                  "fill": "#0A0A0A",
+                  "content": "++ 11",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 40,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "FVukJ",
+                  "name": "stat2Label",
+                  "fill": "#0A0A0A",
+                  "content": "operators",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "aU7ll",
+              "name": "stat3",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "URKXm",
+                  "name": "stat3Val",
+                  "fill": "#0A0A0A",
+                  "content": "++ 10",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 40,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "ObEcl",
+                  "name": "stat3Label",
+                  "fill": "#0A0A0A",
+                  "content": "cli_commands",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "fE6yG",
+              "name": "stat4",
+              "layout": "vertical",
+              "gap": 4,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "6p6Xe",
+                  "name": "stat4Val",
+                  "fill": "#0A0A0A",
+                  "content": "++ 2",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 40,
+                  "fontWeight": "bold"
+                },
+                {
+                  "type": "text",
+                  "id": "TfPzV",
+                  "name": "stat4Label",
+                  "fill": "#0A0A0A",
+                  "content": "languages",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "rzNL0",
+          "name": "CodeShowcase",
+          "width": "fill_container",
+          "fill": "#0F0F0F",
+          "layout": "vertical",
+          "gap": 40,
+          "padding": [
+            80,
+            120
+          ],
+          "children": [
+            {
+              "type": "text",
+              "id": "pI4F3",
+              "name": "showLabel",
+              "fill": "#6B7280",
+              "content": "// real_world_example",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "cKWIa",
+              "name": "showHeadline",
+              "fill": "#FAFAFA",
+              "content": "flags that read\nlike your domain",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 40,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "Rsd0Z",
+              "name": "showSub",
+              "fill": "#6B7280",
+              "content": "geo-aware feature configuration with a/b testing, environments, and inline tests — all in one place.",
+              "fontFamily": "IBM Plex Mono",
+              "fontSize": 15,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "jSetl",
+              "name": "ShowcaseCode",
+              "width": "fill_container",
+              "fill": "#0A0A0A",
+              "layout": "vertical",
+              "gap": 4,
+              "padding": 40,
+              "children": [
+                {
+                  "type": "text",
+                  "id": "TgeMr",
+                  "name": "sc0",
+                  "fill": "#6B7280",
+                  "content": "segment power_users = tier == \"enterprise\" and seats >= 50",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "0dBxc",
+                  "name": "sc1",
+                  "fill": "#FAFAFA",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "SRJyz",
+                  "name": "sc2",
+                  "fill": "#FAFAFA",
+                  "content": "FF-premium-checkout {",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "F5Shl",
+                  "name": "sc3",
+                  "fill": "#6B7280",
+                  "content": "  @owner \"payments-team\"  @ticket JIRA-4821  @expires 2025-09-01",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "ExEaU",
+                  "name": "sc4",
+                  "fill": "#6B7280",
+                  "content": "  @requires FF-new-checkout-enabled",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "zsKH7",
+                  "name": "sc5",
+                  "fill": "#FAFAFA",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "7vWEC",
+                  "name": "sc6",
+                  "fill": "#10B981",
+                  "content": "  segment(power_users) -> json({ \"flow\": \"express\", \"skipReview\": true })",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "jPYTe",
+                  "name": "sc7",
+                  "fill": "#10B981",
+                  "content": "  countryCode in (\"US\", \"CA\") and appVersion >= \"3.2.0\" -> json({ \"flow\": \"standard\", \"taxCalc\": \"realtime\" })",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "54MEU",
+                  "name": "sc8",
+                  "fill": "#FAFAFA",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "Ktya7",
+                  "name": "sc9",
+                  "fill": "#FAFAFA",
+                  "content": "  @env prod {",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "ePGuc",
+                  "name": "sc10",
+                  "fill": "#10B981",
+                  "content": "    percentage() <= 10 -> json({ \"flow\": \"beta\" })",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "F1fiW",
+                  "name": "sc11",
+                  "fill": "#FAFAFA",
+                  "content": "  }",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "yvY8J",
+                  "name": "sc12",
+                  "fill": "#FAFAFA",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "qAcIW",
+                  "name": "sc13",
+                  "fill": "#6B7280",
+                  "content": "  json({ \"flow\": \"legacy\" })   // default",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "xEFhX",
+                  "name": "sc14",
+                  "fill": "#F59E0B",
+                  "content": "  @test { tier: \"enterprise\", seats: 100 } -> { \"flow\": \"express\" }",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "text",
+                  "id": "jonjZ",
+                  "name": "sc15",
+                  "fill": "#FAFAFA",
+                  "content": "}",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 13,
+                  "fontWeight": "normal"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "2xX6r",
+          "name": "FinalCTA",
+          "width": "fill_container",
+          "fill": "#0A0A0A",
+          "layout": "vertical",
+          "gap": 32,
+          "padding": [
+            100,
+            120
+          ],
+          "alignItems": "center",
+          "children": [
+            {
+              "type": "text",
+              "id": "J7Csi",
+              "name": "ctaLabel",
+              "fill": "#10B981",
+              "content": "// ready_to_ship?",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "text",
+              "id": "MEvNs",
+              "name": "ctaHeadline",
+              "fill": "#FAFAFA",
+              "content": "> take_control\nof your flags",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 48,
+              "fontWeight": "bold"
+            },
+            {
+              "type": "text",
+              "id": "HWsnI",
+              "name": "ctaSub",
+              "fill": "#6B7280",
+              "content": "// ship with confidence — flags in git, not in the cloud",
+              "fontFamily": "IBM Plex Mono",
+              "fontSize": 16,
+              "fontWeight": "normal"
+            },
+            {
+              "type": "frame",
+              "id": "SL9Rd",
+              "name": "ctaButtons",
+              "gap": 16,
+              "alignItems": "center",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "OCn1V",
+                  "name": "ctaBtn1",
+                  "fill": "#10B981",
+                  "padding": [
+                    16,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "DrML8",
+                      "name": "ctaBtn1Text",
+                      "fill": "#0A0A0A",
+                      "content": "$ npm install flagfile",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "500"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "wm3H1",
+                  "name": "ctaBtn2",
+                  "padding": [
+                    16,
+                    32
+                  ],
+                  "alignItems": "center",
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "z66zE",
+                      "name": "ctaBtn2Text",
+                      "fill": "#FAFAFA",
+                      "content": "view_on_github >>",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 14,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "text",
+              "id": "vqcoy",
+              "name": "ctaTrust",
+              "fill": "#4B5563",
+              "content": "[mit license]  //  open source forever  //  no vendor lock-in",
+              "fontFamily": "JetBrains Mono",
+              "fontSize": 12,
+              "fontWeight": "normal"
+            }
+          ]
+        },
+        {
+          "type": "frame",
+          "id": "ypezS",
+          "name": "Footer",
+          "width": "fill_container",
+          "fill": "#0A0A0A",
+          "layout": "vertical",
+          "gap": 48,
+          "padding": [
+            60,
+            120
+          ],
+          "children": [
+            {
+              "type": "frame",
+              "id": "Uu6hi",
+              "name": "footerMain",
+              "width": "fill_container",
+              "gap": 80,
+              "justifyContent": "space_between",
+              "children": [
+                {
+                  "type": "frame",
+                  "id": "agf8k",
+                  "name": "footerBrand",
+                  "width": 280,
+                  "layout": "vertical",
+                  "gap": 16,
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "ju51i",
+                      "name": "footerLogoRow",
+                      "gap": 8,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "xGUVs",
+                          "name": "footerLogoPrompt",
+                          "fill": "#10B981",
+                          "content": ">",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 20,
+                          "fontWeight": "bold"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ZiEIh",
+                          "name": "footerLogoText",
+                          "fill": "#FAFAFA",
+                          "content": "flagfile",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 18,
+                          "fontWeight": "500"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "text",
+                      "id": "7Jg4T",
+                      "name": "footerTagline",
+                      "fill": "#6B7280",
+                      "content": "// feature_flags_for_developers\nopen source · mit license",
+                      "fontFamily": "IBM Plex Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                },
+                {
+                  "type": "frame",
+                  "id": "A86tn",
+                  "name": "footerLinks",
+                  "width": "fill_container",
+                  "gap": 80,
+                  "justifyContent": "end",
+                  "children": [
+                    {
+                      "type": "frame",
+                      "id": "p1EOx",
+                      "name": "footerCol1",
+                      "layout": "vertical",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "FeRWW",
+                          "name": "footerCol1Title",
+                          "fill": "#FAFAFA",
+                          "content": "product",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "Sw9LT",
+                          "name": "footerCol1L1",
+                          "fill": "#6B7280",
+                          "content": "docs",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "ukMpb",
+                          "name": "footerCol1L2",
+                          "fill": "#6B7280",
+                          "content": "cli reference",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "DLs2H",
+                          "name": "footerCol1L3",
+                          "fill": "#6B7280",
+                          "content": "examples",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "fJjo8",
+                      "name": "footerCol2",
+                      "layout": "vertical",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "0FrDO",
+                          "name": "footerCol2Title",
+                          "fill": "#FAFAFA",
+                          "content": "resources",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "NGRYm",
+                          "name": "footerCol2L1",
+                          "fill": "#6B7280",
+                          "content": "github",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "zVSHk",
+                          "name": "footerCol2L2",
+                          "fill": "#6B7280",
+                          "content": "changelog",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "mQ5sh",
+                          "name": "footerCol2L3",
+                          "fill": "#6B7280",
+                          "content": "crates.io",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    },
+                    {
+                      "type": "frame",
+                      "id": "w3i3g",
+                      "name": "footerCol3",
+                      "layout": "vertical",
+                      "gap": 16,
+                      "children": [
+                        {
+                          "type": "text",
+                          "id": "nTSDZ",
+                          "name": "footerCol3Title",
+                          "fill": "#FAFAFA",
+                          "content": "legal",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 11,
+                          "fontWeight": "normal"
+                        },
+                        {
+                          "type": "text",
+                          "id": "2ocKW",
+                          "name": "footerCol3L1",
+                          "fill": "#6B7280",
+                          "content": "mit license",
+                          "fontFamily": "JetBrains Mono",
+                          "fontSize": 12,
+                          "fontWeight": "normal"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "frame",
+              "id": "oRpYa",
+              "name": "footerBottom",
+              "width": "fill_container",
+              "padding": [
+                20,
+                0
+              ],
+              "children": [
+                {
+                  "type": "text",
+                  "id": "dR9KB",
+                  "name": "footerCopy",
+                  "fill": "#4B5563",
+                  "content": "© 2025 flagfile",
+                  "fontFamily": "JetBrains Mono",
+                  "fontSize": 12,
+                  "fontWeight": "normal"
+                },
+                {
+                  "type": "frame",
+                  "id": "IWanf",
+                  "name": "footerBottomLinks",
+                  "gap": 24,
+                  "children": [
+                    {
+                      "type": "text",
+                      "id": "MfObs",
+                      "name": "footerBL1",
+                      "fill": "#4B5563",
+                      "content": "github",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "TiWtv",
+                      "name": "footerBL2",
+                      "fill": "#4B5563",
+                      "content": "crates.io",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    },
+                    {
+                      "type": "text",
+                      "id": "X87AE",
+                      "name": "footerBL3",
+                      "fill": "#4B5563",
+                      "content": "npm",
+                      "fontFamily": "JetBrains Mono",
+                      "fontSize": 12,
+                      "fontWeight": "normal"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
