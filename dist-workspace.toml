@@ -21,6 +21,3 @@ publish-jobs = ["homebrew"]
 # protoc is installed via a custom workflow step instead.
 [dist.dependencies.apt]
 protobuf-compiler = { version = "*" }
-
-[dist.dependencies.homebrew]
-protobuf = { version = "29" }

@@ -139,6 +139,22 @@ jobs:
       - name: Install dependencies
         run: |
           ${{ matrix.packages_install }}
+      - name: Install protoc (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          # Homebrew's protobuf v33+ breaks raft-proto's protobuf-build version check.
+          # Install protoc 3.20.2 which reports a compatible version string.
+          PROTOC_VERSION=3.20.2
+          ARCH=$(uname -m)
+          if [ "$ARCH" = "arm64" ]; then
+            PROTOC_ARCH="osx-aarch_64"
+          else
+            PROTOC_ARCH="osx-x86_64"
+          fi
+          curl -LO "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-${PROTOC_ARCH}.zip"
+          unzip -o "protoc-${PROTOC_VERSION}-${PROTOC_ARCH}.zip" -d "$HOME/protoc"
+          echo "$HOME/protoc/bin" >> "$GITHUB_PATH"
       - name: Build artifacts
         run: |
           # Actually do builds and make zips and whatnot
