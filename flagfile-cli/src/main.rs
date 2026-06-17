@@ -2,6 +2,7 @@ mod formatter;
 mod lint;
 mod pull;
 mod push;
+mod push_launchdarkly;
 mod server;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
@@ -168,12 +169,27 @@ enum Command {
         /// Namespace on the remote server
         #[arg(short = 'n', long = "namespace")]
         namespace: Option<String>,
-        /// Write token for authentication
+        /// Write token for authentication (LaunchDarkly API token in --launchdarkly mode)
         #[arg(short = 's', long = "secret")]
         secret: Option<String>,
         /// Path to config file
         #[arg(short = 'c', long = "config", default_value = "ff.toml")]
         config: String,
+        /// Push to LaunchDarkly (create/update flags via the LD REST API)
+        #[arg(long = "launchdarkly")]
+        launchdarkly: bool,
+        /// LaunchDarkly project key (overrides ff.toml); --launchdarkly only
+        #[arg(long = "project")]
+        project: Option<String>,
+        /// Target only this environment (Flagfile @env name or LD env key); --launchdarkly only
+        #[arg(short = 'e', long = "env")]
+        env: Option<String>,
+        /// Push only these flags (comma-separated names); --launchdarkly only
+        #[arg(long = "flags", value_delimiter = ',')]
+        flags: Vec<String>,
+        /// Log every LaunchDarkly API call and payload; --launchdarkly only
+        #[arg(long = "debug")]
+        debug: bool,
     },
     /// Pull Flagfile from a remote server
     Pull {
@@ -1378,15 +1394,33 @@ async fn main() {
             namespace,
             secret,
             config,
+            launchdarkly,
+            project,
+            env,
+            flags,
+            debug,
         } => {
-            push::run_push(
-                &flagfile,
-                remote.as_deref(),
-                namespace.as_deref(),
-                secret.as_deref(),
-                &config,
-            )
-            .await
+            if launchdarkly {
+                push_launchdarkly::run_push(
+                    &flagfile,
+                    project.as_deref(),
+                    env.as_deref(),
+                    secret.as_deref(),
+                    &config,
+                    &flags,
+                    debug,
+                )
+                .await
+            } else {
+                push::run_push(
+                    &flagfile,
+                    remote.as_deref(),
+                    namespace.as_deref(),
+                    secret.as_deref(),
+                    &config,
+                )
+                .await
+            }
         }
         Command::Pull {
             flagfile,

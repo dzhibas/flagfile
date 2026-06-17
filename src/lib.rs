@@ -6,6 +6,7 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub mod ast;
 pub mod builder;
 pub mod eval;
+pub mod transpile;
 pub mod parse;
 pub mod parse_flagfile;
 

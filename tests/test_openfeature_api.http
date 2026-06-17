@@ -6,12 +6,13 @@ Content-Type: application/json
 ###
 
 ### Testing ofrep
-POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-premium-feature
+POST http://0.0.0.0:8080/ofrep/v1/evaluate/flags/FF-new-checkout
 Content-Type: application/json
 
 {
     "context": {
-        "role": "developer"
+        "country": "GB",
+        "platform": "web"
     }
 }
 ###

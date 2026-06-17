@@ -1,0 +1,6 @@
+# Point protoc-using build scripts at a shim that reports a 3.x version to the
+# antiquated `protobuf-build` crate (pulled in by `raft-proto`), while real
+# compilation is done by whatever protoc (>= 3.21) is installed on PATH.
+# See scripts/protoc-shim.sh for the full rationale.
+[env]
+PROTOC = { value = "scripts/protoc-shim.sh", relative = true }
