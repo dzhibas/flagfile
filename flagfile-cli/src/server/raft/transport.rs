@@ -21,8 +21,8 @@ pub mod proto {
 use proto::raft_service_client::RaftServiceClient;
 use proto::raft_service_server::RaftService;
 use proto::{
-    RaftMessage, RaftResponse, SnapshotChunk, SnapshotRequest, SnapshotResponse,
-    StatusRequest, StatusResponse, WriteRequest, WriteResponse,
+    RaftMessage, RaftResponse, SnapshotChunk, SnapshotRequest, SnapshotResponse, StatusRequest,
+    StatusResponse, WriteRequest, WriteResponse,
 };
 
 // ── Client-side transport ────────────────────────────
@@ -37,8 +37,7 @@ impl RaftTransport {
     /// Create a new transport with the given peer addresses.
     /// Connections are established lazily on first use.
     pub fn new(peers: Vec<PeerConfig>) -> Self {
-        let peer_map: HashMap<u64, String> =
-            peers.into_iter().map(|p| (p.id, p.addr)).collect();
+        let peer_map: HashMap<u64, String> = peers.into_iter().map(|p| (p.id, p.addr)).collect();
         Self {
             peers: peer_map,
             clients: Mutex::new(HashMap::new()),
@@ -46,10 +45,7 @@ impl RaftTransport {
     }
 
     /// Get or create a gRPC client for the given peer.
-    async fn get_client(
-        &self,
-        target: u64,
-    ) -> Result<RaftServiceClient<Channel>, String> {
+    async fn get_client(&self, target: u64) -> Result<RaftServiceClient<Channel>, String> {
         let mut clients = self.clients.lock().await;
 
         if let Some(client) = clients.get(&target) {
@@ -71,11 +67,7 @@ impl RaftTransport {
     }
 
     /// Serialise and send a Raft message to the target peer via gRPC.
-    pub async fn send_raft_message(
-        &self,
-        target: u64,
-        msg: &Message,
-    ) -> Result<(), String> {
+    pub async fn send_raft_message(&self, target: u64, msg: &Message) -> Result<(), String> {
         let start = Instant::now();
         let peer = target.to_string();
         let data = msg.write_to_bytes().map_err(|e| format!("encode: {}", e))?;
@@ -88,8 +80,12 @@ impl RaftTransport {
             .map_err(|e| format!("send to {}: {}", target, e));
 
         let m = metrics();
-        m.grpc_requests.with_label_values(&[&peer, "send_message"]).inc();
-        m.grpc_latency.with_label_values(&[&peer]).observe(start.elapsed().as_secs_f64());
+        m.grpc_requests
+            .with_label_values(&[&peer, "send_message"])
+            .inc();
+        m.grpc_latency
+            .with_label_values(&[&peer])
+            .observe(start.elapsed().as_secs_f64());
         if result.is_err() {
             m.grpc_errors.with_label_values(&[&peer]).inc();
         }
@@ -122,8 +118,12 @@ impl RaftTransport {
             .map_err(|e| format!("forward write to leader {}: {}", leader_id, e));
 
         let m = metrics();
-        m.grpc_requests.with_label_values(&[&peer, "forward_write"]).inc();
-        m.grpc_latency.with_label_values(&[&peer]).observe(start.elapsed().as_secs_f64());
+        m.grpc_requests
+            .with_label_values(&[&peer, "forward_write"])
+            .inc();
+        m.grpc_latency
+            .with_label_values(&[&peer])
+            .observe(start.elapsed().as_secs_f64());
         if result.is_err() {
             m.grpc_errors.with_label_values(&[&peer]).inc();
         }
@@ -134,10 +134,7 @@ impl RaftTransport {
     /// Probe a peer for its current cluster status (leader ID, term, committed index).
     /// Returns `(leader_id, term, committed)` on success. A `leader_id` of 0 means the
     /// peer does not know who the leader is.
-    pub async fn probe_peer_status(
-        &self,
-        target: u64,
-    ) -> Result<(u64, u64, u64), String> {
+    pub async fn probe_peer_status(&self, target: u64) -> Result<(u64, u64, u64), String> {
         let mut client = self.get_client(target).await?;
         let response = client
             .get_status(Request::new(StatusRequest {}))
@@ -149,10 +146,7 @@ impl RaftTransport {
 
     /// Request a full application-level snapshot from a peer. Returns the
     /// serialised snapshot bytes (empty if the peer has no data).
-    pub async fn request_snapshot_from_peer(
-        &self,
-        target: u64,
-    ) -> Result<Vec<u8>, String> {
+    pub async fn request_snapshot_from_peer(&self, target: u64) -> Result<Vec<u8>, String> {
         let mut client = self.get_client(target).await?;
         let response = client
             .request_snapshot(Request::new(SnapshotRequest {}))
@@ -200,22 +194,21 @@ impl RaftService for RaftGrpcService {
         &self,
         request: Request<RaftMessage>,
     ) -> Result<Response<RaftResponse>, Status> {
-        metrics().grpc_requests.with_label_values(&["incoming", "send_message"]).inc();
+        metrics()
+            .grpc_requests
+            .with_label_values(&["incoming", "send_message"])
+            .inc();
 
         let data = request.into_inner().data;
-        let msg = Message::parse_from_bytes(&data)
-            .map_err(|e| {
-                metrics().grpc_errors.with_label_values(&["incoming"]).inc();
-                Status::invalid_argument(format!("decode raft message: {}", e))
-            })?;
+        let msg = Message::parse_from_bytes(&data).map_err(|e| {
+            metrics().grpc_errors.with_label_values(&["incoming"]).inc();
+            Status::invalid_argument(format!("decode raft message: {}", e))
+        })?;
 
-        self.raft_msg_tx
-            .send(msg)
-            .await
-            .map_err(|_| {
-                metrics().grpc_errors.with_label_values(&["incoming"]).inc();
-                Status::internal("raft node shut down")
-            })?;
+        self.raft_msg_tx.send(msg).await.map_err(|_| {
+            metrics().grpc_errors.with_label_values(&["incoming"]).inc();
+            Status::internal("raft node shut down")
+        })?;
 
         Ok(Response::new(RaftResponse { success: true }))
     }
@@ -248,7 +241,11 @@ impl RaftService for RaftGrpcService {
         let leader_id = self.raft_handle.leader_id();
         let term = self.raft_handle.term();
         let committed = self.raft_handle.committed();
-        Ok(Response::new(StatusResponse { leader_id, term, committed }))
+        Ok(Response::new(StatusResponse {
+            leader_id,
+            term,
+            committed,
+        }))
     }
 
     /// Create and return a full application-level snapshot of the flag store.
@@ -270,7 +267,10 @@ impl RaftService for RaftGrpcService {
         &self,
         request: Request<WriteRequest>,
     ) -> Result<Response<WriteResponse>, Status> {
-        metrics().grpc_requests.with_label_values(&["incoming", "forward_write"]).inc();
+        metrics()
+            .grpc_requests
+            .with_label_values(&["incoming", "forward_write"])
+            .inc();
         let req = request.into_inner();
 
         if !self.raft_handle.is_leader() {

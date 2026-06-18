@@ -102,9 +102,13 @@ pub async fn handle_ofrep_single(
         Some(ns) => ns,
         None => {
             let m = metrics();
-            m.eval_total.with_label_values(&[ROOT_NAMESPACE, &key]).inc();
+            m.eval_total
+                .with_label_values(&[ROOT_NAMESPACE, &key])
+                .inc();
             m.eval_errors.with_label_values(&[ROOT_NAMESPACE]).inc();
-            m.eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
+            m.eval_duration
+                .with_label_values(&[ROOT_NAMESPACE])
+                .observe(start.elapsed().as_secs_f64());
             return (
                 StatusCode::NOT_FOUND,
                 Json(OFREPEvalError {
@@ -119,9 +123,13 @@ pub async fn handle_ofrep_single(
 
     if !ns.flags.contains_key(&key) {
         let m = metrics();
-        m.eval_total.with_label_values(&[ROOT_NAMESPACE, &key]).inc();
+        m.eval_total
+            .with_label_values(&[ROOT_NAMESPACE, &key])
+            .inc();
         m.eval_errors.with_label_values(&[ROOT_NAMESPACE]).inc();
-        m.eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
+        m.eval_duration
+            .with_label_values(&[ROOT_NAMESPACE])
+            .observe(start.elapsed().as_secs_f64());
         return (
             StatusCode::NOT_FOUND,
             Json(OFREPEvalError {
@@ -154,8 +162,12 @@ pub async fn handle_ofrep_single(
     );
 
     let m = metrics();
-    m.eval_total.with_label_values(&[ROOT_NAMESPACE, &key]).inc();
-    m.eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
+    m.eval_total
+        .with_label_values(&[ROOT_NAMESPACE, &key])
+        .inc();
+    m.eval_duration
+        .with_label_values(&[ROOT_NAMESPACE])
+        .observe(start.elapsed().as_secs_f64());
 
     match result {
         Some((ret, reason)) => {
@@ -184,11 +196,7 @@ pub async fn handle_ofrep_bulk(
     let ns = match namespaces.get(ROOT_NAMESPACE) {
         Some(ns) => ns,
         None => {
-            return (
-                StatusCode::OK,
-                Json(OFREPBulkResponse { flags: vec![] }),
-            )
-                .into_response();
+            return (StatusCode::OK, Json(OFREPBulkResponse { flags: vec![] })).into_response();
         }
     };
 
@@ -222,11 +230,17 @@ pub async fn handle_ofrep_bulk(
                 metadata: serde_json::json!({}),
             },
         };
-        metrics().eval_total.with_label_values(&[ROOT_NAMESPACE, key]).inc();
+        metrics()
+            .eval_total
+            .with_label_values(&[ROOT_NAMESPACE, key])
+            .inc();
         flags.push(serde_json::to_value(result).unwrap());
     }
 
-    metrics().eval_duration.with_label_values(&[ROOT_NAMESPACE]).observe(start.elapsed().as_secs_f64());
+    metrics()
+        .eval_duration
+        .with_label_values(&[ROOT_NAMESPACE])
+        .observe(start.elapsed().as_secs_f64());
 
     (StatusCode::OK, Json(OFREPBulkResponse { flags })).into_response()
 }

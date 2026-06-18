@@ -30,10 +30,7 @@ impl RaftStateMachine {
                 let flags_count = meta.flags_count;
 
                 if let Err(e) = self.store.put_flagfile(&namespace, &content, &meta).await {
-                    eprintln!(
-                        "raft: failed to apply PutFlagfile for {}: {}",
-                        namespace, e
-                    );
+                    eprintln!("raft: failed to apply PutFlagfile for {}: {}", namespace, e);
                     return;
                 }
 

@@ -12,7 +12,7 @@ pub fn check(name: &str, def: &FlagDefinition) -> Vec<LintWarning> {
 fn check_rules(name: &str, rules: &[Rule], warnings: &mut Vec<LintWarning>) {
     for rule in rules {
         match rule {
-            Rule::BoolExpressionValue(expr, _) => check_node(name, expr, warnings),
+            Rule::BoolExpressionValue(expr, _, _) => check_node(name, expr, warnings),
             Rule::EnvRule { rules, .. } => check_rules(name, rules, warnings),
             Rule::Value(_) => {}
         }

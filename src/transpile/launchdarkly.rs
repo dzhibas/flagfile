@@ -21,11 +21,9 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use serde_json::Value;
 
-use crate::ast::{
-    Atom, ComparisonOp, FlagMetadata, FnCall, LogicOp, MatchOp, AstNode, ArrayOp,
-};
-use crate::parse_flagfile::{FlagDefinition, FlagReturn, ParsedFlagfile, Rule};
+use crate::ast::{ArrayOp, AstNode, Atom, ComparisonOp, FlagMetadata, FnCall, LogicOp, MatchOp};
 use crate::eval::Segments;
+use crate::parse_flagfile::{FlagDefinition, FlagReturn, ParsedFlagfile, Rule};
 
 // ──────────────────────────── configuration ────────────────────────────
 
@@ -74,6 +72,10 @@ pub struct LdEnvironment {
 
 #[derive(Debug, Serialize, PartialEq)]
 pub struct LdRule {
+    /// Human-readable rule label, from a Flagfile `@name` annotation. Maps to LD's
+    /// per-rule `description` field shown in the targeting UI.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
     pub clauses: Vec<LdClause>,
     #[serde(flatten)]
     pub target: RuleTarget,
@@ -155,7 +157,11 @@ pub fn transpile(
         }
     }
 
-    if errors.is_empty() { Ok(out) } else { Err(errors) }
+    if errors.is_empty() {
+        Ok(out)
+    } else {
+        Err(errors)
+    }
 }
 
 fn transpile_flag(
@@ -306,7 +312,7 @@ fn walk_returns(
     for r in rules {
         match r {
             Rule::Value(ret) => f(ret)?,
-            Rule::BoolExpressionValue(_, ret) => f(ret)?,
+            Rule::BoolExpressionValue(_, ret, _) => f(ret)?,
             Rule::EnvRule { rules, .. } => walk_returns(rules, f)?,
         }
     }
@@ -337,7 +343,12 @@ fn flag_return_to_value(ret: &FlagReturn) -> Value {
 }
 
 #[derive(Debug, PartialEq, Clone, Copy)]
-enum LdKind { Boolean, Number, String, Json }
+enum LdKind {
+    Boolean,
+    Number,
+    String,
+    Json,
+}
 impl LdKind {
     fn of(v: &Value) -> Self {
         match v {
@@ -385,10 +396,12 @@ fn lower_environment(
         match rule {
             // A bare value is the block default -> fallthrough.
             Rule::Value(ret) => {
-                fallthrough = Some(RuleTarget::Variation { variation: index_of.index_of(ret) });
+                fallthrough = Some(RuleTarget::Variation {
+                    variation: index_of.index_of(ret),
+                });
             }
-            Rule::BoolExpressionValue(cond, ret) => {
-                match lower_condition(flag, cond, ret, index_of, segments, cfg) {
+            Rule::BoolExpressionValue(cond, ret, name) => {
+                match lower_condition(flag, cond, ret, name.as_deref(), index_of, segments, cfg) {
                     Ok(mut produced) => ld_rules.append(&mut produced),
                     Err(mut e) => errors.append(&mut e),
                 }
@@ -408,7 +421,9 @@ fn lower_environment(
     Ok(LdEnvironment {
         rules: ld_rules,
         // No explicit default -> serve the off value.
-        fallthrough: fallthrough.unwrap_or(RuleTarget::Variation { variation: off_variation }),
+        fallthrough: fallthrough.unwrap_or(RuleTarget::Variation {
+            variation: off_variation,
+        }),
         off_variation,
         prerequisites: Vec::new(),
     })
@@ -419,12 +434,20 @@ fn lower_condition(
     flag: &str,
     cond: &AstNode,
     ret: &FlagReturn,
+    name: Option<&str>,
     index_of: &IndexMap,
     segments: &Segments,
     cfg: &TranspileConfig,
 ) -> Result<Vec<LdRule>, Vec<TranspileError>> {
     let mut errors = Vec::new();
-    let dnf = match to_dnf(flag, cond, false) {
+    // Resolve Flagfile `@segment` references to their defining expressions so the
+    // emitted clauses don't depend on a segment existing in LD. `inlined` must
+    // outlive `dnf`, which borrows from it.
+    let inlined = match inline_segments(flag, cond, segments, &mut Vec::new()) {
+        Ok(n) => n,
+        Err(e) => return Err(vec![e]),
+    };
+    let dnf = match to_dnf(flag, &inlined, false) {
         Ok(d) => d,
         Err(e) => return Err(vec![e]),
     };
@@ -452,14 +475,73 @@ fn lower_condition(
         }
 
         let target = match rollout_term {
-            None => RuleTarget::Variation { variation: index_of.index_of(ret) },
-            Some(p) => build_rollout(flag, p, ret, index_of)
-                .unwrap_or_else(|e| { errors.push(e); RuleTarget::Variation { variation: 0 } }),
+            None => RuleTarget::Variation {
+                variation: index_of.index_of(ret),
+            },
+            Some(p) => build_rollout(flag, p, ret, index_of).unwrap_or_else(|e| {
+                errors.push(e);
+                RuleTarget::Variation { variation: 0 }
+            }),
         };
-        out.push(LdRule { clauses, target });
+        out.push(LdRule {
+            description: name.map(|s| s.to_string()),
+            clauses,
+            target,
+        });
     }
 
-    if errors.is_empty() { Ok(out) } else { Err(errors) }
+    if errors.is_empty() {
+        Ok(out)
+    } else {
+        Err(errors)
+    }
+}
+
+// ──────────────────────────── segment inlining ──────────────────────────
+// LD only accepts `segmentMatch` against segments that already exist in the
+// project. A Flagfile `@segment` is just a named boolean expression, so we
+// substitute each `segment(name)` reference with its defining expression before
+// lowering. A `segment(...)` that isn't defined in the Flagfile is left intact
+// (assumed to be a natively-managed LD segment) and still lowers to a
+// `segmentMatch` clause. Substitution is recursive (segments may reference other
+// segments) with cycle detection.
+
+fn inline_segments(
+    flag: &str,
+    node: &AstNode,
+    segments: &Segments,
+    seen: &mut Vec<String>,
+) -> Result<AstNode, TranspileError> {
+    match node {
+        AstNode::Segment(name) => match segments.get(name) {
+            Some(expr) => {
+                if seen.iter().any(|n| n == name) {
+                    return Err(TranspileError::UnsupportedConstruct {
+                        flag: flag.into(),
+                        what: format!("recursive segment \"{name}\""),
+                    });
+                }
+                seen.push(name.clone());
+                let inlined = inline_segments(flag, expr, segments, seen)?;
+                seen.pop();
+                Ok(inlined)
+            }
+            // Not a Flagfile segment — keep it; lower_leaf emits a segmentMatch.
+            None => Ok(node.clone()),
+        },
+        AstNode::Logic(l, op, r) => Ok(AstNode::Logic(
+            Box::new(inline_segments(flag, l, segments, seen)?),
+            op.clone(),
+            Box::new(inline_segments(flag, r, segments, seen)?),
+        )),
+        AstNode::Scope { expr, negate } => Ok(AstNode::Scope {
+            expr: Box::new(inline_segments(flag, expr, segments, seen)?),
+            negate: *negate,
+        }),
+        // Segment references only occur at boolean positions, so leaf predicates
+        // and other constructs are returned unchanged.
+        other => Ok(other.clone()),
+    }
 }
 
 // ──────────────────────────── DNF / NNF ──────────────────────────────────
@@ -534,23 +616,34 @@ fn to_dnf<'a>(
         AstNode::Percentage { rate, field, .. } => {
             // salt is dropped: LD owns the bucketing seed.
             let field = field.as_str().unwrap_or("key").to_string();
-            Ok(vec![vec![Literal::Pct(PercentageLit { rate: *rate, field })]])
+            Ok(vec![vec![Literal::Pct(PercentageLit {
+                rate: *rate,
+                field,
+            })]])
         }
 
         // Constructs that have no clause form at all.
         AstNode::Coalesce(_) => Err(TranspileError::UnsupportedConstruct {
-            flag: flag.into(), what: "coalesce()".into(),
+            flag: flag.into(),
+            what: "coalesce()".into(),
         }),
         AstNode::NullCheck { .. } => Err(TranspileError::UnsupportedConstruct {
-            flag: flag.into(), what: "null check".into(),
+            flag: flag.into(),
+            what: "null check".into(),
         }),
-        AstNode::Function(FnCall::Now, _) => Err(TranspileError::TimeRelative { flag: flag.into() }),
+        AstNode::Function(FnCall::Now, _) => {
+            Err(TranspileError::TimeRelative { flag: flag.into() })
+        }
         AstNode::Function(_, _) => Err(TranspileError::UnsupportedConstruct {
-            flag: flag.into(), what: "attribute function (upper/lower)".into(),
+            flag: flag.into(),
+            what: "attribute function (upper/lower)".into(),
         }),
 
         // Anything else is a leaf predicate (Compare / Match / Array / Segment).
-        leaf => Ok(vec![vec![Literal::Pred { node: leaf, negate: negated }]]),
+        leaf => Ok(vec![vec![Literal::Pred {
+            node: leaf,
+            negate: negated,
+        }]]),
     }
 }
 
@@ -573,7 +666,8 @@ fn lower_leaf(
         }),
 
         AstNode::Compare(lhs, op, rhs) => {
-            let attribute = lhs.as_str()
+            let attribute = lhs
+                .as_str()
                 .ok_or(TranspileError::UnsupportedClauseShape { flag: flag.into() })?
                 .to_string();
             // NOW() / function on either side -> not representable.
@@ -592,7 +686,8 @@ fn lower_leaf(
         }
 
         AstNode::Match(lhs, op, rhs) => {
-            let attribute = lhs.as_str()
+            let attribute = lhs
+                .as_str()
                 .ok_or(TranspileError::UnsupportedClauseShape { flag: flag.into() })?
                 .to_string();
             let value = constant_value(flag, rhs)?;
@@ -607,7 +702,8 @@ fn lower_leaf(
         }
 
         AstNode::Array(lhs, op, rhs) => {
-            let attribute = lhs.as_str()
+            let attribute = lhs
+                .as_str()
                 .ok_or(TranspileError::UnsupportedClauseShape { flag: flag.into() })?
                 .to_string();
             let values = list_values(flag, rhs)?;
@@ -675,8 +771,14 @@ fn build_rollout(
     Ok(RuleTarget::Rollout {
         rollout: LdRollout {
             variations: vec![
-                LdWeightedVariation { variation: on_idx, weight: on_weight },
-                LdWeightedVariation { variation: off_idx, weight: 100_000 - on_weight },
+                LdWeightedVariation {
+                    variation: on_idx,
+                    weight: on_weight,
+                },
+                LdWeightedVariation {
+                    variation: off_idx,
+                    weight: 100_000 - on_weight,
+                },
             ],
             bucket_by: Some(p.field.clone()),
         },
@@ -697,17 +799,29 @@ fn lower_prerequisites(
     Ok(meta
         .requires
         .iter()
-        .map(|k| LdPrerequisite { key: k.clone(), variation: 0 })
+        .map(|k| LdPrerequisite {
+            key: k.clone(),
+            variation: 0,
+        })
         .collect())
 }
 
 fn metadata_to_tags(meta: &FlagMetadata) -> Vec<String> {
     // TODO: owner -> maintainerId requires an LD member lookup; for now tag it.
     let mut tags = vec!["managed-by-flagfile".to_string()];
-    if let Some(t) = &meta.flag_type { tags.push(format!("type:{t}")); }
-    if let Some(o) = &meta.owner { tags.push(format!("owner:{o}")); }
-    if let Some(tk) = &meta.ticket { tags.push(format!("ticket:{tk}")); }
-    if let Some(d) = &meta.deprecated { let _ = d; tags.push("deprecated".into()); }
+    if let Some(t) = &meta.flag_type {
+        tags.push(format!("type:{t}"));
+    }
+    if let Some(o) = &meta.owner {
+        tags.push(format!("owner:{o}"));
+    }
+    if let Some(tk) = &meta.ticket {
+        tags.push(format!("ticket:{tk}"));
+    }
+    if let Some(d) = &meta.deprecated {
+        let _ = d;
+        tags.push("deprecated".into());
+    }
     // TODO: meta.expires -> custom property or scheduled archive.
     tags
 }
@@ -734,7 +848,9 @@ fn atom_to_value(a: &Atom) -> Value {
     match a {
         Atom::String(s) | Atom::Variable(s) => Value::String(s.clone()),
         Atom::Number(n) => Value::Number((*n).into()),
-        Atom::Float(f) => serde_json::Number::from_f64(*f).map(Value::Number).unwrap_or(Value::Null),
+        Atom::Float(f) => serde_json::Number::from_f64(*f)
+            .map(Value::Number)
+            .unwrap_or(Value::Null),
         Atom::Boolean(b) => Value::Bool(*b),
         Atom::Date(d) => Value::String(d.to_string()),
         Atom::DateTime(dt) => Value::String(dt.to_string()),
@@ -813,7 +929,10 @@ mod tests {
                 Box::new(Constant(Atom::String("2".into()))),
             )),
         );
-        let scoped = Scope { expr: Box::new(inner), negate: true };
+        let scoped = Scope {
+            expr: Box::new(inner),
+            negate: true,
+        };
         let dnf = to_dnf("FF-x", &scoped, false).unwrap();
         assert_eq!(dnf.len(), 1);
         assert_eq!(dnf[0].len(), 2);
@@ -859,7 +978,10 @@ mod e2e {
         let flag = transpile_one("FF-welcome-banner -> true\n");
         assert_eq!(flag.variations.len(), 2);
         assert!(flag.variations.iter().any(|v| v.value == Value::Bool(true)));
-        assert!(flag.variations.iter().any(|v| v.value == Value::Bool(false)));
+        assert!(flag
+            .variations
+            .iter()
+            .any(|v| v.value == Value::Bool(false)));
         let false_idx = flag
             .variations
             .iter()
@@ -875,7 +997,10 @@ mod e2e {
         let flag = transpile_one("FF-theme -> \"dark\"\n");
         assert_eq!(flag.variations.len(), 2);
         assert!(flag.variations.iter().all(|v| !v.value.is_null()));
-        assert!(flag.variations.iter().any(|v| v.value == Value::String(String::new())));
+        assert!(flag
+            .variations
+            .iter()
+            .any(|v| v.value == Value::String(String::new())));
     }
 
     // A single-value JSON flag is padded with an empty object, never null.
@@ -884,7 +1009,94 @@ mod e2e {
         let flag = transpile_one("FF-checking-json -> json({\"success\": true})\n");
         assert_eq!(flag.variations.len(), 2);
         assert!(flag.variations.iter().all(|v| !v.value.is_null()));
-        assert!(flag.variations.iter().any(|v| v.value == serde_json::json!({})));
+        assert!(flag
+            .variations
+            .iter()
+            .any(|v| v.value == serde_json::json!({})));
+    }
+
+    // A named conditional rule carries its name as the LD rule `description`.
+    #[test]
+    fn named_rule_sets_description() {
+        let flag = transpile_one(
+            "FF-checkout {\n    @name \"EU rollout\"\n    country == \"NL\" -> true\n    false\n}\n",
+        );
+        let rules = &flag.environments["production"].rules;
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].description.as_deref(), Some("EU rollout"));
+    }
+
+    // An OR condition expands to several LD rules; each gets the same description.
+    #[test]
+    fn named_or_rule_names_all_expanded_rules() {
+        let flag = transpile_one(
+            "FF-checkout {\n    @name \"EU\"\n    country == \"NL\" or country == \"BE\" -> true\n    false\n}\n",
+        );
+        let rules = &flag.environments["production"].rules;
+        assert_eq!(rules.len(), 2);
+        assert!(rules.iter().all(|r| r.description.as_deref() == Some("EU")));
+    }
+
+    // Without an annotation the rule has no description (omitted from JSON).
+    #[test]
+    fn unnamed_rule_has_no_description() {
+        let flag = transpile_one("FF-checkout {\n    country == \"NL\" -> true\n    false\n}\n");
+        let rules = &flag.environments["production"].rules;
+        assert_eq!(rules.len(), 1);
+        assert!(rules[0].description.is_none());
+        let json = serde_json::to_value(&rules[0]).unwrap();
+        assert!(json.get("description").is_none());
+    }
+
+    // A `segment(...)` referencing a Flagfile @segment is inlined into clauses,
+    // never emitted as a segmentMatch against a (possibly non-existent) LD segment.
+    #[test]
+    fn flagfile_segment_is_inlined() {
+        let flag = transpile_one(
+            "@segment eu_region {\n    country in (DE, FR, NL)\n}\n\nFF-testing_new {\n    segment(eu_region) -> true\n    false\n}\n",
+        );
+        let rules = &flag.environments["production"].rules;
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].clauses.len(), 1);
+        let clause = &rules[0].clauses[0];
+        assert_eq!(clause.op, "in");
+        assert_eq!(clause.attribute, "country");
+        assert!(clause.op != "segmentMatch");
+        assert_eq!(
+            clause.values,
+            vec![
+                Value::String("DE".into()),
+                Value::String("FR".into()),
+                Value::String("NL".into()),
+            ]
+        );
+    }
+
+    // An OR inside an inlined segment expands to multiple LD rules.
+    #[test]
+    fn segment_with_or_inlines_to_multiple_rules() {
+        let flag = transpile_one(
+            "@segment vip {\n    tier == \"gold\" or country == \"NL\"\n}\n\nFF-perk {\n    segment(vip) -> true\n    false\n}\n",
+        );
+        let rules = &flag.environments["production"].rules;
+        assert_eq!(rules.len(), 2);
+        assert!(rules
+            .iter()
+            .all(|r| r.clauses.iter().all(|c| c.op != "segmentMatch")));
+    }
+
+    // A segment(...) not defined in the Flagfile is assumed to be a native LD
+    // segment and still lowers to a segmentMatch clause.
+    #[test]
+    fn unknown_segment_stays_segment_match() {
+        let flag = transpile_one("FF-x {\n    segment(native_ld_seg) -> true\n    false\n}\n");
+        let rules = &flag.environments["production"].rules;
+        assert_eq!(rules.len(), 1);
+        assert_eq!(rules[0].clauses[0].op, "segmentMatch");
+        assert_eq!(
+            rules[0].clauses[0].values,
+            vec![Value::String("native_ld_seg".into())]
+        );
     }
 
     #[test]
@@ -908,7 +1120,8 @@ mod e2e {
                 match transpile_flag(name, def, &parsed.segments, &cfg) {
                     Ok(flag) => {
                         ok += 1;
-                        if first_json.is_none() && !flag.environments["production"].rules.is_empty() {
+                        if first_json.is_none() && !flag.environments["production"].rules.is_empty()
+                        {
                             first_json = Some(serde_json::to_string_pretty(&flag).unwrap());
                         }
                     }
@@ -924,8 +1137,10 @@ mod e2e {
         for (name, why) in &blocked {
             println!("  BLOCKED {name}: {why}");
         }
-        println!("\n=== sample LD flag JSON (first non-trivial) ===\n{}",
-                 first_json.unwrap_or_else(|| "<none had rules>".into()));
+        println!(
+            "\n=== sample LD flag JSON (first non-trivial) ===\n{}",
+            first_json.unwrap_or_else(|| "<none had rules>".into())
+        );
 
         assert!(ok > 0, "at least some flags should transpile");
     }

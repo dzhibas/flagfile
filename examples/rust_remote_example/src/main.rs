@@ -1,4 +1,4 @@
-use flagfile_lib::{ff, Context};
+use flagfile_lib::{Context, ff};
 use std::collections::HashMap;
 use std::sync::{Arc, Condvar, Mutex};
 

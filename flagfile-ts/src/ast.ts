@@ -78,7 +78,7 @@ export type FlagReturn =
 
 export type Rule =
     | { type: 'Value'; value: FlagReturn }
-    | { type: 'BoolExpressionValue'; expr: AstNode; value: FlagReturn }
+    | { type: 'BoolExpressionValue'; expr: AstNode; value: FlagReturn; name?: string }
     | { type: 'EnvRule'; env: string; rules: Rule[] };
 
 // ── Flag metadata ─────────────────────────────────────────────────

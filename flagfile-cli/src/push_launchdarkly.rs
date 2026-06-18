@@ -67,8 +67,16 @@ pub async fn run_push(
     flags_filter: &[String],
     debug: bool,
 ) {
-    if let Err(()) =
-        push(flagfile_path, project_arg, env_arg, secret_arg, config_path, flags_filter, debug).await
+    if let Err(()) = push(
+        flagfile_path,
+        project_arg,
+        env_arg,
+        secret_arg,
+        config_path,
+        flags_filter,
+        debug,
+    )
+    .await
     {
         process::exit(1);
     }
@@ -124,10 +132,10 @@ async fn push(
     let content = std::fs::read_to_string(flagfile_path).map_err(|_| {
         eprintln!("{} does not exist", flagfile_path);
     })?;
-    let (rest, mut parsed) =
-        flagfile_lib::parse_flagfile::parse_flagfile_with_segments(&content).map_err(|e| {
-            eprintln!("Validation failed: {}", e);
-        })?;
+    let (rest, mut parsed) = flagfile_lib::parse_flagfile::parse_flagfile_with_segments(&content)
+        .map_err(|e| {
+        eprintln!("Validation failed: {}", e);
+    })?;
     if !rest.trim().is_empty() {
         eprintln!("Validation failed: unparsed trailing content");
         return Err(());
@@ -136,14 +144,23 @@ async fn push(
     // Optionally narrow to an explicit set of flags (--flags a,b,c). Filtering
     // here (before transpile) means unrelated, untranspilable flags don't block
     // a targeted push.
-    let wanted: std::collections::HashSet<&str> =
-        flags_filter.iter().map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+    let wanted: std::collections::HashSet<&str> = flags_filter
+        .iter()
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .collect();
     if !wanted.is_empty() {
-        let present: std::collections::HashSet<&str> =
-            parsed.flags.iter().flat_map(|m| m.keys().copied()).collect();
+        let present: std::collections::HashSet<&str> = parsed
+            .flags
+            .iter()
+            .flat_map(|m| m.keys().copied())
+            .collect();
         for name in &wanted {
             if !present.contains(name) {
-                eprintln!("Warning: requested flag '{}' not found in {}", name, flagfile_path);
+                eprintln!(
+                    "Warning: requested flag '{}' not found in {}",
+                    name, flagfile_path
+                );
             }
         }
         for map in parsed.flags.iter_mut() {
@@ -160,13 +177,23 @@ async fn push(
     // Transpile to the LD target model.
     let cfg = TranspileConfig {
         project_key: project_key.clone(),
-        env_keys: config.environments.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
-        default_context_kind: config.context_kind.clone().unwrap_or_else(|| "user".to_string()),
+        env_keys: config
+            .environments
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect(),
+        default_context_kind: config
+            .context_kind
+            .clone()
+            .unwrap_or_else(|| "user".to_string()),
     };
     let flags = match transpile(&parsed, &cfg) {
         Ok(flags) => flags,
         Err(errors) => {
-            eprintln!("{} flag(s) cannot be represented in LaunchDarkly:", errors.len());
+            eprintln!(
+                "{} flag(s) cannot be represented in LaunchDarkly:",
+                errors.len()
+            );
             for e in &errors {
                 eprintln!("  - {:?}", e);
             }
@@ -285,7 +312,11 @@ impl LdClient {
             eprintln!(
                 "← {} {}\n",
                 status.as_u16(),
-                if text.is_empty() { "(empty body)" } else { text.as_str() }
+                if text.is_empty() {
+                    "(empty body)"
+                } else {
+                    text.as_str()
+                }
             );
         }
 
@@ -316,7 +347,10 @@ impl LdClient {
 
     /// GET the flag: `Some(json)` if it exists, `None` on 404.
     async fn get_flag(&self, flag_key: &str) -> Result<Option<Value>, String> {
-        let url = format!("{}/api/v2/flags/{}/{}", self.base_url, self.project_key, flag_key);
+        let url = format!(
+            "{}/api/v2/flags/{}/{}",
+            self.base_url, self.project_key, flag_key
+        );
         let (status, body) = self.send(reqwest::Method::GET, &url, None).await?;
         match status.as_u16() {
             200 => serde_json::from_str(&body)
@@ -366,7 +400,10 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
         only_env: Option<&str>,
         live_values: &[Value],
     ) -> Result<(), String> {
-        let url = format!("{}/api/v2/flags/{}/{}", self.base_url, self.project_key, flag.key);
+        let url = format!(
+            "{}/api/v2/flags/{}/{}",
+            self.base_url, self.project_key, flag.key
+        );
 
         // Append (never remove/reorder) any variation value LD doesn't have yet,
         // so other environments' index-based targeting keeps working. `mapped`
@@ -377,7 +414,9 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
         let mut mapped: Vec<Value> = live_values.to_vec();
         for v in &flag.variations {
             if !mapped.iter().any(|x| x == &v.value) {
-                var_ops.push(json!({ "op": "add", "path": "/variations/-", "value": { "value": v.value } }));
+                var_ops.push(
+                    json!({ "op": "add", "path": "/variations/-", "value": { "value": v.value } }),
+                );
                 mapped.push(v.value.clone());
             }
         }
@@ -412,7 +451,11 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
             // Turn the env on so the configured targeting actually serves —
             // otherwise LD serves the off variation and ignores rules/fallthrough.
             ops.push(json!({ "op": "replace", "path": format!("{}/on", base), "value": true }));
-            let rules: Vec<Value> = env.rules.iter().map(|r| remap_rule(r, &live_index)).collect();
+            let rules: Vec<Value> = env
+                .rules
+                .iter()
+                .map(|r| remap_rule(r, &live_index))
+                .collect();
             ops.push(json!({ "op": "replace", "path": format!("{}/rules", base), "value": rules }));
             ops.push(json!({ "op": "replace", "path": format!("{}/fallthrough", base), "value": remap_target(&env.fallthrough, &live_index) }));
             ops.push(json!({ "op": "replace", "path": format!("{}/offVariation", base), "value": live_index(env.off_variation) }));
@@ -421,7 +464,10 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
 
         if let Some(only) = only_env {
             if !touched_env {
-                return Err(format!("environment '{}' is not configured for this flag", only));
+                return Err(format!(
+                    "environment '{}' is not configured for this flag",
+                    only
+                ));
             }
         }
 
@@ -485,6 +531,9 @@ fn remap_rule(
     live_index: &impl Fn(usize) -> usize,
 ) -> Value {
     let mut obj = serde_json::Map::new();
+    if let Some(desc) = &rule.description {
+        obj.insert("description".into(), Value::String(desc.clone()));
+    }
     obj.insert(
         "clauses".into(),
         serde_json::to_value(&rule.clauses).unwrap_or(Value::Array(vec![])),

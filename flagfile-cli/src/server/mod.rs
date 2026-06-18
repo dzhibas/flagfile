@@ -67,12 +67,27 @@ pub async fn run_serve(
     secret: Option<String>,
 ) {
     if sidecar {
-        run_serve_sidecar(port_arg, hostname_arg, config_path, upstream, namespace, secret).await;
+        run_serve_sidecar(
+            port_arg,
+            hostname_arg,
+            config_path,
+            upstream,
+            namespace,
+            secret,
+        )
+        .await;
     } else if is_multi_tenant_config(config_path) {
         run_serve_multi_tenant(config_path, port_arg, hostname_arg, env_arg).await;
     } else {
-        run_serve_single_tenant(flagfile_arg, port_arg, hostname_arg, watch, config_path, env_arg)
-            .await;
+        run_serve_single_tenant(
+            flagfile_arg,
+            port_arg,
+            hostname_arg,
+            watch,
+            config_path,
+            env_arg,
+        )
+        .await;
     }
 }
 
@@ -118,7 +133,10 @@ async fn run_serve_single_tenant(
     };
 
     // Record startup flags metric
-    metrics::metrics().flags_total.with_label_values(&[ROOT_NAMESPACE]).set(flags.len() as i64);
+    metrics::metrics()
+        .flags_total
+        .with_label_values(&[ROOT_NAMESPACE])
+        .set(flags.len() as i64);
 
     let mut namespaces = HashMap::new();
     namespaces.insert(
@@ -194,7 +212,10 @@ async fn run_serve_multi_tenant(
     let persistent_store: Arc<dyn store::FlagStore + Send + Sync> =
         match server_config.server.storage {
             StorageBackend::Sled => {
-                metrics::metrics().storage_backend.with_label_values(&["sled"]).set(1);
+                metrics::metrics()
+                    .storage_backend
+                    .with_label_values(&["sled"])
+                    .set(1);
                 match store::sled_store::SledStore::open(&server_config.server.data_dir) {
                     Ok(s) => Arc::new(s),
                     Err(e) => {
@@ -204,7 +225,10 @@ async fn run_serve_multi_tenant(
                 }
             }
             StorageBackend::Memory => {
-                metrics::metrics().storage_backend.with_label_values(&["memory"]).set(1);
+                metrics::metrics()
+                    .storage_backend
+                    .with_label_values(&["memory"])
+                    .set(1);
                 Arc::new(store::memory::MemoryStore::new())
             }
         };
@@ -233,7 +257,10 @@ async fn run_serve_multi_tenant(
 
     // Record flags_total per namespace at startup
     for (ns_key, ns_data) in &namespaces {
-        metrics::metrics().flags_total.with_label_values(&[ns_key]).set(ns_data.flags.len() as i64);
+        metrics::metrics()
+            .flags_total
+            .with_label_values(&[ns_key])
+            .set(ns_data.flags.len() as i64);
     }
 
     let broadcaster = Arc::new(SseBroadcaster::new());
@@ -432,8 +459,7 @@ async fn run_serve_multi_tenant(
 
         // Spawn gRPC server for inter-node Raft communication.
         let grpc_port = cluster_cfg.grpc_port;
-        let grpc_service =
-            RaftGrpcService::new(raft_msg_tx, handle, Arc::clone(&persistent_store));
+        let grpc_service = RaftGrpcService::new(raft_msg_tx, handle, Arc::clone(&persistent_store));
 
         tokio::spawn(async move {
             use self::raft::transport::proto::raft_service_server::RaftServiceServer;
@@ -442,10 +468,7 @@ async fn run_serve_multi_tenant(
                 .parse()
                 .expect("invalid gRPC address");
 
-            println!(
-                "Raft gRPC server listening on 0.0.0.0:{}",
-                grpc_port
-            );
+            println!("Raft gRPC server listening on 0.0.0.0:{}", grpc_port);
 
             if let Err(e) = tonic::transport::Server::builder()
                 .add_service(RaftServiceServer::new(grpc_service))
@@ -478,10 +501,7 @@ fn build_single_tenant_router(state: Arc<AppState>) -> Router {
         .route("/flagfile/hash", get(handle_flagfile_hash))
         .route("/events", get(handle_events))
         .route("/v1/eval/{flag_name}", get(handle_eval))
-        .route(
-            "/ofrep/v1/evaluate/flags/{key}",
-            post(handle_ofrep_single),
-        )
+        .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
         .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
         .route("/metrics", get(handle_metrics))
         .layer(axum::middleware::from_fn(track_metrics))
@@ -496,10 +516,7 @@ fn build_multi_tenant_router(state: Arc<AppState>) -> Router {
         .route("/flagfile/hash", get(handle_flagfile_hash))
         .route("/events", get(handle_events))
         .route("/v1/eval/{flag_name}", get(handle_eval))
-        .route(
-            "/ofrep/v1/evaluate/flags/{key}",
-            post(handle_ofrep_single),
-        )
+        .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
         .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk));
 
     // Namespaced routes: /ns/{namespace}/...
@@ -508,12 +525,12 @@ fn build_multi_tenant_router(state: Arc<AppState>) -> Router {
             "/ns/{namespace}/flagfile",
             get(handle_flagfile_ns).put(handle_put_flagfile_ns),
         )
-        .route("/ns/{namespace}/flagfile/hash", get(handle_flagfile_hash_ns))
-        .route("/ns/{namespace}/events", get(handle_events_ns))
         .route(
-            "/ns/{namespace}/v1/eval/{flag_name}",
-            get(handle_eval_ns),
-        );
+            "/ns/{namespace}/flagfile/hash",
+            get(handle_flagfile_hash_ns),
+        )
+        .route("/ns/{namespace}/events", get(handle_events_ns))
+        .route("/ns/{namespace}/v1/eval/{flag_name}", get(handle_eval_ns));
 
     // Observability (no auth)
     let obs_routes = Router::new()
@@ -604,7 +621,10 @@ async fn run_serve_sidecar(
     )
     .await;
     if !ok {
-        eprintln!("Warning: initial fetch from {} failed, starting anyway", flagfile_url);
+        eprintln!(
+            "Warning: initial fetch from {} failed, starting anyway",
+            flagfile_url
+        );
     }
 
     // Spawn background SSE listener
@@ -642,10 +662,7 @@ fn build_sidecar_router(state: Arc<AppState>) -> Router {
         .route("/flagfile/hash", get(handle_flagfile_hash))
         .route("/events", get(handle_events))
         .route("/v1/eval/{flag_name}", get(handle_eval))
-        .route(
-            "/ofrep/v1/evaluate/flags/{key}",
-            post(handle_ofrep_single),
-        )
+        .route("/ofrep/v1/evaluate/flags/{key}", post(handle_ofrep_single))
         .route("/ofrep/v1/evaluate/flags", post(handle_ofrep_bulk))
         .route("/readyz", get(sidecar::handle_sidecar_readyz))
         .route("/metrics", get(handle_metrics))
@@ -815,9 +832,8 @@ async fn serve_with_shutdown(
     let shutdown = async move {
         let ctrl_c = tokio::signal::ctrl_c();
         #[cfg(unix)]
-        let mut sigterm =
-            tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
-                .expect("failed to install SIGTERM handler");
+        let mut sigterm = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+            .expect("failed to install SIGTERM handler");
 
         #[cfg(unix)]
         tokio::select! {
@@ -839,9 +855,7 @@ async fn serve_with_shutdown(
                         // Poll is_leader() until we're no longer leader, up to 5s.
                         let deadline =
                             tokio::time::Instant::now() + std::time::Duration::from_secs(5);
-                        while handle.is_leader()
-                            && tokio::time::Instant::now() < deadline
-                        {
+                        while handle.is_leader() && tokio::time::Instant::now() < deadline {
                             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                         }
                         if handle.is_leader() {

@@ -329,7 +329,7 @@ pub(crate) fn evaluate_rules_with_env(
 ) -> Option<FlagReturn> {
     for rule in rules {
         match rule {
-            Rule::BoolExpressionValue(expr, return_val) => {
+            Rule::BoolExpressionValue(expr, return_val, _) => {
                 if let Ok(true) = eval_with_segments(expr, context, flag_name, segments) {
                     return Some(return_val.clone());
                 }

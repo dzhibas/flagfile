@@ -60,7 +60,7 @@ fn collect_segment_refs(node: &AstNode, out: &mut HashSet<String>) {
 fn collect_segment_refs_from_rules(rules: &[Rule], out: &mut HashSet<String>) {
     for rule in rules {
         match rule {
-            Rule::BoolExpressionValue(expr, _) => collect_segment_refs(expr, out),
+            Rule::BoolExpressionValue(expr, _, _) => collect_segment_refs(expr, out),
             Rule::EnvRule { rules, .. } => collect_segment_refs_from_rules(rules, out),
             Rule::Value(_) => {}
         }

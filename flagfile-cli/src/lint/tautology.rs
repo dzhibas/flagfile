@@ -12,7 +12,7 @@ pub fn check(name: &str, def: &FlagDefinition) -> Vec<LintWarning> {
 fn check_rules(name: &str, rules: &[Rule], warnings: &mut Vec<LintWarning>) {
     for rule in rules {
         match rule {
-            Rule::BoolExpressionValue(AstNode::Constant(Atom::Boolean(true)), _) => {
+            Rule::BoolExpressionValue(AstNode::Constant(Atom::Boolean(true)), _, _) => {
                 warnings.push(LintWarning::warn(format!(
                     "{}: tautological condition (true -> ...) is always matched",
                     name

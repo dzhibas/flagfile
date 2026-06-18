@@ -8,8 +8,8 @@ use axum::response::{IntoResponse, Response};
 
 use super::state::AppState;
 use prometheus::{
-    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Opts,
-    Registry, TextEncoder,
+    Encoder, HistogramOpts, HistogramVec, IntCounterVec, IntGauge, IntGaugeVec, Opts, Registry,
+    TextEncoder,
 };
 
 /// Global metrics registry
@@ -66,16 +66,17 @@ impl Metrics {
     fn new(registry: &Registry) -> Self {
         // ── Raft cluster metrics ─────────────────────────────────────
         let raft_state = IntGaugeVec::new(
-            Opts::new("ff_raft_state", "Current raft state (0=none, 1=follower, 2=candidate, 3=leader)"),
+            Opts::new(
+                "ff_raft_state",
+                "Current raft state (0=none, 1=follower, 2=candidate, 3=leader)",
+            ),
             &["node_id"],
         )
         .expect("failed to create raft_state metric");
 
-        let raft_term = IntGaugeVec::new(
-            Opts::new("ff_raft_term", "Current raft term"),
-            &["node_id"],
-        )
-        .expect("failed to create raft_term metric");
+        let raft_term =
+            IntGaugeVec::new(Opts::new("ff_raft_term", "Current raft term"), &["node_id"])
+                .expect("failed to create raft_term metric");
 
         let raft_last_applied = IntGaugeVec::new(
             Opts::new("ff_raft_last_applied", "Last applied log index"),
@@ -128,8 +129,11 @@ impl Metrics {
         .expect("failed to create push_total metric");
 
         let push_duration = HistogramVec::new(
-            HistogramOpts::new("ff_push_duration_seconds", "Duration of flag push operations")
-                .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]),
+            HistogramOpts::new(
+                "ff_push_duration_seconds",
+                "Duration of flag push operations",
+            )
+            .buckets(vec![0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]),
             &["namespace"],
         )
         .expect("failed to create push_duration metric");
@@ -149,20 +153,29 @@ impl Metrics {
         .expect("failed to create eval_duration metric");
 
         let eval_errors = IntCounterVec::new(
-            Opts::new("ff_eval_errors_total", "Total number of flag evaluation errors"),
+            Opts::new(
+                "ff_eval_errors_total",
+                "Total number of flag evaluation errors",
+            ),
             &["namespace"],
         )
         .expect("failed to create eval_errors metric");
 
         // ── SSE metrics ──────────────────────────────────────────────
         let sse_active = IntGaugeVec::new(
-            Opts::new("ff_sse_active_connections", "Number of active SSE connections"),
+            Opts::new(
+                "ff_sse_active_connections",
+                "Number of active SSE connections",
+            ),
             &["namespace"],
         )
         .expect("failed to create sse_active metric");
 
         let sse_total = IntCounterVec::new(
-            Opts::new("ff_sse_connections_total", "Total number of SSE connections"),
+            Opts::new(
+                "ff_sse_connections_total",
+                "Total number of SSE connections",
+            ),
             &["namespace"],
         )
         .expect("failed to create sse_total metric");
@@ -200,11 +213,8 @@ impl Metrics {
         )
         .expect("failed to create storage_backend metric");
 
-        let storage_size = IntGauge::new(
-            "ff_storage_size_bytes",
-            "Total storage size in bytes",
-        )
-        .expect("failed to create storage_size metric");
+        let storage_size = IntGauge::new("ff_storage_size_bytes", "Total storage size in bytes")
+            .expect("failed to create storage_size metric");
 
         let storage_write_duration = HistogramVec::new(
             HistogramOpts::new(
@@ -228,37 +238,89 @@ impl Metrics {
                 "ff_http_request_duration_seconds",
                 "HTTP request duration in seconds",
             )
-            .buckets(vec![0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0]),
+            .buckets(vec![
+                0.0005, 0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0,
+            ]),
             &["method", "path"],
         )
         .expect("failed to create http_request_duration metric");
 
         // Register all metrics with the registry
-        registry.register(Box::new(raft_state.clone())).expect("register raft_state");
-        registry.register(Box::new(raft_term.clone())).expect("register raft_term");
-        registry.register(Box::new(raft_last_applied.clone())).expect("register raft_last_applied");
-        registry.register(Box::new(raft_committed.clone())).expect("register raft_committed");
-        registry.register(Box::new(raft_peers_connected.clone())).expect("register raft_peers_connected");
-        registry.register(Box::new(raft_leader_id.clone())).expect("register raft_leader_id");
-        registry.register(Box::new(raft_elections.clone())).expect("register raft_elections");
-        registry.register(Box::new(raft_snapshots.clone())).expect("register raft_snapshots");
-        registry.register(Box::new(flags_total.clone())).expect("register flags_total");
-        registry.register(Box::new(push_total.clone())).expect("register push_total");
-        registry.register(Box::new(push_duration.clone())).expect("register push_duration");
-        registry.register(Box::new(eval_total.clone())).expect("register eval_total");
-        registry.register(Box::new(eval_duration.clone())).expect("register eval_duration");
-        registry.register(Box::new(eval_errors.clone())).expect("register eval_errors");
-        registry.register(Box::new(sse_active.clone())).expect("register sse_active");
-        registry.register(Box::new(sse_total.clone())).expect("register sse_total");
-        registry.register(Box::new(sse_events.clone())).expect("register sse_events");
-        registry.register(Box::new(grpc_requests.clone())).expect("register grpc_requests");
-        registry.register(Box::new(grpc_errors.clone())).expect("register grpc_errors");
-        registry.register(Box::new(grpc_latency.clone())).expect("register grpc_latency");
-        registry.register(Box::new(storage_backend.clone())).expect("register storage_backend");
-        registry.register(Box::new(storage_size.clone())).expect("register storage_size");
-        registry.register(Box::new(storage_write_duration.clone())).expect("register storage_write_duration");
-        registry.register(Box::new(http_requests_total.clone())).expect("register http_requests_total");
-        registry.register(Box::new(http_request_duration.clone())).expect("register http_request_duration");
+        registry
+            .register(Box::new(raft_state.clone()))
+            .expect("register raft_state");
+        registry
+            .register(Box::new(raft_term.clone()))
+            .expect("register raft_term");
+        registry
+            .register(Box::new(raft_last_applied.clone()))
+            .expect("register raft_last_applied");
+        registry
+            .register(Box::new(raft_committed.clone()))
+            .expect("register raft_committed");
+        registry
+            .register(Box::new(raft_peers_connected.clone()))
+            .expect("register raft_peers_connected");
+        registry
+            .register(Box::new(raft_leader_id.clone()))
+            .expect("register raft_leader_id");
+        registry
+            .register(Box::new(raft_elections.clone()))
+            .expect("register raft_elections");
+        registry
+            .register(Box::new(raft_snapshots.clone()))
+            .expect("register raft_snapshots");
+        registry
+            .register(Box::new(flags_total.clone()))
+            .expect("register flags_total");
+        registry
+            .register(Box::new(push_total.clone()))
+            .expect("register push_total");
+        registry
+            .register(Box::new(push_duration.clone()))
+            .expect("register push_duration");
+        registry
+            .register(Box::new(eval_total.clone()))
+            .expect("register eval_total");
+        registry
+            .register(Box::new(eval_duration.clone()))
+            .expect("register eval_duration");
+        registry
+            .register(Box::new(eval_errors.clone()))
+            .expect("register eval_errors");
+        registry
+            .register(Box::new(sse_active.clone()))
+            .expect("register sse_active");
+        registry
+            .register(Box::new(sse_total.clone()))
+            .expect("register sse_total");
+        registry
+            .register(Box::new(sse_events.clone()))
+            .expect("register sse_events");
+        registry
+            .register(Box::new(grpc_requests.clone()))
+            .expect("register grpc_requests");
+        registry
+            .register(Box::new(grpc_errors.clone()))
+            .expect("register grpc_errors");
+        registry
+            .register(Box::new(grpc_latency.clone()))
+            .expect("register grpc_latency");
+        registry
+            .register(Box::new(storage_backend.clone()))
+            .expect("register storage_backend");
+        registry
+            .register(Box::new(storage_size.clone()))
+            .expect("register storage_size");
+        registry
+            .register(Box::new(storage_write_duration.clone()))
+            .expect("register storage_write_duration");
+        registry
+            .register(Box::new(http_requests_total.clone()))
+            .expect("register http_requests_total");
+        registry
+            .register(Box::new(http_request_duration.clone()))
+            .expect("register http_request_duration");
 
         Self {
             raft_state,
@@ -306,7 +368,9 @@ pub async fn handle_metrics() -> Response {
     let encoder = TextEncoder::new();
     let metric_families = registry.gather();
     let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).expect("encode metrics");
+    encoder
+        .encode(&metric_families, &mut buffer)
+        .expect("encode metrics");
     (
         StatusCode::OK,
         [("content-type", "text/plain; version=0.0.4; charset=utf-8")],

@@ -44,8 +44,8 @@ impl FlagStore for SledStore {
         content: &[u8],
         meta: &Meta,
     ) -> Result<(), String> {
-        let meta_bytes = serde_json::to_vec(meta)
-            .map_err(|e| format!("failed to serialize meta: {}", e))?;
+        let meta_bytes =
+            serde_json::to_vec(meta).map_err(|e| format!("failed to serialize meta: {}", e))?;
 
         self.db
             .insert(Self::flags_key(namespace), content)
@@ -113,15 +113,16 @@ impl FlagStore for SledStore {
 
         for item in self.db.scan_prefix(prefix) {
             let (key, value) = item.map_err(|e| format!("failed to read key: {}", e))?;
-            let key_str = std::str::from_utf8(&key)
-                .map_err(|e| format!("invalid key encoding: {}", e))?;
+            let key_str =
+                std::str::from_utf8(&key).map_err(|e| format!("invalid key encoding: {}", e))?;
             let namespace = key_str
                 .strip_prefix(prefix)
                 .ok_or_else(|| "unexpected key format".to_string())?;
 
-            let meta = self.get_meta(namespace).await.ok_or_else(|| {
-                format!("meta missing for namespace: {}", namespace)
-            })?;
+            let meta = self
+                .get_meta(namespace)
+                .await
+                .ok_or_else(|| format!("meta missing for namespace: {}", namespace))?;
 
             entries.insert(
                 namespace.to_string(),
@@ -133,7 +134,6 @@ impl FlagStore for SledStore {
         }
 
         let snapshot = StoreSnapshot { entries };
-        serde_json::to_vec(&snapshot)
-            .map_err(|e| format!("failed to serialize snapshot: {}", e))
+        serde_json::to_vec(&snapshot).map_err(|e| format!("failed to serialize snapshot: {}", e))
     }
 }

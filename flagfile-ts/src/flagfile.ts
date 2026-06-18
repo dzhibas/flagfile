@@ -239,6 +239,52 @@ function parseEnvRule(i: string): ParseResult<Rule> {
     });
 }
 
+// Rule-level name annotation. Accepts both a bare quoted form (`@name "rule name"`)
+// and a comment-prefixed rest-of-line form (`// @name rule name`).
+function parseRuleName(i: string): ParseResult<string> {
+    let rest = skipWs(i);
+    if (rest.startsWith('//')) {
+        rest = skipWs(rest.slice(2));
+    }
+    if (!rest.startsWith('@name')) return fail();
+    rest = skipWs(rest.slice(5));
+    const q = parseQuotedString(rest);
+    if (q.ok) return ok(q.rest, q.value);
+    const eol = rest.search(/[\n\r]/);
+    const end = eol === -1 ? rest.length : eol;
+    return ok(rest.slice(end), rest.slice(0, end).trim());
+}
+
+// Consume leading comments and at most one `@name` annotation preceding a rule,
+// returning the last name seen. `parseRuleName` is tried before line-comment skipping
+// so the `// @name ...` form is captured rather than swallowed as a plain comment.
+function parseRulePrefix(i: string): { rest: string; name: string | null } {
+    let name: string | null = null;
+    let rest = i;
+    while (true) {
+        const ws = skipWs(rest);
+        const n = parseRuleName(ws);
+        if (n.ok) {
+            name = n.value;
+            rest = n.rest;
+            continue;
+        }
+        const afterLine = skipLineComment(ws);
+        if (afterLine !== ws) {
+            rest = afterLine;
+            continue;
+        }
+        const afterBlock = skipBlockComment(ws);
+        if (afterBlock !== ws) {
+            rest = afterBlock;
+            continue;
+        }
+        rest = ws;
+        break;
+    }
+    return { rest, name };
+}
+
 function parseRule(i: string): ParseResult<Rule> {
     let r: ParseResult<Rule>;
     r = parseEnvRule(i);
@@ -255,11 +301,16 @@ function parseRulesList(i: string): ParseResult<Rule[]> {
     let rest = i;
 
     while (true) {
-        rest = skipComments(rest);
+        const prefix = parseRulePrefix(rest);
+        rest = prefix.rest;
         if (rest.length === 0 || rest[0] === '}') break;
         const ruleR = parseRule(rest);
         if (!ruleR.ok) break;
-        rules.push(ruleR.value);
+        let rule = ruleR.value;
+        if (prefix.name !== null && rule.type === 'BoolExpressionValue') {
+            rule = { ...rule, name: prefix.name };
+        }
+        rules.push(rule);
         rest = ruleR.rest;
     }
 
@@ -338,12 +389,18 @@ function parseAnnotation(i: string): ParseResult<AnnotationEntry> {
         return ok(r.rest, { key: 'ticket', value: r.value });
     }
 
-    // @description "string"
+    // @description "string"  OR  @description rest of line
     if (trimmed.startsWith('@description')) {
-        const rest = skipWs(trimmed.slice(12));
-        const r = parseQuotedString(rest);
-        if (!r.ok) return fail();
-        return ok(r.rest, { key: 'description', value: r.value });
+        // Skip spaces/tabs only (not newlines) so an empty value doesn't swallow
+        // the following line.
+        const rest = trimmed.slice(12).replace(/^[ \t]*/, '');
+        const q = parseQuotedString(rest);
+        if (q.ok) return ok(q.rest, { key: 'description', value: q.value });
+        const eol = rest.search(/[\n\r]/);
+        const end = eol === -1 ? rest.length : eol;
+        const value = rest.slice(0, end).trim();
+        if (value.length === 0) return fail();
+        return ok(rest.slice(end), { key: 'description', value });
     }
 
     // @type identifier  (must check before @deprecated since both start with @)

@@ -4,10 +4,10 @@ use chrono::NaiveDate;
 use nom::{
     branch::alt,
     bytes::complete::{is_not, tag, take_till, take_until},
-    character::complete::{alphanumeric1, multispace0},
-    combinator::{map, recognize, value},
+    character::complete::{alphanumeric1, multispace0, space0},
+    combinator::{map, opt, recognize, value},
     multi::{many0, many0_count, many1},
-    sequence::{delimited, pair, preceded, terminated, tuple},
+    sequence::{delimited, pair, preceded, tuple},
     IResult,
 };
 use serde_json::Value;
@@ -52,7 +52,7 @@ impl From<FlagReturn> for String {
 #[derive(Debug, Clone)]
 pub enum Rule {
     Value(FlagReturn),
-    BoolExpressionValue(AstNode, FlagReturn),
+    BoolExpressionValue(AstNode, FlagReturn, Option<String>),
     EnvRule { env: String, rules: Vec<Rule> },
 }
 
@@ -242,10 +242,30 @@ fn parse_annotation_ticket(i: &str) -> IResult<&str, Annotation> {
     Ok((rest, Annotation::Ticket(val.to_string())))
 }
 
+/// Parse an annotation value that is either a quoted string or the rest of the
+/// line (trimmed). Only spaces/tabs are skipped before the value — not newlines —
+/// so an annotation with no value doesn't swallow the following line.
+fn parse_string_or_line(i: &str) -> IResult<&str, String> {
+    let (rest, _) = space0(i)?;
+    if let Ok((r, s)) = parse_quoted_string(rest) {
+        return Ok((r, s.to_string()));
+    }
+    let (rest, val) = take_till(|c| c == '\n' || c == '\r')(rest)?;
+    let val = val.trim();
+    if val.is_empty() {
+        return Err(nom::Err::Error(nom::error::Error::new(
+            i,
+            nom::error::ErrorKind::Tag,
+        )));
+    }
+    Ok((rest, val.to_string()))
+}
+
 fn parse_annotation_description(i: &str) -> IResult<&str, Annotation> {
-    let (rest, _) = ws(tag("@description"))(i)?;
-    let (rest, val) = ws(parse_quoted_string)(rest)?;
-    Ok((rest, Annotation::Description(val.to_string())))
+    let (rest, _) = multispace0(i)?;
+    let (rest, _) = tag("@description")(rest)?;
+    let (rest, val) = parse_string_or_line(rest)?;
+    Ok((rest, Annotation::Description(val)))
 }
 
 fn parse_annotation_type(i: &str) -> IResult<&str, Annotation> {
@@ -367,7 +387,47 @@ fn parse_anonymous_func(i: &str) -> IResult<&str, FlagValue<'_>> {
 
 fn parse_rule_expr(i: &str) -> IResult<&str, Rule> {
     let parser = tuple((parse, ws(tag("->")), parse_return_val));
-    map(parser, |(e, _, v)| Rule::BoolExpressionValue(e, v))(i)
+    map(parser, |(e, _, v)| Rule::BoolExpressionValue(e, v, None))(i)
+}
+
+/// Rule-level name annotation. Accepts both a bare quoted form
+/// (`@name "rule name"`, consistent with flag annotations) and a comment-prefixed
+/// rest-of-line form (`// @name rule name`).
+fn parse_rule_name(i: &str) -> IResult<&str, String> {
+    let (rest, _) = multispace0(i)?;
+    let (rest, _) = opt(tag("//"))(rest)?;
+    let (rest, _) = ws(tag("@name"))(rest)?;
+    alt((
+        map(ws(parse_quoted_string), |s| s.to_string()),
+        map(take_till(|c| c == '\n' || c == '\r'), |s: &str| {
+            s.trim().to_string()
+        }),
+    ))(rest)
+}
+
+/// Consume any leading comments and at most one `@name` annotation preceding a rule,
+/// returning the last name seen. `parse_rule_name` is tried before `parse_comment` so
+/// the `// @name ...` form is captured rather than swallowed as a plain comment.
+fn parse_rule_prefix(i: &str) -> IResult<&str, Option<String>> {
+    let mut name = None;
+    let mut input = i;
+    loop {
+        if let Ok((r, n)) = parse_rule_name(input) {
+            name = Some(n);
+            input = r;
+            continue;
+        }
+        if let Ok((r, _)) = parse_comment(input) {
+            input = r;
+            continue;
+        }
+        if let Ok((r, _)) = multiline_comment(input) {
+            input = r;
+            continue;
+        }
+        break;
+    }
+    Ok((input, name))
 }
 
 fn parse_rule_static(i: &str) -> IResult<&str, Rule> {
@@ -416,14 +476,22 @@ fn parse_rules(i: &str) -> IResult<&str, Rule> {
 }
 
 fn parse_rules_or_comments(i: &str) -> IResult<&str, Rule> {
-    terminated(
-        preceded(many0(alt((parse_comment, multiline_comment))), parse_rules),
-        many0(alt((parse_comment, multiline_comment))),
-    )(i)
+    let (rest, name) = parse_rule_prefix(i)?;
+    let (rest, rule) = parse_rules(rest)?;
+    let rule = match (rule, name) {
+        (Rule::BoolExpressionValue(e, v, _), Some(n)) => Rule::BoolExpressionValue(e, v, Some(n)),
+        (other, _) => other,
+    };
+    // NB: trailing comments are deliberately NOT consumed here — doing so would eat
+    // the next rule's leading `// @name` annotation as if it were a plain comment.
+    // Trailing comments before `}` are handled once at the end of `parse_rules_list`.
+    Ok((rest, rule))
 }
 
 fn parse_rules_list(i: &str) -> IResult<&str, Vec<Rule>> {
-    many1(parse_rules_or_comments)(i)
+    let (rest, rules) = many1(parse_rules_or_comments)(i)?;
+    let (rest, _) = many0(alt((parse_comment, multiline_comment)))(rest)?;
+    Ok((rest, rules))
 }
 
 fn parse_function(i: &str) -> IResult<&str, FlagValue<'_>> {
@@ -655,6 +723,36 @@ FF-pay -> true"#;
             def.metadata.expires,
             Some(NaiveDate::from_ymd_opt(2026, 6, 1).unwrap())
         );
+    }
+
+    #[test]
+    fn test_parse_metadata_description_quoted() {
+        let data = "@description \"this is desc\"\nFF-x -> true";
+        let (i, v) = parse_flagfile(data).unwrap();
+        assert_eq!(i.trim(), "");
+        let def = v[0].get("FF-x").unwrap();
+        assert_eq!(def.metadata.description, Some("this is desc".to_string()));
+    }
+
+    #[test]
+    fn test_parse_metadata_description_unquoted_rest_of_line() {
+        let data = "@description this is desc\nFF-x -> true";
+        let (i, v) = parse_flagfile(data).unwrap();
+        assert_eq!(i.trim(), "");
+        let def = v[0].get("FF-x").unwrap();
+        assert_eq!(def.metadata.description, Some("this is desc".to_string()));
+    }
+
+    #[test]
+    fn test_parse_metadata_description_unquoted_stops_at_newline() {
+        // The unquoted value must stop at end of line and not swallow the next
+        // annotation or the flag definition.
+        let data = "@description short desc\n@owner \"team\"\nFF-x -> true";
+        let (i, v) = parse_flagfile(data).unwrap();
+        assert_eq!(i.trim(), "");
+        let def = v[0].get("FF-x").unwrap();
+        assert_eq!(def.metadata.description, Some("short desc".to_string()));
+        assert_eq!(def.metadata.owner, Some("team".to_string()));
     }
 
     #[test]
@@ -999,7 +1097,102 @@ FF-logging {
         assert_eq!(i, "");
         assert!(matches!(
             rule,
-            Rule::BoolExpressionValue(_, FlagReturn::OnOff(true))
+            Rule::BoolExpressionValue(_, FlagReturn::OnOff(true), _)
+        ));
+    }
+
+    #[test]
+    fn test_rule_name_bare_quoted() {
+        let data = r#"FF-checkout {
+    @name "EU rollout"
+    countryCode == NL -> true
+    false
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF-checkout").unwrap();
+        assert!(matches!(
+            &def.rules[0],
+            Rule::BoolExpressionValue(_, _, Some(n)) if n == "EU rollout"
+        ));
+        assert!(matches!(&def.rules[1], Rule::Value(_)));
+    }
+
+    #[test]
+    fn test_rule_name_comment_prefixed() {
+        let data = r#"FF-checkout {
+    // @name beta cohort
+    countryCode == NL -> true
+    false
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF-checkout").unwrap();
+        assert!(matches!(
+            &def.rules[0],
+            Rule::BoolExpressionValue(_, _, Some(n)) if n == "beta cohort"
+        ));
+    }
+
+    #[test]
+    fn test_rule_name_dropped_on_static_value() {
+        let data = r#"FF-checkout {
+    countryCode == NL -> true
+    @name ignored
+    false
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF-checkout").unwrap();
+        // The name preceding a bare static value is parsed but not retained.
+        assert!(matches!(
+            &def.rules[1],
+            Rule::Value(FlagReturn::OnOff(false))
+        ));
+    }
+
+    #[test]
+    fn test_rule_names_across_multiple_rules() {
+        // Regression: a `// @name` preceding rules 2+ must not be swallowed as a
+        // trailing comment of the previous rule.
+        let data = r#"FF_checking_json {
+    // @test FF_checking_json(user=nik) == {"success": true}
+    // @name user switch
+    user == "nik" && surname == "krauklis" -> json({"success":true})
+    // @name country selection
+    country == "NL" -> json({"country":"NL","success":true})
+    @name default variant
+    json({"success":false})
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF_checking_json").unwrap();
+        assert_eq!(def.rules.len(), 3);
+        assert!(matches!(
+            &def.rules[0],
+            Rule::BoolExpressionValue(_, _, Some(n)) if n == "user switch"
+        ));
+        assert!(matches!(
+            &def.rules[1],
+            Rule::BoolExpressionValue(_, _, Some(n)) if n == "country selection"
+        ));
+        // The third is a static fallthrough value; its name is intentionally dropped.
+        assert!(matches!(&def.rules[2], Rule::Value(_)));
+    }
+
+    #[test]
+    fn test_plain_comment_not_treated_as_name() {
+        let data = r#"FF-checkout {
+    // just a comment
+    countryCode == NL -> true
+    false
+}"#;
+        let (i, v) = parse_function(data).unwrap();
+        assert_eq!(i, "");
+        let def = v.get("FF-checkout").unwrap();
+        assert!(matches!(
+            &def.rules[0],
+            Rule::BoolExpressionValue(_, _, None)
         ));
     }
 }

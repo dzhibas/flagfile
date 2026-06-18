@@ -14,9 +14,9 @@ use sha1::{Digest, Sha1};
 use super::metrics::metrics;
 
 use super::auth::{check_token, extract_bearer_token, forbidden, unauthorized, TokenPermission};
+use super::sse::{create_sse_stream, FlagUpdateEvent};
 use super::state::{AppState, ParsedNamespace};
 use super::store::{Meta, ROOT_NAMESPACE};
-use super::sse::{create_sse_stream, FlagUpdateEvent};
 
 // ── Helper: extract bearer token from headers ────────────────
 
@@ -124,7 +124,10 @@ pub async fn handle_put_flagfile(
     let (remainder, parsed) = match parse_flagfile_with_segments(&body_for_parse) {
         Ok(result) => result,
         Err(e) => {
-            metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+            metrics()
+                .push_total
+                .with_label_values(&[ns_key, "error"])
+                .inc();
             return (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 Json(serde_json::json!({"error": format!("parse error: {}", e)})),
@@ -134,7 +137,10 @@ pub async fn handle_put_flagfile(
     };
 
     if !remainder.trim().is_empty() {
-        metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+        metrics()
+            .push_total
+            .with_label_values(&[ns_key, "error"])
+            .inc();
         return (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(serde_json::json!({
@@ -180,8 +186,12 @@ pub async fn handle_put_flagfile(
                 Ok(()) => {
                     let m = metrics();
                     m.push_total.with_label_values(&[ns_key, "ok"]).inc();
-                    m.push_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
-                    m.flags_total.with_label_values(&[ns_key]).set(flags_count as i64);
+                    m.push_duration
+                        .with_label_values(&[ns_key])
+                        .observe(start.elapsed().as_secs_f64());
+                    m.flags_total
+                        .with_label_values(&[ns_key])
+                        .set(flags_count as i64);
                     (
                         StatusCode::OK,
                         Json(serde_json::json!({
@@ -193,7 +203,10 @@ pub async fn handle_put_flagfile(
                         .into_response()
                 }
                 Err(e) => {
-                    metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                    metrics()
+                        .push_total
+                        .with_label_values(&[ns_key, "error"])
+                        .inc();
                     (
                         StatusCode::INTERNAL_SERVER_ERROR,
                         Json(serde_json::json!({"error": format!("raft propose: {}", e)})),
@@ -205,7 +218,10 @@ pub async fn handle_put_flagfile(
             // Follower: forward the write to the current leader.
             let leader_id = handle.leader_id();
             if leader_id == 0 {
-                metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                metrics()
+                    .push_total
+                    .with_label_values(&[ns_key, "error"])
+                    .inc();
                 return (
                     StatusCode::SERVICE_UNAVAILABLE,
                     Json(serde_json::json!({"error": "no leader elected yet"})),
@@ -221,8 +237,12 @@ pub async fn handle_put_flagfile(
                     Ok(resp) if resp.success => {
                         let m = metrics();
                         m.push_total.with_label_values(&[ns_key, "ok"]).inc();
-                        m.push_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
-                        m.flags_total.with_label_values(&[ns_key]).set(resp.flags_count as i64);
+                        m.push_duration
+                            .with_label_values(&[ns_key])
+                            .observe(start.elapsed().as_secs_f64());
+                        m.flags_total
+                            .with_label_values(&[ns_key])
+                            .set(resp.flags_count as i64);
                         (
                             StatusCode::OK,
                             Json(serde_json::json!({
@@ -234,7 +254,10 @@ pub async fn handle_put_flagfile(
                             .into_response()
                     }
                     Ok(resp) => {
-                        metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                        metrics()
+                            .push_total
+                            .with_label_values(&[ns_key, "error"])
+                            .inc();
                         (
                             StatusCode::INTERNAL_SERVER_ERROR,
                             Json(serde_json::json!({"error": resp.error})),
@@ -242,7 +265,10 @@ pub async fn handle_put_flagfile(
                             .into_response()
                     }
                     Err(e) => {
-                        metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+                        metrics()
+                            .push_total
+                            .with_label_values(&[ns_key, "error"])
+                            .inc();
                         (
                             StatusCode::BAD_GATEWAY,
                             Json(serde_json::json!({
@@ -272,7 +298,10 @@ pub async fn handle_put_flagfile(
             flags_count,
         };
         if let Err(e) = store.put_flagfile(ns_key, body.as_bytes(), &meta).await {
-            metrics().push_total.with_label_values(&[ns_key, "error"]).inc();
+            metrics()
+                .push_total
+                .with_label_values(&[ns_key, "error"])
+                .inc();
             return (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(serde_json::json!({"error": format!("storage error: {}", e)})),
@@ -311,8 +340,12 @@ pub async fn handle_put_flagfile(
 
     let m = metrics();
     m.push_total.with_label_values(&[ns_key, "ok"]).inc();
-    m.push_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
-    m.flags_total.with_label_values(&[ns_key]).set(flags_count as i64);
+    m.push_duration
+        .with_label_values(&[ns_key])
+        .observe(start.elapsed().as_secs_f64());
+    m.flags_total
+        .with_label_values(&[ns_key])
+        .set(flags_count as i64);
 
     (
         StatusCode::OK,
@@ -375,10 +408,7 @@ pub async fn handle_eval(
     headers: HeaderMap,
 ) -> Response {
     let start = Instant::now();
-    let ns_key = params
-        .namespace
-        .as_deref()
-        .unwrap_or(ROOT_NAMESPACE);
+    let ns_key = params.namespace.as_deref().unwrap_or(ROOT_NAMESPACE);
     let flag_name = &params.flag_name;
 
     let ns_config = match state.namespace_config(ns_key) {
@@ -412,7 +442,9 @@ pub async fn handle_eval(
         let m = metrics();
         m.eval_total.with_label_values(&[ns_key, flag_name]).inc();
         m.eval_errors.with_label_values(&[ns_key]).inc();
-        m.eval_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
+        m.eval_duration
+            .with_label_values(&[ns_key])
+            .observe(start.elapsed().as_secs_f64());
         if plain {
             return (StatusCode::NOT_FOUND, "flag not found").into_response();
         }
@@ -440,7 +472,9 @@ pub async fn handle_eval(
 
     let m = metrics();
     m.eval_total.with_label_values(&[ns_key, flag_name]).inc();
-    m.eval_duration.with_label_values(&[ns_key]).observe(start.elapsed().as_secs_f64());
+    m.eval_duration
+        .with_label_values(&[ns_key])
+        .observe(start.elapsed().as_secs_f64());
 
     match result {
         Some((val, _reason)) => format_flag_response(flag_name, &val, plain),
@@ -473,25 +507,41 @@ fn format_flag_response(flag_name: &str, val: &FlagReturn, plain: bool) -> Respo
             if plain {
                 return (StatusCode::OK, v.to_string()).into_response();
             }
-            (StatusCode::OK, Json(serde_json::json!({"flag": flag_name, "value": v}))).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"flag": flag_name, "value": v})),
+            )
+                .into_response()
         }
         FlagReturn::Json(v) => {
             if plain {
                 return (StatusCode::OK, v.to_string()).into_response();
             }
-            (StatusCode::OK, Json(serde_json::json!({"flag": flag_name, "value": v}))).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"flag": flag_name, "value": v})),
+            )
+                .into_response()
         }
         FlagReturn::Integer(v) => {
             if plain {
                 return (StatusCode::OK, v.to_string()).into_response();
             }
-            (StatusCode::OK, Json(serde_json::json!({"flag": flag_name, "value": v}))).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"flag": flag_name, "value": v})),
+            )
+                .into_response()
         }
         FlagReturn::Str(v) => {
             if plain {
                 return (StatusCode::OK, v.clone()).into_response();
             }
-            (StatusCode::OK, Json(serde_json::json!({"flag": flag_name, "value": v}))).into_response()
+            (
+                StatusCode::OK,
+                Json(serde_json::json!({"flag": flag_name, "value": v})),
+            )
+                .into_response()
         }
     }
 }
@@ -508,7 +558,7 @@ pub fn evaluate_rules_with_reason(
 ) -> Option<(FlagReturn, &'static str)> {
     for rule in rules {
         match rule {
-            Rule::BoolExpressionValue(expr, return_val) => {
+            Rule::BoolExpressionValue(expr, return_val, _) => {
                 if let Ok(true) = eval_with_segments(expr, context, flag_name, segments) {
                     return Some((return_val.clone(), "TARGETING_MATCH"));
                 }

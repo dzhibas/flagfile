@@ -47,8 +47,8 @@ impl FlagStore for MemoryStore {
     }
 
     async fn apply_snapshot(&self, snapshot: &[u8]) -> Result<(), String> {
-        let deserialized: StoreSnapshot =
-            serde_json::from_slice(snapshot).map_err(|e| format!("failed to deserialize snapshot: {}", e))?;
+        let deserialized: StoreSnapshot = serde_json::from_slice(snapshot)
+            .map_err(|e| format!("failed to deserialize snapshot: {}", e))?;
         let mut data = self.data.write().await;
         data.clear();
         for (namespace, entry) in deserialized.entries {

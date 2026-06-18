@@ -60,9 +60,10 @@ FF-testing {
 // @test FF-feature-complex-ticket-234234(a=b, c=d, dd=4, z="demo car") == true
 FF-feature-complex-ticket-234234 {
     // complex bool expression
+    @name "segment match"
     segment(complex_segment_test) -> TRUE
 
-    // another one
+    // @name demo car opt-out
     z == "demo car" -> FALSE
 
     // with checking more

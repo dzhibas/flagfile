@@ -232,8 +232,14 @@ pub async fn run_raft_node(
                 if current_leader == 0 {
                     println!("raft node {}: leader unknown", node_id);
                 } else if current_leader == node_id {
-                    println!("raft node {}: became leader (term {})", node_id, raw_node.raft.term);
-                    metrics().raft_elections.with_label_values(&[&node_id_str]).inc();
+                    println!(
+                        "raft node {}: became leader (term {})",
+                        node_id, raw_node.raft.term
+                    );
+                    metrics()
+                        .raft_elections
+                        .with_label_values(&[&node_id_str])
+                        .inc();
                 } else {
                     println!(
                         "raft node {}: following leader {} (term {})",
@@ -241,10 +247,22 @@ pub async fn run_raft_node(
                     );
                 }
                 let m = metrics();
-                let state_val = if current_leader == 0 { 0 } else if current_leader == node_id { 3 } else { 1 };
-                m.raft_state.with_label_values(&[&node_id_str]).set(state_val);
-                m.raft_leader_id.with_label_values(&[&node_id_str]).set(current_leader as i64);
-                m.raft_term.with_label_values(&[&node_id_str]).set(raw_node.raft.term as i64);
+                let state_val = if current_leader == 0 {
+                    0
+                } else if current_leader == node_id {
+                    3
+                } else {
+                    1
+                };
+                m.raft_state
+                    .with_label_values(&[&node_id_str])
+                    .set(state_val);
+                m.raft_leader_id
+                    .with_label_values(&[&node_id_str])
+                    .set(current_leader as i64);
+                m.raft_term
+                    .with_label_values(&[&node_id_str])
+                    .set(raw_node.raft.term as i64);
                 last_leader = current_leader;
             }
             leader_id_clone.store(current_leader, Ordering::Relaxed);
@@ -260,7 +278,10 @@ pub async fn run_raft_node(
             if let Some(hs) = ready.hs() {
                 storage.set_hard_state(hs.clone());
                 committed_clone.store(hs.commit, Ordering::Relaxed);
-                metrics().raft_committed.with_label_values(&[&node_id_str]).set(hs.commit as i64);
+                metrics()
+                    .raft_committed
+                    .with_label_values(&[&node_id_str])
+                    .set(hs.commit as i64);
             }
             if !ready.entries().is_empty() {
                 if let Err(e) = storage.append(ready.entries()) {
@@ -326,7 +347,10 @@ pub async fn run_raft_node(
             // This is a simplified approach: we drain all pending senders once
             // any committed entries come through.
             if !committed.is_empty() {
-                metrics().raft_last_applied.with_label_values(&[&node_id_str]).set(applied_index as i64);
+                metrics()
+                    .raft_last_applied
+                    .with_label_values(&[&node_id_str])
+                    .set(applied_index as i64);
                 for tx in pending.drain(..) {
                     let _ = tx.send(Ok(()));
                 }
@@ -369,7 +393,9 @@ pub async fn run_raft_node(
             raw_node.advance_apply();
 
             // 6. Trigger snapshot if enough entries have been applied.
-            if snapshot_threshold > 0 && applied_index > 0 && applied_index.is_multiple_of(snapshot_threshold)
+            if snapshot_threshold > 0
+                && applied_index > 0
+                && applied_index.is_multiple_of(snapshot_threshold)
             {
                 match state_machine.snapshot().await {
                     Ok(data) => {
@@ -383,7 +409,10 @@ pub async fn run_raft_node(
                         if let Err(e) = storage.compact(applied_index) {
                             eprintln!("raft compact error: {}", e);
                         }
-                        metrics().raft_snapshots.with_label_values(&[&node_id_str]).inc();
+                        metrics()
+                            .raft_snapshots
+                            .with_label_values(&[&node_id_str])
+                            .inc();
                     }
                     Err(e) => {
                         eprintln!("raft state_machine snapshot error: {}", e);

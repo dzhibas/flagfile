@@ -38,10 +38,7 @@ pub async fn fetch_and_update(
     };
 
     if !response.status().is_success() {
-        eprintln!(
-            "Sidecar: upstream returned {}",
-            response.status()
-        );
+        eprintln!("Sidecar: upstream returned {}", response.status());
         return false;
     }
 
@@ -157,8 +154,8 @@ pub async fn upstream_sse_listener(
                         if line.is_empty() {
                             // Empty line = end of event
                             if !current_event.is_empty() {
-                                let should_fetch = current_event == "connected"
-                                    || current_event == "flag_update";
+                                let should_fetch =
+                                    current_event == "connected" || current_event == "flag_update";
                                 let is_shutdown = current_event == "server_shutdown";
 
                                 if should_fetch || is_shutdown {

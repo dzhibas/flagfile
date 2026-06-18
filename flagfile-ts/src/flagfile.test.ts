@@ -36,6 +36,57 @@ describe('parseFlagfile', () => {
         }
     });
 
+    it('attaches a bare quoted @name to the rule', () => {
+        const data = `FF-checkout {
+    @name "EU rollout"
+    countryCode == NL -> true
+    false
+}`;
+        const r = parseFlagfile(data);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const def = r.value.get('FF-checkout')!;
+            const rule = def.rules[0];
+            expect(rule.type).toBe('BoolExpressionValue');
+            if (rule.type === 'BoolExpressionValue') {
+                expect(rule.name).toBe('EU rollout');
+            }
+            expect(def.rules[1].type).toBe('Value');
+        }
+    });
+
+    it('attaches a // @name comment-prefixed name to the rule', () => {
+        const data = `FF-checkout {
+    // @name beta cohort
+    countryCode == NL -> true
+    false
+}`;
+        const r = parseFlagfile(data);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const rule = r.value.get('FF-checkout')!.rules[0];
+            if (rule.type === 'BoolExpressionValue') {
+                expect(rule.name).toBe('beta cohort');
+            }
+        }
+    });
+
+    it('does not treat a plain comment as a rule name', () => {
+        const data = `FF-checkout {
+    // just a comment
+    countryCode == NL -> true
+    false
+}`;
+        const r = parseFlagfile(data);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const rule = r.value.get('FF-checkout')!.rules[0];
+            if (rule.type === 'BoolExpressionValue') {
+                expect(rule.name).toBeUndefined();
+            }
+        }
+    });
+
     it('parses snake_case flag names', () => {
         const data = `FF_feature_y {
     FALSE
@@ -142,6 +193,26 @@ FF-beta -> false`;
             const def = r.value.get('FF-pay')!;
             expect(def.metadata.owner).toBe('payments-team');
             expect(def.rules.length).toBe(1);
+        }
+    });
+
+    it('parses @description quoted', () => {
+        const data = '@description "this is desc"\nFF-x -> true';
+        const r = parseFlagfile(data);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            expect(r.value.get('FF-x')!.metadata.description).toBe('this is desc');
+        }
+    });
+
+    it('parses @description unquoted to end of line', () => {
+        const data = '@description this is desc\n@owner "team"\nFF-x -> true';
+        const r = parseFlagfile(data);
+        expect(r.ok).toBe(true);
+        if (r.ok) {
+            const def = r.value.get('FF-x')!;
+            expect(def.metadata.description).toBe('this is desc');
+            expect(def.metadata.owner).toBe('team');
         }
     });
 

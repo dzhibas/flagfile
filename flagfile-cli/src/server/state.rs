@@ -72,4 +72,3 @@ impl AppState {
         ns_param.unwrap_or(ROOT_NAMESPACE)
     }
 }
-

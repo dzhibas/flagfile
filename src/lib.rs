@@ -6,9 +6,9 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub mod ast;
 pub mod builder;
 pub mod eval;
-pub mod transpile;
 pub mod parse;
 pub mod parse_flagfile;
+pub mod transpile;
 
 pub use ast::FlagMetadata;
 pub use eval::{Context, Segments};
@@ -194,7 +194,7 @@ fn evaluate_rules(
 ) -> Option<FlagReturn> {
     for rule in rules {
         match rule {
-            Rule::BoolExpressionValue(expr, return_val) => {
+            Rule::BoolExpressionValue(expr, return_val, _) => {
                 if let Ok(true) = eval::eval_with_segments(expr, context, flag_name, segments) {
                     return Some(return_val.clone());
                 }

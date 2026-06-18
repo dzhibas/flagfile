@@ -90,6 +90,7 @@ pub fn classify_line(
             || after_at.starts_with("deprecated")
             || after_at.starts_with("requires")
             || after_at.starts_with("test")
+            || after_at.starts_with("name")
         {
             return LineType::Annotation;
         }

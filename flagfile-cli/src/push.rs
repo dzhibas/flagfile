@@ -130,7 +130,10 @@ pub async fn run_push(
         Ok(resp) => {
             let count = resp.flags_count.unwrap_or(0);
             let hash = resp.hash.unwrap_or_else(|| "unknown".to_string());
-            println!("✓ Pushed {} flags to {} (hash: {})", count, ns_display, hash);
+            println!(
+                "✓ Pushed {} flags to {} (hash: {})",
+                count, ns_display, hash
+            );
         }
         Err(_) => {
             println!("✓ Pushed to {}", ns_display);
