@@ -96,6 +96,10 @@ pub fn format_flagfile(input: &str) -> String {
     let mut prev_expects_continuation = false;
     let mut prev_was_blank = false;
     let mut prev_was_open_brace = false;
+    // State for enforcing blank-line separation around top-level block entries.
+    let mut prev_top_close = false;
+    let mut prev_line_type: Option<LineType> = None;
+    let mut top_group_start: usize = 0;
 
     for line in &lines {
         let trimmed = line.trim();
@@ -139,11 +143,49 @@ pub fn format_flagfile(input: &str) -> String {
             }
         }
 
+        let preceded_by_blank = prev_was_blank;
         prev_was_blank = false;
 
         // ── Adjust depth BEFORE output for closing braces ──────
         if line_type == LineType::ClosingBrace {
             depth = depth.saturating_sub(1);
+        }
+
+        // ── Enforce blank-line separation around top-level blocks ──
+        // A top-level flag/segment with a `{ ... }` scope is set off from its
+        // neighbours by a single blank line; consecutive short flags
+        // (`FF-x -> true`) stay packed together.
+        let at_top_level = depth == 0;
+        if at_top_level && line_type != LineType::ClosingBrace {
+            // Rule A: a blank line follows a top-level block's closing brace.
+            if prev_top_close && !output.last().is_some_and(|l| l.is_empty()) {
+                output.push(String::new());
+            }
+
+            // Track where the current top-level entry begins, including any
+            // leading comments/annotations, so a block header can insert a
+            // separating blank above the whole group rather than just itself.
+            let starts_new_group = output.is_empty()
+                || output.last().is_some_and(|l| l.is_empty())
+                || preceded_by_blank
+                || prev_top_close
+                || matches!(
+                    prev_line_type,
+                    Some(LineType::FlagHeaderShort) | Some(LineType::EnvHeaderShort)
+                );
+            if starts_new_group {
+                top_group_start = output.len();
+            }
+
+            // Rule B: a blank line precedes a top-level block entry's group.
+            if matches!(
+                line_type,
+                LineType::FlagHeaderBlock | LineType::SegmentHeader
+            ) && top_group_start > 0
+                && !output[top_group_start - 1].is_empty()
+            {
+                output.insert(top_group_start, String::new());
+            }
         }
 
         // ── Compute indentation ────────────────────────────────
@@ -203,6 +245,10 @@ pub fn format_flagfile(input: &str) -> String {
             }
             _ => false,
         };
+
+        // ── Track top-level block state for the next iteration ──
+        prev_line_type = Some(line_type.clone());
+        prev_top_close = at_top_level && line_type == LineType::ClosingBrace;
     }
 
     // Remove trailing blank lines
@@ -643,6 +689,98 @@ FF-b -> FALSE
 ";
         // The blank line between the two flags should be preserved
         assert_eq!(format_flagfile(input), input);
+    }
+
+    // ── Blank-line separation around block flags ───────────────
+
+    #[test]
+    fn test_blank_inserted_between_block_flags() {
+        let input = "\
+FF-a {
+    x == y -> TRUE
+    FALSE
+}
+FF-b {
+    FALSE
+}
+";
+        let expected = "\
+FF-a {
+    x == y -> TRUE
+    FALSE
+}
+
+FF-b {
+    FALSE
+}
+";
+        assert_eq!(format_flagfile(input), expected);
+    }
+
+    #[test]
+    fn test_blank_inserted_after_block_before_short() {
+        let input = "\
+FF-a {
+    FALSE
+}
+FF-b -> TRUE
+";
+        let expected = "\
+FF-a {
+    FALSE
+}
+
+FF-b -> TRUE
+";
+        assert_eq!(format_flagfile(input), expected);
+    }
+
+    #[test]
+    fn test_blank_inserted_before_block_after_short() {
+        let input = "\
+FF-a -> TRUE
+FF-b {
+    FALSE
+}
+";
+        let expected = "\
+FF-a -> TRUE
+
+FF-b {
+    FALSE
+}
+";
+        assert_eq!(format_flagfile(input), expected);
+    }
+
+    #[test]
+    fn test_short_flags_stay_packed() {
+        let input = "\
+FF-a -> TRUE
+FF-b -> FALSE
+FF-c -> TRUE
+";
+        assert_eq!(format_flagfile(input), input);
+    }
+
+    #[test]
+    fn test_blank_before_block_keeps_leading_comment_attached() {
+        let input = "\
+FF-a -> TRUE
+// comment for b
+FF-b {
+    FALSE
+}
+";
+        let expected = "\
+FF-a -> TRUE
+
+// comment for b
+FF-b {
+    FALSE
+}
+";
+        assert_eq!(format_flagfile(input), expected);
     }
 
     // ── Complex real-world scenario ────────────────────────────
