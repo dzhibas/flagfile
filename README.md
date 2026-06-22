@@ -10,6 +10,13 @@ it has a cli available through `brew install dzhibas/tap/flagfile-cli` which all
 
 it also have libraries to work with flagfile in each language, check our [examples/](examples/) folder
 
+## 📖 Syntax guide
+
+New to Flagfile? Start with the **[Syntax Guide](docs/syntax/README.md)** — a
+step-by-step walkthrough of the format, from the simplest `FF-flag -> true` up
+through rules, comparisons, functions, percentage rollouts, segments,
+environments, and metadata annotations.
+
 ## Usage in Rust
 
 Add the dependency to your `Cargo.toml`:
