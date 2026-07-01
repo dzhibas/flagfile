@@ -330,7 +330,9 @@ impl LdClient {
                 // Reference LD's *existing* variation ordering by value so we
                 // never depend on local indices that may have drifted.
                 let live_values = extract_variation_values(&live);
-                self.patch_flag(flag, only_env, &live_values).await?;
+                // Existing flag: never touch `on` — a kill-switch toggled in
+                // the LD UI must survive the push (the ownership boundary).
+                self.patch_flag(flag, only_env, &live_values, false).await?;
                 Ok(Outcome::Updated)
             }
             None => {
@@ -339,7 +341,9 @@ impl LdClient {
                 // in our order — so local indices line up.
                 let live_values: Vec<Value> =
                     flag.variations.iter().map(|v| v.value.clone()).collect();
-                self.patch_flag(flag, only_env, &live_values).await?;
+                // Brand-new flag: LD defaults `on` to false, so enable each env
+                // we configure — otherwise the targeting we just wrote is inert.
+                self.patch_flag(flag, only_env, &live_values, true).await?;
                 Ok(Outcome::Created)
             }
         }
@@ -394,11 +398,17 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
     /// references we emit are resolved against it by value (appending any value
     /// LD is missing), so they stay correct even if the Flagfile reordered or
     /// changed its returns since the flag was created.
+    ///
+    /// `enable_on` is set only when the flag was just created: a new LD flag
+    /// starts with `on: false`, so we must turn each configured env on for the
+    /// targeting to serve. On updates it is false, so the env's live on/off
+    /// state (a UI kill-switch) is left untouched.
     async fn patch_flag(
         &self,
         flag: &LdFlag,
         only_env: Option<&str>,
         live_values: &[Value],
+        enable_on: bool,
     ) -> Result<(), String> {
         let url = format!(
             "{}/api/v2/flags/{}/{}",
@@ -437,8 +447,10 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
             ops.push(json!({ "op": "replace", "path": "/description", "value": desc }));
         }
 
-        // Per-environment targeting. `on` and ad-hoc `targets` are intentionally
-        // never touched (owned by LD at runtime) — see the transpile module.
+        // Per-environment targeting. Ad-hoc `targets` and the env's `on`/off
+        // state are owned by LD at runtime — see the transpile module. We only
+        // set `on` for a flag we just created (see `enable_on`); on updates it
+        // is left as-is so a kill-switch toggled in the UI survives the push.
         let mut touched_env = false;
         for (env_key, env) in &flag.environments {
             if let Some(only) = only_env {
@@ -448,9 +460,11 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
             }
             touched_env = true;
             let base = format!("/environments/{}", env_key);
-            // Turn the env on so the configured targeting actually serves —
-            // otherwise LD serves the off variation and ignores rules/fallthrough.
-            ops.push(json!({ "op": "replace", "path": format!("{}/on", base), "value": true }));
+            // Newly created flag only: turn the env on so the targeting we just
+            // wrote actually serves (LD defaults a new flag's `on` to false).
+            if enable_on {
+                ops.push(json!({ "op": "replace", "path": format!("{}/on", base), "value": true }));
+            }
             let rules: Vec<Value> = env
                 .rules
                 .iter()
