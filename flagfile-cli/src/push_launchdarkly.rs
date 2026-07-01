@@ -15,7 +15,9 @@ use std::process;
 use serde::Deserialize;
 use serde_json::{json, Value};
 
-use flagfile_lib::transpile::launchdarkly::{transpile, LdFlag, RuleTarget, TranspileConfig};
+use flagfile_lib::transpile::launchdarkly::{
+    transpile, LdFlag, LdVariation, RuleTarget, TranspileConfig,
+};
 
 const DEFAULT_BASE_URL: &str = "https://app.launchdarkly.com";
 
@@ -58,6 +60,7 @@ fn resolve_token(secret_arg: Option<&str>, config: &LaunchDarklyConfig) -> Optio
         .or_else(|| config.api_token.clone())
 }
 
+#[allow(clippy::too_many_arguments)]
 pub async fn run_push(
     flagfile_path: &str,
     project_arg: Option<&str>,
@@ -66,6 +69,7 @@ pub async fn run_push(
     config_path: &str,
     flags_filter: &[String],
     debug: bool,
+    dry_run: bool,
 ) {
     if let Err(()) = push(
         flagfile_path,
@@ -75,6 +79,7 @@ pub async fn run_push(
         config_path,
         flags_filter,
         debug,
+        dry_run,
     )
     .await
     {
@@ -82,6 +87,7 @@ pub async fn run_push(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn push(
     flagfile_path: &str,
     project_arg: Option<&str>,
@@ -90,6 +96,7 @@ async fn push(
     config_path: &str,
     flags_filter: &[String],
     debug: bool,
+    dry_run: bool,
 ) -> Result<(), ()> {
     let config = load_config(config_path);
 
@@ -212,14 +219,19 @@ async fn push(
         project_key: project_key.clone(),
         token,
         debug,
+        dry_run,
     };
     if debug {
         eprintln!(
-            "[debug] LaunchDarkly push: base_url={} project={} target_env={}\n",
+            "[debug] LaunchDarkly push: base_url={} project={} target_env={} dry_run={}\n",
             client.base_url,
             client.project_key,
-            only_env.as_deref().unwrap_or("<all>")
+            only_env.as_deref().unwrap_or("<all>"),
+            dry_run,
         );
+    }
+    if dry_run {
+        println!("DRY RUN — reading LaunchDarkly state; no changes will be applied.\n");
     }
 
     let mut created = 0usize;
@@ -236,6 +248,9 @@ async fn push(
                 updated += 1;
                 println!("✓ updated {}", flag.key);
             }
+            // In dry-run the plan is printed by sync_flag; just tally here.
+            Ok(Outcome::WouldCreate) => created += 1,
+            Ok(Outcome::WouldUpdate) => updated += 1,
             Err(e) => {
                 failed += 1;
                 eprintln!("✗ {}: {}", flag.key, e);
@@ -247,10 +262,17 @@ async fn push(
         Some(env) => format!("project '{}' env '{}'", project_key, env),
         None => format!("project '{}'", project_key),
     };
-    println!(
-        "\nDone ({}): {} created, {} updated, {} failed",
-        target, created, updated, failed
-    );
+    if dry_run {
+        println!(
+            "\nDry run ({}): {} to create, {} to update, {} failed. No changes applied.",
+            target, created, updated, failed
+        );
+    } else {
+        println!(
+            "\nDone ({}): {} created, {} updated, {} failed",
+            target, created, updated, failed
+        );
+    }
 
     if failed > 0 {
         Err(())
@@ -262,6 +284,10 @@ async fn push(
 enum Outcome {
     Created,
     Updated,
+    /// dry-run: the flag would be created (nothing was written).
+    WouldCreate,
+    /// dry-run: the flag would be updated (nothing was written).
+    WouldUpdate,
 }
 
 /// Thin LD REST client. Centralises auth and (when `debug`) logs every request
@@ -272,6 +298,8 @@ struct LdClient {
     project_key: String,
     token: String,
     debug: bool,
+    /// When set, only reads (GET) are performed; writes are printed as a plan.
+    dry_run: bool,
 }
 
 impl LdClient {
@@ -323,30 +351,109 @@ impl LdClient {
         Ok((status, text))
     }
 
-    /// Create the flag if absent, otherwise patch its targeting.
+    /// Create the flag if absent, otherwise patch its targeting. In dry-run the
+    /// read still happens (to tell create from update and resolve LD's live
+    /// variation order), but every write is printed as a plan instead of sent.
     async fn sync_flag(&self, flag: &LdFlag, only_env: Option<&str>) -> Result<Outcome, String> {
         match self.get_flag(&flag.key).await? {
             Some(live) => {
                 // Reference LD's *existing* variation ordering by value so we
                 // never depend on local indices that may have drifted.
                 let live_values = extract_variation_values(&live);
+                if self.dry_run {
+                    self.print_plan(flag, only_env, &live_values, false)?;
+                    return Ok(Outcome::WouldUpdate);
+                }
                 // Existing flag: never touch `on` — a kill-switch toggled in
                 // the LD UI must survive the push (the ownership boundary).
                 self.patch_flag(flag, only_env, &live_values, false).await?;
                 Ok(Outcome::Updated)
             }
             None => {
-                self.create_flag(flag).await?;
-                // A freshly created flag holds exactly the variations we sent,
-                // in our order — so local indices line up.
+                // A flag that doesn't exist yet will hold exactly the variations
+                // we send, in our order — so local indices line up.
                 let live_values: Vec<Value> =
                     flag.variations.iter().map(|v| v.value.clone()).collect();
+                if self.dry_run {
+                    self.print_plan(flag, only_env, &live_values, true)?;
+                    return Ok(Outcome::WouldCreate);
+                }
+                self.create_flag(flag).await?;
                 // Brand-new flag: LD defaults `on` to false, so enable each env
                 // we configure — otherwise the targeting we just wrote is inert.
                 self.patch_flag(flag, only_env, &live_values, true).await?;
                 Ok(Outcome::Created)
             }
         }
+    }
+
+    /// Print, without writing anything, what `sync_flag` would send for one flag.
+    /// Builds the real request bodies (`build_flag_patch` / `create_body`) so the
+    /// preview can't drift from the push path, and surfaces the same errors (e.g.
+    /// an `--env` not configured for the flag).
+    fn print_plan(
+        &self,
+        flag: &LdFlag,
+        only_env: Option<&str>,
+        live_values: &[Value],
+        is_create: bool,
+    ) -> Result<(), String> {
+        // Build first so a bad --env fails before we print a misleading header.
+        let patch = build_flag_patch(flag, only_env, live_values, is_create)?;
+
+        let (marker, verb) = if is_create {
+            ("+", "CREATE")
+        } else {
+            ("~", "UPDATE")
+        };
+        println!("{} {} — would {}", marker, flag.key, verb);
+        if is_create {
+            let vals: Vec<String> = flag.variations.iter().map(|v| v.value.to_string()).collect();
+            println!("    variations: [{}]", vals.join(", "));
+        }
+        if !patch.var_ops.is_empty() {
+            println!(
+                "    (+{} variation(s) appended to the live flag)",
+                patch.var_ops.len()
+            );
+        }
+        for (env_key, env) in &flag.environments {
+            if let Some(only) = only_env {
+                if env_key != only {
+                    continue;
+                }
+            }
+            let on = if is_create { "on → true" } else { "on untouched" };
+            println!(
+                "    env '{}': {}, {} rule(s), fallthrough {}, offVariation {}",
+                env_key,
+                on,
+                env.rules.len(),
+                describe_target(&env.fallthrough, &flag.variations),
+                env.off_variation,
+            );
+        }
+        // Exact request bodies only when --debug, so a plan can be audited.
+        if self.debug {
+            if is_create {
+                eprintln!(
+                    "    [payload] POST create:\n{}",
+                    serde_json::to_string_pretty(&create_body(flag)).unwrap_or_default()
+                );
+            }
+            if !patch.var_ops.is_empty() {
+                eprintln!(
+                    "    [payload] PATCH variations:\n{}",
+                    serde_json::to_string_pretty(&patch.var_ops).unwrap_or_default()
+                );
+            }
+            eprintln!(
+                "    [payload] PATCH targeting:\n{}",
+                serde_json::to_string_pretty(&patch.ops).unwrap_or_default()
+            );
+        }
+        println!();
+        Ok(())
     }
 
     /// GET the flag: `Some(json)` if it exists, `None` on 404.
@@ -373,19 +480,7 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
 
     async fn create_flag(&self, flag: &LdFlag) -> Result<(), String> {
         let url = format!("{}/api/v2/flags/{}", self.base_url, self.project_key);
-
-        // The create endpoint sets flag-level fields only; per-env targeting is
-        // applied afterwards via PATCH.
-        let mut body = json!({
-            "key": flag.key,
-            "name": flag.name,
-            "variations": flag.variations,
-            "tags": flag.tags,
-        });
-        if let Some(desc) = &flag.description {
-            body["description"] = Value::String(desc.clone());
-        }
-
+        let body = create_body(flag);
         let (status, text) = self.send(reqwest::Method::POST, &url, Some(&body)).await?;
         if !status.is_success() {
             return Err(format!("create failed ({}): {}", status, text));
@@ -393,16 +488,10 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
         Ok(())
     }
 
-    /// Patch the flag's metadata and per-env targeting. `live_values` is the
-    /// flag's current variation values **in LD's order**; all variation
-    /// references we emit are resolved against it by value (appending any value
-    /// LD is missing), so they stay correct even if the Flagfile reordered or
-    /// changed its returns since the flag was created.
-    ///
-    /// `enable_on` is set only when the flag was just created: a new LD flag
-    /// starts with `on: false`, so we must turn each configured env on for the
-    /// targeting to serve. On updates it is false, so the env's live on/off
-    /// state (a UI kill-switch) is left untouched.
+    /// Patch the flag's metadata and per-env targeting. The request bodies are
+    /// built by `build_flag_patch` (pure — see it for variation remapping and the
+    /// `enable_on` rule). LD forbids changing variations and config in the same
+    /// patch, so any new variations go out as their own request first.
     async fn patch_flag(
         &self,
         flag: &LdFlag,
@@ -414,83 +503,13 @@ access (Account settings → Authorization → Access tokens), not an SDK key/cl
             "{}/api/v2/flags/{}/{}",
             self.base_url, self.project_key, flag.key
         );
-
-        // Append (never remove/reorder) any variation value LD doesn't have yet,
-        // so other environments' index-based targeting keeps working. `mapped`
-        // tracks the resulting LD ordering used to resolve indices below. LD
-        // forbids changing variations and config in the same patch, so these go
-        // out as their own request first.
-        let mut var_ops: Vec<Value> = Vec::new();
-        let mut mapped: Vec<Value> = live_values.to_vec();
-        for v in &flag.variations {
-            if !mapped.iter().any(|x| x == &v.value) {
-                var_ops.push(
-                    json!({ "op": "add", "path": "/variations/-", "value": { "value": v.value } }),
-                );
-                mapped.push(v.value.clone());
-            }
-        }
-        // local variation index -> LD variation index, resolved by value.
-        let live_index = |local: usize| -> usize {
-            match flag.variations.get(local) {
-                Some(var) => mapped.iter().position(|x| x == &var.value).unwrap_or(0),
-                None => 0,
-            }
-        };
-
-        let mut ops: Vec<Value> = Vec::new();
-
-        // Flag-level metadata (kept in sync from the Flagfile).
-        ops.push(json!({ "op": "replace", "path": "/name", "value": flag.name }));
-        ops.push(json!({ "op": "replace", "path": "/tags", "value": flag.tags }));
-        if let Some(desc) = &flag.description {
-            ops.push(json!({ "op": "replace", "path": "/description", "value": desc }));
-        }
-
-        // Per-environment targeting. Ad-hoc `targets` and the env's `on`/off
-        // state are owned by LD at runtime — see the transpile module. We only
-        // set `on` for a flag we just created (see `enable_on`); on updates it
-        // is left as-is so a kill-switch toggled in the UI survives the push.
-        let mut touched_env = false;
-        for (env_key, env) in &flag.environments {
-            if let Some(only) = only_env {
-                if env_key != only {
-                    continue;
-                }
-            }
-            touched_env = true;
-            let base = format!("/environments/{}", env_key);
-            // Newly created flag only: turn the env on so the targeting we just
-            // wrote actually serves (LD defaults a new flag's `on` to false).
-            if enable_on {
-                ops.push(json!({ "op": "replace", "path": format!("{}/on", base), "value": true }));
-            }
-            let rules: Vec<Value> = env
-                .rules
-                .iter()
-                .map(|r| remap_rule(r, &live_index))
-                .collect();
-            ops.push(json!({ "op": "replace", "path": format!("{}/rules", base), "value": rules }));
-            ops.push(json!({ "op": "replace", "path": format!("{}/fallthrough", base), "value": remap_target(&env.fallthrough, &live_index) }));
-            ops.push(json!({ "op": "replace", "path": format!("{}/offVariation", base), "value": live_index(env.off_variation) }));
-            ops.push(json!({ "op": "replace", "path": format!("{}/prerequisites", base), "value": env.prerequisites }));
-        }
-
-        if let Some(only) = only_env {
-            if !touched_env {
-                return Err(format!(
-                    "environment '{}' is not configured for this flag",
-                    only
-                ));
-            }
-        }
-
+        let patch = build_flag_patch(flag, only_env, live_values, enable_on)?;
         // 1. Add new variations (separate request — LD rejects mixing the two).
-        if !var_ops.is_empty() {
-            self.patch(&url, &var_ops).await?;
+        if !patch.var_ops.is_empty() {
+            self.patch(&url, &patch.var_ops).await?;
         }
         // 2. Metadata + targeting, now that any new variations exist.
-        self.patch(&url, &ops).await
+        self.patch(&url, &patch.ops).await
     }
 
     /// Send a JSON-Patch array to the flag and check the result.
@@ -557,4 +576,218 @@ fn remap_rule(
         obj.extend(target);
     }
     Value::Object(obj)
+}
+
+/// The create request body for a flag: flag-level fields only (per-env targeting
+/// is applied separately via PATCH). Pure, so `--dry-run` can preview it.
+fn create_body(flag: &LdFlag) -> Value {
+    let mut body = json!({
+        "key": flag.key,
+        "name": flag.name,
+        "variations": flag.variations,
+        "tags": flag.tags,
+    });
+    if let Some(desc) = &flag.description {
+        body["description"] = Value::String(desc.clone());
+    }
+    body
+}
+
+/// The two JSON-Patch request bodies a targeting update sends, in order:
+/// `var_ops` (append missing variations — LD forbids mixing this with config
+/// changes) then `ops` (metadata + per-env targeting).
+struct FlagPatch {
+    var_ops: Vec<Value>,
+    ops: Vec<Value>,
+}
+
+/// Build the patch bodies for one flag against LD's live variation ordering.
+/// Pure (no I/O), so it drives both the real push (`patch_flag`) and the
+/// `--dry-run` preview (`print_plan`) from one source of truth.
+///
+/// `live_values` is the flag's current variation values **in LD's order**; every
+/// variation reference we emit is resolved against it by value (appending any
+/// value LD is missing), so it stays correct even if the Flagfile reordered or
+/// changed its returns since the flag was created.
+///
+/// `enable_on` is set only when the flag was just created: a new LD flag starts
+/// with `on: false`, so each configured env must be turned on for the targeting
+/// to serve. On updates it is false, so the env's live on/off state (a UI
+/// kill-switch) is left untouched.
+fn build_flag_patch(
+    flag: &LdFlag,
+    only_env: Option<&str>,
+    live_values: &[Value],
+    enable_on: bool,
+) -> Result<FlagPatch, String> {
+    // Append (never remove/reorder) any variation value LD doesn't have yet, so
+    // other environments' index-based targeting keeps working. `mapped` tracks
+    // the resulting LD ordering used to resolve indices below.
+    let mut var_ops: Vec<Value> = Vec::new();
+    let mut mapped: Vec<Value> = live_values.to_vec();
+    for v in &flag.variations {
+        if !mapped.iter().any(|x| x == &v.value) {
+            var_ops.push(
+                json!({ "op": "add", "path": "/variations/-", "value": { "value": v.value } }),
+            );
+            mapped.push(v.value.clone());
+        }
+    }
+    // local variation index -> LD variation index, resolved by value.
+    let live_index = |local: usize| -> usize {
+        match flag.variations.get(local) {
+            Some(var) => mapped.iter().position(|x| x == &var.value).unwrap_or(0),
+            None => 0,
+        }
+    };
+
+    let mut ops: Vec<Value> = Vec::new();
+
+    // Flag-level metadata (kept in sync from the Flagfile).
+    ops.push(json!({ "op": "replace", "path": "/name", "value": flag.name }));
+    ops.push(json!({ "op": "replace", "path": "/tags", "value": flag.tags }));
+    if let Some(desc) = &flag.description {
+        ops.push(json!({ "op": "replace", "path": "/description", "value": desc }));
+    }
+
+    // Per-environment targeting. Ad-hoc `targets` and the env's `on`/off state
+    // are owned by LD at runtime — see the transpile module. We only set `on`
+    // for a flag we just created (see `enable_on`); on updates it is left as-is
+    // so a kill-switch toggled in the UI survives the push.
+    let mut touched_env = false;
+    for (env_key, env) in &flag.environments {
+        if let Some(only) = only_env {
+            if env_key != only {
+                continue;
+            }
+        }
+        touched_env = true;
+        let base = format!("/environments/{}", env_key);
+        if enable_on {
+            ops.push(json!({ "op": "replace", "path": format!("{}/on", base), "value": true }));
+        }
+        let rules: Vec<Value> = env.rules.iter().map(|r| remap_rule(r, &live_index)).collect();
+        ops.push(json!({ "op": "replace", "path": format!("{}/rules", base), "value": rules }));
+        ops.push(json!({ "op": "replace", "path": format!("{}/fallthrough", base), "value": remap_target(&env.fallthrough, &live_index) }));
+        ops.push(json!({ "op": "replace", "path": format!("{}/offVariation", base), "value": live_index(env.off_variation) }));
+        ops.push(json!({ "op": "replace", "path": format!("{}/prerequisites", base), "value": env.prerequisites }));
+    }
+
+    if let Some(only) = only_env {
+        if !touched_env {
+            return Err(format!(
+                "environment '{}' is not configured for this flag",
+                only
+            ));
+        }
+    }
+
+    Ok(FlagPatch { var_ops, ops })
+}
+
+/// One-line, human-readable description of a rule/fallthrough target for the
+/// `--dry-run` plan (shows the served value, not just its index).
+fn describe_target(target: &RuleTarget, variations: &[LdVariation]) -> String {
+    let val = |idx: usize| {
+        variations
+            .get(idx)
+            .map(|v| v.value.to_string())
+            .unwrap_or_else(|| "?".to_string())
+    };
+    match target {
+        RuleTarget::Variation { variation } => {
+            format!("→ variation {} ({})", variation, val(*variation))
+        }
+        RuleTarget::Rollout { rollout } => {
+            let parts: Vec<String> = rollout
+                .variations
+                .iter()
+                .map(|wv| format!("{:.1}%→v{}", wv.weight as f64 / 1000.0, wv.variation))
+                .collect();
+            format!("→ rollout [{}]", parts.join(" "))
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    use flagfile_lib::parse_flagfile::parse_flagfile_with_segments;
+    use flagfile_lib::transpile::launchdarkly::{transpile, TranspileConfig};
+
+    /// Transpile a one-flag Flagfile (single env `_` -> "production") to an LdFlag.
+    fn one_flag(src: &str) -> LdFlag {
+        let (_, parsed) = parse_flagfile_with_segments(src).expect("parse");
+        let cfg = TranspileConfig {
+            project_key: "p".into(),
+            env_keys: BTreeMap::from([("_".into(), "production".into())]),
+            default_context_kind: "user".into(),
+        };
+        transpile(&parsed, &cfg)
+            .expect("transpile")
+            .into_iter()
+            .next()
+            .expect("one flag")
+    }
+
+    fn has_on_op(ops: &[Value]) -> bool {
+        ops.iter().any(|op| {
+            op.get("path")
+                .and_then(|p| p.as_str())
+                .map(|p| p.ends_with("/on"))
+                .unwrap_or(false)
+        })
+    }
+
+    // Regression guard for the ownership boundary (fix #1): a create enables the
+    // env; an update must never emit an `on` op, so a UI kill-switch survives.
+    #[test]
+    fn create_enables_on_update_leaves_it() {
+        let flag = one_flag("FF-x {\n    country == \"NL\" -> true\n    false\n}\n");
+        let live = [Value::Bool(true), Value::Bool(false)];
+
+        let created = build_flag_patch(&flag, None, &live, true).expect("create patch");
+        assert!(has_on_op(&created.ops), "create must enable `on`");
+
+        let updated = build_flag_patch(&flag, None, &live, false).expect("update patch");
+        assert!(!has_on_op(&updated.ops), "update must not touch `on`");
+    }
+
+    // A variation LD doesn't have yet is appended (never reordered) as its own op.
+    #[test]
+    fn missing_variation_is_appended() {
+        let flag = one_flag("FF-x {\n    country == \"NL\" -> true\n    false\n}\n");
+        // LD only knows `true` so far; `false` must be appended.
+        let patch = build_flag_patch(&flag, None, &[Value::Bool(true)], false).expect("patch");
+        assert_eq!(patch.var_ops.len(), 1);
+        assert!(patch.var_ops[0]["path"]
+            .as_str()
+            .unwrap()
+            .starts_with("/variations"));
+    }
+
+    // Targeting an env the flag doesn't configure is an error (same as a push).
+    #[test]
+    fn unconfigured_env_errors() {
+        let flag = one_flag("FF-x {\n    true\n}\n");
+        let err = build_flag_patch(
+            &flag,
+            Some("staging"),
+            &[Value::Bool(true), Value::Bool(false)],
+            false,
+        );
+        assert!(err.is_err());
+    }
+
+    // create_body carries flag-level fields and omits per-env targeting.
+    #[test]
+    fn create_body_has_flag_level_fields() {
+        let flag = one_flag("FF-x {\n    true\n}\n");
+        let body = create_body(&flag);
+        assert_eq!(body["key"], "FF-x");
+        assert!(body.get("variations").is_some());
+        assert!(body.get("environments").is_none());
+    }
 }

@@ -190,6 +190,9 @@ enum Command {
         /// Log every LaunchDarkly API call and payload; --launchdarkly only
         #[arg(long = "debug")]
         debug: bool,
+        /// Show what would be created/updated without applying it; --launchdarkly only
+        #[arg(long = "dry-run")]
+        dry_run: bool,
     },
     /// Pull Flagfile from a remote server
     Pull {
@@ -1399,6 +1402,7 @@ async fn main() {
             env,
             flags,
             debug,
+            dry_run,
         } => {
             if launchdarkly {
                 push_launchdarkly::run_push(
@@ -1409,6 +1413,7 @@ async fn main() {
                     &config,
                     &flags,
                     debug,
+                    dry_run,
                 )
                 .await
             } else {
