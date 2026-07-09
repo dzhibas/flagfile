@@ -1,0 +1,3 @@
+FF-abs-local -> true
+
+@include /etc/hosts

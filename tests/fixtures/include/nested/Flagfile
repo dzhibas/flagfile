@@ -1,0 +1,3 @@
+FF-nested-root -> true
+
+@include sub/Flagfile

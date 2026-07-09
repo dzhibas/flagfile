@@ -25,6 +25,7 @@ TypeScript port — there is one Flagfile language.
 12. [Environments](12-environments.md) — per-environment behavior with `@env`
 13. [Annotations](13-annotations.md) — metadata: owner, expiry, dependencies, …
 14. [Tests](14-tests.md) — `@test` assertions and running them
+15. [Includes](15-includes.md) — composing a Flagfile from multiple files with `@include`
 
 ## Mental model
 

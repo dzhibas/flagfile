@@ -58,13 +58,8 @@ impl LintWarning {
 /// Inner lint logic that returns Ok(()) on success or Err(()) on failure.
 /// Used by both the standalone `lint` command and the combined `check` command.
 pub fn run_lint_inner(flagfile_path: &str) -> Result<(), ()> {
-    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
-        Ok(content) => content,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            return Err(());
-        }
-    };
+    let (_raw, resolved) = crate::read_flagfile_resolved(flagfile_path)?;
+    let flagfile_content = resolved.content;
 
     let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,

@@ -1,0 +1,5 @@
+// @test FF-included-feature(countryCode=nl) == true
+FF-included-feature {
+    lower(countryCode) == nl -> true
+    false
+}

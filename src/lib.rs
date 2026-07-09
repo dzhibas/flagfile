@@ -6,6 +6,8 @@ use wasm_bindgen::prelude::wasm_bindgen;
 pub mod ast;
 pub mod builder;
 pub mod eval;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod include;
 pub mod parse;
 pub mod parse_flagfile;
 pub mod transpile;
@@ -57,14 +59,13 @@ pub fn init_from_str_with_env(content: &str, env: &str) {
     init_from_str_inner(content, Some(env.to_string()));
 }
 
-/// Reads and parses a `Flagfile` with the given environment name.
+/// Reads and parses a `Flagfile` with the given environment name,
+/// resolving any `@include` directives relative to the current directory.
 #[cfg(not(target_arch = "wasm32"))]
 pub fn init_with_env(env: &str) {
-    init_from_str_with_env(
-        &std::fs::read_to_string("Flagfile")
-            .expect("Could not read 'Flagfile' in current directory"),
-        env,
-    );
+    let resolved = include::resolve_includes_from_path(std::path::Path::new("Flagfile"))
+        .unwrap_or_else(|e| panic!("Could not initialize from 'Flagfile': {}", e));
+    init_from_str_with_env(&resolved.content, env);
 }
 
 /// Parse content and store in global state. Returns an error on parse failure
@@ -73,9 +74,15 @@ pub(crate) fn parse_and_store(content: &str, env: Option<String>) -> Result<(), 
     let (remainder, parsed) = parse_flagfile::parse_flagfile_with_segments(content)
         .map_err(|e| format!("Failed to parse Flagfile: {}", e))?;
     if !remainder.trim().is_empty() {
+        let near = remainder.trim().lines().next().unwrap_or("");
+        let hint = if near.starts_with("@include") {
+            " (@include directives are only resolved when loading from a file path — use init().file(...) or the ff CLI)"
+        } else {
+            ""
+        };
         return Err(format!(
-            "Flagfile parsing failed: unexpected content near: {}",
-            remainder.trim().lines().next().unwrap_or("")
+            "Flagfile parsing failed: unexpected content near: {}{}",
+            near, hint
         ));
     }
     let mut flags: HashMap<String, Vec<Rule>> = HashMap::new();

@@ -73,7 +73,14 @@ impl Drop for FlagfileBuilder {
 
         match &self.remote {
             None => {
-                // Local mode — read file, parse, store in global state
+                // Local mode — read file, resolve @include directives,
+                // parse, store in global state
+                #[cfg(not(target_arch = "wasm32"))]
+                let content =
+                    crate::include::resolve_includes_from_path(std::path::Path::new(&self.file))
+                        .unwrap_or_else(|e| panic!("Could not read '{}': {}", self.file, e))
+                        .content;
+                #[cfg(target_arch = "wasm32")]
                 let content = std::fs::read_to_string(&self.file)
                     .unwrap_or_else(|_| panic!("Could not read '{}'", self.file));
                 super::init_from_str_inner(&content, self.env.clone());

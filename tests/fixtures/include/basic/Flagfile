@@ -1,0 +1,4 @@
+// basic include fixture
+FF-basic-local -> true
+
+@include Flagfile.demo

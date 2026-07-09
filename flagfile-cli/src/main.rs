@@ -7,12 +7,14 @@ mod server;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::io::{self, BufRead, IsTerminal, Write};
+use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Mutex;
 
 use clap::{Parser, Subcommand};
 use flagfile_lib::ast::{Atom, FlagMetadata};
 use flagfile_lib::eval::{eval_with_segments, Context, Segments};
+use flagfile_lib::include::{resolve_includes_from_path, ResolvedFlagfile};
 use flagfile_lib::parse_flagfile::{
     extract_test_annotations, parse_flagfile_with_segments, FlagReturn, Rule, TestAnnotation,
 };
@@ -544,14 +546,32 @@ fn run_init() {
     println!("Created Flagfile, Flagfile.tests, and ff.toml");
 }
 
-fn run_list(flagfile_path: &str, show_description: bool) {
-    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
+/// Reads a Flagfile and resolves its `@include` directives relative to its
+/// directory. Returns the raw root-file content alongside the resolved result.
+pub(crate) fn read_flagfile_resolved(
+    flagfile_path: &str,
+) -> Result<(String, ResolvedFlagfile), ()> {
+    let raw = match std::fs::read_to_string(flagfile_path) {
         Ok(content) => content,
         Err(_) => {
             eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
+            return Err(());
         }
     };
+    match resolve_includes_from_path(Path::new(flagfile_path)) {
+        Ok(resolved) => Ok((raw, resolved)),
+        Err(e) => {
+            eprintln!("{}", e);
+            Err(())
+        }
+    }
+}
+
+fn run_list(flagfile_path: &str, show_description: bool) {
+    let Ok((_raw, resolved)) = read_flagfile_resolved(flagfile_path) else {
+        process::exit(1);
+    };
+    let flagfile_content = resolved.content;
 
     let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
@@ -612,13 +632,8 @@ fn run_check(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
 /// Inner validate logic that returns Ok(()) on success or Err(()) on failure.
 /// Used by both the standalone `validate` command and the combined `check` command.
 fn run_validate_inner(flagfile_path: &str) -> Result<(), ()> {
-    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
-        Ok(content) => content,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            return Err(());
-        }
-    };
+    let (_raw, resolved) = read_flagfile_resolved(flagfile_path)?;
+    let flagfile_content = resolved.content;
 
     let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
@@ -660,6 +675,14 @@ fn run_validate_inner(flagfile_path: &str) -> Result<(), ()> {
         }
     }
 
+    if !resolved.includes.is_empty() {
+        println!();
+        println!("Includes:");
+        for inc in &resolved.includes {
+            println!("  {}", inc.path.display());
+        }
+    }
+
     println!();
     println!(
         "{} valid, {} flags, {} rules, {} segments",
@@ -674,6 +697,86 @@ fn run_validate_inner(flagfile_path: &str) -> Result<(), ()> {
 fn run_validate(flagfile_path: &str) {
     if run_validate_inner(flagfile_path).is_err() {
         process::exit(1);
+    }
+}
+
+/// Runs individual test assertion lines against a merged flag map,
+/// accumulating pass/fail counts across test sources.
+struct AssertionRunner<'a> {
+    flags: &'a HashMap<&'a str, Vec<Rule>>,
+    metadata: &'a HashMap<&'a str, FlagMetadata>,
+    segments: &'a Segments,
+    env: Option<&'a str>,
+    pass_label: &'a str,
+    fail_label: &'a str,
+    passed: usize,
+    failed: usize,
+    total: usize,
+}
+
+impl AssertionRunner<'_> {
+    /// `suffix` is appended to every printed line (e.g. " (line 12)");
+    /// `invalid_label` names the source kind in SKIP messages.
+    fn run_line(&mut self, line: &str, suffix: &str, invalid_label: &str) {
+        let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
+            eprintln!("SKIP  {}: {}{}", invalid_label, line, suffix);
+            return;
+        };
+
+        self.total += 1;
+
+        let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
+
+        if !self.flags.contains_key(flag_name) {
+            println!("{}  {} - flag not found{}", self.fail_label, line, suffix);
+            self.failed += 1;
+            return;
+        }
+
+        let result = evaluate_flag_with_env(
+            flag_name,
+            &context,
+            self.flags,
+            self.metadata,
+            self.segments,
+            self.env,
+        );
+
+        match result {
+            Some(ref ret) if result_matches(ret, expected) => {
+                println!("{}  {}{}", self.pass_label, line, suffix);
+                self.passed += 1;
+            }
+            Some(_) => {
+                println!("{}  {}{}", self.fail_label, line, suffix);
+                self.failed += 1;
+            }
+            None => {
+                println!("{}  {} - no rule matched{}", self.fail_label, line, suffix);
+                self.failed += 1;
+            }
+        }
+    }
+
+    fn run_tests_file(&mut self, content: &str) {
+        for line in content.lines() {
+            let line = line.trim();
+            if line.is_empty() || line.starts_with("//") {
+                continue;
+            }
+            self.run_line(line, "", "Invalid test line");
+        }
+    }
+
+    fn run_annotations(&mut self, annotations: &[TestAnnotation], with_line_numbers: bool) {
+        for annotation in annotations {
+            let suffix = if with_line_numbers {
+                format!(" (line {})", annotation.line_number)
+            } else {
+                String::new()
+            };
+            self.run_line(&annotation.assertion, &suffix, "Invalid @test annotation");
+        }
     }
 }
 
@@ -692,16 +795,11 @@ fn run_tests_inner(flagfile_path: &str, testfile_path: &str, env: Option<&str>) 
         "FAIL"
     };
 
-    // 1. Read Flagfile
-    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
-        Ok(content) => content,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            return Err(());
-        }
-    };
+    // 1. Read Flagfile and resolve @include directives
+    let (raw_content, resolved) = read_flagfile_resolved(flagfile_path)?;
+    let flagfile_content = resolved.content;
 
-    // 2. Parse Flagfile
+    // 2. Parse merged Flagfile
     let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
         Err(_) => {
@@ -733,14 +831,36 @@ fn run_tests_inner(flagfile_path: &str, testfile_path: &str, env: Option<&str>) 
     }
     let segments = &parsed.segments;
 
-    // Extract inline @test annotations from comments
-    let inline_tests = extract_test_annotations(&flagfile_content);
+    // Extract inline @test annotations from the raw root file so line
+    // numbers refer to that file, not the merged content
+    let inline_tests = extract_test_annotations(&raw_content);
 
-    // 3. Read test file (optional if inline or annotation tests exist)
+    // Collect test sources of included files: sibling `<path>.tests` files
+    // and inline @test annotations from each included file's own content
+    let included_tests_files: Vec<(PathBuf, String)> = resolved
+        .includes
+        .iter()
+        .filter_map(|inc| {
+            let path = PathBuf::from(format!("{}.tests", inc.path.display()));
+            std::fs::read_to_string(&path).ok().map(|c| (path, c))
+        })
+        .collect();
+    let included_inline_tests: Vec<(&std::path::Path, Vec<TestAnnotation>)> = resolved
+        .includes
+        .iter()
+        .map(|inc| (inc.path.as_path(), extract_test_annotations(&inc.content)))
+        .filter(|(_, annotations)| !annotations.is_empty())
+        .collect();
+
+    // 3. Read test file (optional if any other test source exists)
     let tests_content = match std::fs::read_to_string(testfile_path) {
         Ok(content) => Some(content),
         Err(_) => {
-            if inline_tests.is_empty() && annotation_tests.is_empty() {
+            if inline_tests.is_empty()
+                && annotation_tests.is_empty()
+                && included_tests_files.is_empty()
+                && included_inline_tests.is_empty()
+            {
                 eprintln!("{} does not exist", testfile_path);
                 return Err(());
             }
@@ -748,161 +868,65 @@ fn run_tests_inner(flagfile_path: &str, testfile_path: &str, env: Option<&str>) 
         }
     };
 
-    let mut passed = 0;
-    let mut failed = 0;
-    let mut total = 0;
+    let mut runner = AssertionRunner {
+        flags: &flags,
+        metadata: &metadata,
+        segments,
+        env,
+        pass_label,
+        fail_label,
+        passed: 0,
+        failed: 0,
+        total: 0,
+    };
+    let mut printed_section = false;
+    macro_rules! section {
+        ($($arg:tt)*) => {{
+            if std::mem::replace(&mut printed_section, true) {
+                println!();
+            }
+            println!($($arg)*);
+        }};
+    }
 
     // 4. Run tests from test file
     if let Some(ref content) = tests_content {
-        println!("--- {} ---", testfile_path);
-        for line in content.lines() {
-            let line = line.trim();
-            if line.is_empty() || line.starts_with("//") {
-                continue;
-            }
-
-            let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
-                eprintln!("SKIP  Invalid test line: {}", line);
-                continue;
-            };
-
-            total += 1;
-
-            let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
-
-            if !flags.contains_key(flag_name) {
-                println!("{}  {} - flag not found", fail_label, line);
-                failed += 1;
-                continue;
-            }
-
-            let result =
-                evaluate_flag_with_env(flag_name, &context, &flags, &metadata, segments, env);
-
-            match result {
-                Some(ref ret) if result_matches(ret, expected) => {
-                    println!("{}  {}", pass_label, line);
-                    passed += 1;
-                }
-                Some(_) => {
-                    println!("{}  {}", fail_label, line);
-                    failed += 1;
-                }
-                None => {
-                    println!("{}  {} - no rule matched", fail_label, line);
-                    failed += 1;
-                }
-            }
-        }
+        section!("--- {} ---", testfile_path);
+        runner.run_tests_file(content);
     }
 
-    // 5. Run inline @test annotations (from comments)
+    // 5. Run inline @test annotations (from comments in the root file)
     if !inline_tests.is_empty() {
-        if tests_content.is_some() {
-            println!();
-        }
-        println!("--- inline @test ({}) ---", flagfile_path);
-
-        for annotation in &inline_tests {
-            let line = annotation.assertion.as_str();
-
-            let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
-                eprintln!(
-                    "SKIP  Invalid @test annotation: {} (line {})",
-                    line, annotation.line_number
-                );
-                continue;
-            };
-
-            total += 1;
-
-            let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
-
-            if !flags.contains_key(flag_name) {
-                println!(
-                    "{}  {} - flag not found (line {})",
-                    fail_label, line, annotation.line_number
-                );
-                failed += 1;
-                continue;
-            }
-
-            let result =
-                evaluate_flag_with_env(flag_name, &context, &flags, &metadata, segments, env);
-
-            match result {
-                Some(ref ret) if result_matches(ret, expected) => {
-                    println!("{}  {} (line {})", pass_label, line, annotation.line_number);
-                    passed += 1;
-                }
-                Some(_) => {
-                    println!("{}  {} (line {})", fail_label, line, annotation.line_number);
-                    failed += 1;
-                }
-                None => {
-                    println!(
-                        "{}  {} - no rule matched (line {})",
-                        fail_label, line, annotation.line_number
-                    );
-                    failed += 1;
-                }
-            }
-        }
+        section!("--- inline @test ({}) ---", flagfile_path);
+        runner.run_annotations(&inline_tests, true);
     }
 
-    // 6. Run @test annotations from flag metadata
+    // 6. Run sibling `.tests` files of included files
+    for (path, content) in &included_tests_files {
+        section!("--- {} ---", path.display());
+        runner.run_tests_file(content);
+    }
+
+    // 7. Run inline @test annotations from included files
+    for (path, annotations) in &included_inline_tests {
+        section!("--- inline @test ({}) ---", path.display());
+        runner.run_annotations(annotations, true);
+    }
+
+    // 8. Run @test annotations from flag metadata (merged across includes)
     if !annotation_tests.is_empty() {
-        if tests_content.is_some() || !inline_tests.is_empty() {
-            println!();
-        }
-        println!("--- @test annotations ({}) ---", flagfile_path);
-
-        for annotation in &annotation_tests {
-            let line = annotation.assertion.as_str();
-
-            let Some((flag_name, pairs, expected)) = parse_test_line(line) else {
-                eprintln!("SKIP  Invalid @test annotation: {}", line);
-                continue;
-            };
-
-            total += 1;
-
-            let context: Context = pairs.iter().map(|(k, v)| (*k, Atom::from(*v))).collect();
-
-            if !flags.contains_key(flag_name) {
-                println!("{}  {} - flag not found", fail_label, line);
-                failed += 1;
-                continue;
-            }
-
-            let result =
-                evaluate_flag_with_env(flag_name, &context, &flags, &metadata, segments, env);
-
-            match result {
-                Some(ref ret) if result_matches(ret, expected) => {
-                    println!("{}  {}", pass_label, line);
-                    passed += 1;
-                }
-                Some(_) => {
-                    println!("{}  {}", fail_label, line);
-                    failed += 1;
-                }
-                None => {
-                    println!("{}  {} - no rule matched", fail_label, line);
-                    failed += 1;
-                }
-            }
-        }
+        section!("--- @test annotations ({}) ---", flagfile_path);
+        runner.run_annotations(&annotation_tests, false);
     }
 
-    // 7. Summary
+    // 9. Summary
     println!();
     println!(
         "{} passed, {} failed out of {} tests",
-        passed, failed, total
+        runner.passed, runner.failed, runner.total
     );
 
-    if failed > 0 {
+    if runner.failed > 0 {
         Err(())
     } else {
         Ok(())
@@ -916,13 +940,10 @@ fn run_tests(flagfile_path: &str, testfile_path: &str, env: Option<&str>) {
 }
 
 fn run_eval(flagfile_path: &str, flag_name: &str, context_args: &[String], env: Option<&str>) {
-    let flagfile_content = match std::fs::read_to_string(flagfile_path) {
-        Ok(content) => content,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
-        }
+    let Ok((_raw, resolved)) = read_flagfile_resolved(flagfile_path) else {
+        process::exit(1);
     };
+    let flagfile_content = resolved.content;
 
     let (remainder, parsed) = match parse_flagfile_with_segments(&flagfile_content) {
         Ok(result) => result,
