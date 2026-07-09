@@ -151,6 +151,7 @@ pub fn normalize_line(trimmed: &str, line_type: &LineType) -> String {
                 trimmed.to_string()
             }
         }
+        LineType::Include => trimmed.to_string(),
         LineType::ClosingBrace => "}".to_string(),
         LineType::FlagHeaderBlock => normalize_flag_header_block(trimmed),
         LineType::FlagHeaderShort => normalize_short_form(trimmed),

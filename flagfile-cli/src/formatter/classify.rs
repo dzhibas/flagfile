@@ -12,6 +12,7 @@ pub enum LineType {
     BlockCommentEnd,
     BlockCommentFull,
     Annotation,
+    Include,
     FlagHeaderBlock,
     FlagHeaderShort,
     SegmentHeader,
@@ -67,6 +68,11 @@ pub fn classify_line(
     // ── Segment header ──────────────────────────────────────────────
     if trimmed.starts_with("@segment") || trimmed.starts_with("@segment ") {
         return LineType::SegmentHeader;
+    }
+
+    // ── Include directive ───────────────────────────────────────────
+    if trimmed.starts_with("@include ") {
+        return LineType::Include;
     }
 
     // ── @env rules ──────────────────────────────────────────────────
@@ -233,6 +239,27 @@ mod tests {
         assert_eq!(
             classify_line("FF-my-flag -> true", false, false),
             LineType::FlagHeaderShort
+        );
+    }
+
+    #[test]
+    fn test_classify_include() {
+        assert_eq!(
+            classify_line("@include Flagfile.demo", false, false),
+            LineType::Include
+        );
+        assert_eq!(
+            classify_line("@include cua/Flagfile", false, false),
+            LineType::Include
+        );
+        // inside comments it's not a directive
+        assert_eq!(
+            classify_line("// @include nope.ff", false, false),
+            LineType::LineComment
+        );
+        assert_eq!(
+            classify_line("@include x.ff", true, false),
+            LineType::BlockCommentMiddle
         );
     }
 

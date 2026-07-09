@@ -1,0 +1,4 @@
+FF-fmt-included {
+  lower(countryCode) == nl ->   true
+  false
+}

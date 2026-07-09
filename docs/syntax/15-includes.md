@@ -46,7 +46,12 @@ file can reference flags from anywhere in the final result.
 ```bash
 flagfile validate -f Flagfile   # lists resolved includes
 flagfile check -f Flagfile      # validate + lint + test, includes included
+flagfile fmt -f Flagfile        # formats the root and every included file
 ```
+
+`fmt` keeps `@include` lines exactly where they are — it never inlines the
+included content. Instead it formats each included file in place, and
+`fmt --check` reports every file that would be reformatted.
 
 ## Notes
 

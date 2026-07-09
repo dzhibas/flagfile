@@ -1,0 +1,3 @@
+FF-fmt-clean-root -> TRUE
+
+@include sub/Flagfile

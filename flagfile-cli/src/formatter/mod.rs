@@ -6,6 +6,7 @@ mod classify;
 mod format;
 mod normalize;
 
+use std::collections::HashSet;
 use std::io::IsTerminal;
 use std::process;
 
@@ -21,17 +22,15 @@ pub fn run_fmt(flagfile_path: &str, check: bool, diff: bool) {
 }
 
 /// Inner logic returning `Result<(), ()>` for composability with `check`.
+///
+/// Resolves `@include` directives first: the merged content is validated,
+/// then the root file and every included file are formatted individually.
+/// `@include` lines are preserved as-is — includes are never inlined.
 pub fn run_fmt_inner(flagfile_path: &str, check: bool, diff: bool) -> Result<(), ()> {
-    let content = match std::fs::read_to_string(flagfile_path) {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            return Err(());
-        }
-    };
+    let (raw, resolved) = crate::read_flagfile_resolved(flagfile_path)?;
 
-    // Validate the file parses correctly before formatting
-    match parse_flagfile_with_segments(&content) {
+    // Validate the merged content parses correctly before formatting
+    match parse_flagfile_with_segments(&resolved.content) {
         Ok((remainder, _)) => {
             if !remainder.trim().is_empty() {
                 let near = remainder.trim().lines().next().unwrap_or("");
@@ -48,39 +47,55 @@ pub fn run_fmt_inner(flagfile_path: &str, check: bool, diff: bool) -> Result<(),
         }
     }
 
-    let formatted = format_flagfile(&content);
-
-    if check {
-        if content == formatted {
-            return Ok(());
+    // Root file first, then each included file (deduplicated)
+    let mut files: Vec<(String, &str)> = vec![(flagfile_path.to_string(), raw.as_str())];
+    let mut seen: HashSet<String> = HashSet::from([flagfile_path.to_string()]);
+    for inc in &resolved.includes {
+        let path = inc.path.display().to_string();
+        if seen.insert(path.clone()) {
+            files.push((path, inc.content.as_str()));
         }
-        let is_tty = std::io::stderr().is_terminal();
-        if is_tty {
-            eprintln!("\x1b[1;31mwould reformat:\x1b[0m {}", flagfile_path);
+    }
+
+    let mut unformatted = 0;
+    for (path, content) in &files {
+        let formatted = format_flagfile(content);
+
+        if check {
+            if *content != formatted {
+                unformatted += 1;
+                let is_tty = std::io::stderr().is_terminal();
+                if is_tty {
+                    eprintln!("\x1b[1;31mwould reformat:\x1b[0m {}", path);
+                } else {
+                    eprintln!("would reformat: {}", path);
+                }
+            }
+            continue;
+        }
+
+        if diff {
+            print_diff(content, &formatted, path);
+            continue;
+        }
+
+        // Write back if changed
+        if *content == formatted {
+            println!("already formatted: {}", path);
         } else {
-            eprintln!("would reformat: {}", flagfile_path);
-        }
-        return Err(());
-    }
-
-    if diff {
-        print_diff(&content, &formatted, flagfile_path);
-        return Ok(());
-    }
-
-    // Write back if changed
-    if content == formatted {
-        println!("already formatted: {}", flagfile_path);
-    } else {
-        match std::fs::write(flagfile_path, &formatted) {
-            Ok(_) => println!("formatted: {}", flagfile_path),
-            Err(e) => {
-                eprintln!("Failed to write {}: {}", flagfile_path, e);
-                return Err(());
+            match std::fs::write(path, &formatted) {
+                Ok(_) => println!("formatted: {}", path),
+                Err(e) => {
+                    eprintln!("Failed to write {}: {}", path, e);
+                    return Err(());
+                }
             }
         }
     }
 
+    if unformatted > 0 {
+        return Err(());
+    }
     Ok(())
 }
 

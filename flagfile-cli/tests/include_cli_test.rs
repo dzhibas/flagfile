@@ -186,3 +186,70 @@ fn test_list_shows_included_flags() {
     assert!(output.contains("FF-root-feature"));
     assert!(output.contains("FF-included-feature"));
 }
+
+// ── fmt ────────────────────────────────────────────────────
+
+#[test]
+fn test_fmt_check_passes_with_formatted_includes() {
+    let flagfile = fixture("fmt_clean/Flagfile");
+    let out = ff(&["fmt", "--check", "-f", &flagfile.display().to_string()]);
+    assert!(
+        out.status.success(),
+        "stdout: {} stderr: {}",
+        stdout(&out),
+        stderr(&out)
+    );
+}
+
+#[test]
+fn test_fmt_check_reports_unformatted_included_file() {
+    let flagfile = fixture("fmt_unformatted/Flagfile");
+    let out = ff(&["fmt", "--check", "-f", &flagfile.display().to_string()]);
+    assert!(!out.status.success());
+    let err = stderr(&out);
+    assert!(err.contains("would reformat"), "stderr: {err}");
+    assert!(err.contains("sub/Flagfile"), "stderr: {err}");
+}
+
+#[test]
+fn test_fmt_fails_on_missing_include() {
+    let flagfile = fixture("missing/Flagfile");
+    let out = ff(&["fmt", "--check", "-f", &flagfile.display().to_string()]);
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("nope.ff"), "stderr: {}", stderr(&out));
+}
+
+#[test]
+fn test_fmt_formats_included_files_in_place() {
+    // build a scratch tree so the committed fixtures stay untouched
+    let dir = PathBuf::from(env!("CARGO_TARGET_TMPDIR")).join("fmt_include_write");
+    let sub = dir.join("cua");
+    std::fs::create_dir_all(&sub).unwrap();
+    let root = dir.join("Flagfile");
+    std::fs::write(&root, "FF-root -> true\n\n@include cua/Flagfile\n").unwrap();
+    let inc = sub.join("Flagfile");
+    std::fs::write(
+        &inc,
+        "FF-included {\n  plan == premium ->   true\n  false\n}\n",
+    )
+    .unwrap();
+
+    let out = ff(&["fmt", "-f", &root.display().to_string()]);
+    assert!(out.status.success(), "stderr: {}", stderr(&out));
+    assert!(
+        stdout(&out).contains("formatted"),
+        "stdout: {}",
+        stdout(&out)
+    );
+
+    let root_after = std::fs::read_to_string(&root).unwrap();
+    assert!(
+        root_after.contains("@include cua/Flagfile"),
+        "include line must be preserved, not inlined: {root_after}"
+    );
+    let inc_after = std::fs::read_to_string(&inc).unwrap();
+    assert!(
+        inc_after.contains("    plan == premium -> TRUE"),
+        "included file should be reformatted in place: {inc_after}"
+    );
+}

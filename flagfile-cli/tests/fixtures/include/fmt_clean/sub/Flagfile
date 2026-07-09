@@ -1,0 +1,5 @@
+// @test FF-fmt-clean-included(countryCode=nl) == true
+FF-fmt-clean-included {
+    lower(countryCode) == nl -> TRUE
+    FALSE
+}

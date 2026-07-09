@@ -171,7 +171,9 @@ pub fn format_flagfile(input: &str) -> String {
                 || prev_top_close
                 || matches!(
                     prev_line_type,
-                    Some(LineType::FlagHeaderShort) | Some(LineType::EnvHeaderShort)
+                    Some(LineType::FlagHeaderShort)
+                        | Some(LineType::EnvHeaderShort)
+                        | Some(LineType::Include)
                 );
             if starts_new_group {
                 top_group_start = output.len();
@@ -638,6 +640,27 @@ FF-feature-y {
         let input = "FF-flag -> true";
         let result = format_flagfile(input);
         assert!(result.ends_with('\n'));
+    }
+
+    // ── @include directives ────────────────────────────────────
+
+    #[test]
+    fn test_include_directive_preserved() {
+        let input = "FF-a -> TRUE\n\n@include sub/Flagfile\n";
+        assert_eq!(format_flagfile(input), input);
+    }
+
+    #[test]
+    fn test_include_directive_normalized() {
+        // stray indentation and doubled spaces are cleaned up
+        let input = "  @include   sub/Flagfile\n";
+        assert_eq!(format_flagfile(input), "@include sub/Flagfile\n");
+    }
+
+    #[test]
+    fn test_include_between_flags() {
+        let input = "FF-a -> TRUE\n@include one.ff\nFF-b -> FALSE\n";
+        assert_eq!(format_flagfile(input), input);
     }
 
     // ── Leading blank lines removed ────────────────────────────
