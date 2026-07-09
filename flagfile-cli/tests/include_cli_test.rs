@@ -253,3 +253,44 @@ fn test_fmt_formats_included_files_in_place() {
         "included file should be reformatted in place: {inc_after}"
     );
 }
+
+// ── push ───────────────────────────────────────────────────
+// Both push modes must resolve includes; a missing include fails during
+// local validation, before any network I/O happens.
+
+#[test]
+fn test_push_launchdarkly_fails_on_missing_include() {
+    let flagfile = fixture("missing/Flagfile");
+    let config = fixture("ld.toml");
+    let out = ff(&[
+        "push",
+        "--launchdarkly",
+        "--project",
+        "default",
+        "--secret",
+        "dummy",
+        "--config",
+        &config.display().to_string(),
+        "--dry-run",
+        "-f",
+        &flagfile.display().to_string(),
+    ]);
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("nope.ff"), "stderr: {}", stderr(&out));
+}
+
+#[test]
+fn test_push_remote_fails_on_missing_include() {
+    let flagfile = fixture("missing/Flagfile");
+    let out = ff(&[
+        "push",
+        "--remote",
+        "http://127.0.0.1:9",
+        "--secret",
+        "dummy",
+        "-f",
+        &flagfile.display().to_string(),
+    ]);
+    assert!(!out.status.success());
+    assert!(stderr(&out).contains("nope.ff"), "stderr: {}", stderr(&out));
+}

@@ -73,19 +73,24 @@ pub async fn run_push(
         .map(String::from)
         .or_else(|| config.namespace.clone());
 
-    // 1. Read local Flagfile
-    let content = match std::fs::read_to_string(flagfile_path) {
-        Ok(c) => c,
-        Err(_) => {
-            eprintln!("{} does not exist", flagfile_path);
-            process::exit(1);
-        }
+    // 1. Read local Flagfile, resolving @include directives — the remote
+    // serves a self-contained flagfile, so includes are inlined here.
+    let content = match crate::read_flagfile_resolved(flagfile_path) {
+        Ok((_raw, resolved)) => resolved.content,
+        Err(()) => process::exit(1),
     };
 
     // 2. Validate syntax locally (fail fast)
-    if let Err(e) = flagfile_lib::parse_flagfile::parse_flagfile_with_segments(&content) {
-        eprintln!("Validation failed: {}", e);
-        process::exit(1);
+    match flagfile_lib::parse_flagfile::parse_flagfile_with_segments(&content) {
+        Ok((rest, _)) if rest.trim().is_empty() => {}
+        Ok(_) => {
+            eprintln!("Validation failed: unparsed trailing content");
+            process::exit(1);
+        }
+        Err(e) => {
+            eprintln!("Validation failed: {}", e);
+            process::exit(1);
+        }
     }
 
     // 3. Build URL

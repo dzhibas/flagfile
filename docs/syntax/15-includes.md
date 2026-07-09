@@ -53,6 +53,10 @@ flagfile fmt -f Flagfile        # formats the root and every included file
 included content. Instead it formats each included file in place, and
 `fmt --check` reports every file that would be reformatted.
 
+`push` resolves includes as well: LaunchDarkly mode (`push --launchdarkly`)
+pushes the merged flag set, and remote-server mode pushes the merged, inlined
+content (the remote has no directory to resolve includes against).
+
 ## Notes
 
 - Duplicate flag names across included files are caught by the

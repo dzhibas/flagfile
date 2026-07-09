@@ -135,10 +135,10 @@ async fn push(
         None => None,
     };
 
-    // Read + parse the Flagfile.
-    let content = std::fs::read_to_string(flagfile_path).map_err(|_| {
-        eprintln!("{} does not exist", flagfile_path);
-    })?;
+    // Read + parse the Flagfile, resolving any @include directives so the
+    // merged flag set is pushed.
+    let (_raw, resolved) = crate::read_flagfile_resolved(flagfile_path)?;
+    let content = resolved.content;
     let (rest, mut parsed) = flagfile_lib::parse_flagfile::parse_flagfile_with_segments(&content)
         .map_err(|e| {
         eprintln!("Validation failed: {}", e);

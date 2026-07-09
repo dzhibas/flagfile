@@ -1,0 +1,5 @@
+[launchdarkly]
+project_key = "default"
+
+[launchdarkly.environments]
+stage = "staging"
