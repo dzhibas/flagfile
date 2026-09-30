@@ -1,3 +1,4 @@
+mod docs;
 mod formatter;
 mod lint;
 mod pull;
@@ -227,6 +228,11 @@ enum Command {
         /// Print a diff of what would change
         #[arg(long = "diff")]
         diff: bool,
+    },
+    /// Open the Flagfile syntax docs in a browser (optionally a topic, e.g. `env`, `segment`)
+    Docs {
+        /// Docs topic to open (e.g. env, segment, tests, 12)
+        topic: Option<String>,
     },
 }
 
@@ -1469,5 +1475,6 @@ async fn main() {
             check,
             diff,
         } => formatter::run_fmt(&flagfile, check, diff),
+        Command::Docs { topic } => docs::run_docs(topic.as_deref()),
     }
 }
